@@ -1,6 +1,30 @@
 {
-  "name": "stock-ledger", "version": "1.0.0", "private": true, "type": "module",
-  "scripts": { "dev": "vite --host 127.0.0.1", "build": "tsc --noEmit && vite build", "test": "vitest run", "ios:sync": "cap sync ios" },
-  "dependencies": { "@capacitor/core": "^8.0.0", "@capacitor/ios": "^8.0.0", "@capacitor/preferences": "^8.0.0", "@capacitor/filesystem": "^8.0.0", "@capacitor/share": "^8.0.0", "decimal.js": "^10.6.0", "lucide": "^0.577.0" },
-  "devDependencies": { "@capacitor/cli": "^8.0.0", "typescript": "~5.9.3", "vite": "^7.3.0", "vitest": "^4.0.0", "@types/node": "^22.0.0", "@playwright/test": "^1.58.0" }
+  "name": "stock-ledger",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "ios:sync": "cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/filesystem": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
+    "@capacitor/preferences": "^8.0.0",
+    "@capacitor/share": "^8.0.0",
+    "decimal.js": "^10.6.0",
+    "lucide": "^0.577.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.0",
+    "vitest": "^4.0.0"
+  }
 }

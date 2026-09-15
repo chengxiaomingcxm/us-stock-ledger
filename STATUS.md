@@ -2,24 +2,22 @@
 
 更新：2026-09-15
 
-## 已完成
+## 1.1.0 / build 2
 
-- 用户要求的五项功能及独立示例模式。
-- 27 项账本计算、输入校验、备份和存储恢复测试通过。
-- 2 项浏览器完整流程测试通过，覆盖买卖、修改重算、手动报价、导入导出和示例隔离。
-- GitHub 私有仓库已建立并上传完整工程。
-- 云端 Xcode 26.6 编译成功，生成 iPhone 真机 ARM64 IPA；最低 iOS 16.0。
-- 下载后的外层 ZIP 校验值与 GitHub 产物摘要一致；IPA 校验值与云端输出一致。
-- IPA 内容验证：真机平台、ARM64 可执行文件、应用标识、隐私文件及内置页面资源正确，不依赖开发服务器。
+- 用户已确认使用「早上打开 App 自动更新 + 手动刷新」，不要求后台定点执行。
+- 39 项计算、存储、旧备份兼容、交易时段及报价更新测试通过。
+- 4 项浏览器流程测试通过，包括第一版原存储直接升级、自动更新、失败保留、旧备份恢复、编辑时响应保护、Logo 失败回退和原有记账流程。
+- TypeScript 类型检查、生产构建和原生工程同步通过。
+- 实际网络检查：Yahoo chart 返回美元美股日线数据；Financial Modeling Prep 的 AAPL 图片返回有效 PNG。实际界面确认 AAPL / MSFT / NVDA Logo 显示。
+- 云端 IPA 构建：工程上传后执行，完成后在此补充构建链接与校验值。
+- 尚未在用户 iPhone 上验证本次覆盖安装、原生前台唤醒和实际网络连接；签名后需核对第一版持仓、成本与交易笔数。
 
-## 下载与签名
+## 第一版记录
 
-- 构建记录：https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/34961045118
-- 构建提交：e06032994ca92d78bd343275accb1f66cb92cb80
-- 产物名称：StockLedger-unsigned-IPA
-- IPA 文件：StockLedger-unsigned.ipa（未签名，需使用个人 Apple 账号签名后安装）。
-- SHA-256：37bb3a0d6ff63e208123060ff940c0c30151d835a1a0062ad6977b97f1ae4415
+用户报告第一版已安装并录入基础数据。
 
-## 待真机验证
+- 构建：https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/34961045118
+- 二进制对应提交：e06032994ca92d78bd343275accb1f66cb92cb80
+- 第一版 IPA SHA-256：37bb3a0d6ff63e208123060ff940c0c30151d835a1a0062ad6977b97f1ae4415
 
-尚未在用户 iPhone 上验证安装签名、原生持久化、系统分享与文件选择器。用户签名安装后可先使用独立示例模式检查界面，再建立正式账本。
+新旧版本均使用 com.personal.stockledger；安装新版前先导出备份，不要卸载旧版。

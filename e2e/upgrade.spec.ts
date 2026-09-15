@@ -1,0 +1,50 @@
+import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+const old=JSON.parse(readFileSync(new URL('../tests/fixtures/v1-backup.json',import.meta.url),'utf8'));
+const response={chart:{error:null,result:[{meta:{symbol:'AAPL',currency:'USD',instrumentType:'EQUITY',priceHint:2,exchangeTimezoneName:'America/New_York'},timestamp:[Date.parse('2025-07-03T13:30:00Z')/1000],indicators:{quote:[{close:[110]}]}}]}};
+async function seed(page:any){
+ await page.addInitScript((ledger:any)=>{if(!localStorage.getItem('test-seeded')){localStorage.setItem('CapacitorStorage.stock-ledger-v1-0',JSON.stringify({revision:5,data:ledger}));localStorage.setItem('test-seeded','yes');}},old);
+}
+test('第一版本机数据直接升级，启动同步、手动刷新、失败保留与旧备份恢复',async({page})=>{
+ await seed(page);let requests=0, fail=false;
+ await page.route('https://query2.finance.yahoo.com/**',async route=>{requests++;await route.fulfill({status:fail?429:200,contentType:'application/json',body:JSON.stringify(response)});});
+ await page.goto('/');
+ await expect(page.getByTestId('sync-status')).toContainText('1 只取得收盘报价');
+ await expect(page.getByTestId('cost')).toHaveText('$600.60');
+ await expect(page.getByTestId('realized')).toHaveText('+$77.60');
+ await expect(page.getByTestId('market-value')).toHaveText('$660.00');
+ await expect(page.getByTestId('unrealized')).toHaveText('+$59.40');
+ await expect(page.locator('.quote-date')).toContainText('2025-07-03 · 美股收盘');
+ expect(requests).toBe(1);
+ await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));expect(requests).toBe(1);
+ fail=true;await page.getByRole('button',{name:'更新收益',exact:true}).click();
+ await expect(page.getByTestId('sync-status')).toContainText('1 只更新失败');
+ await expect(page.getByTestId('market-value')).toHaveText('$660.00');
+ await page.reload();await expect(page.getByTestId('sync-status')).toContainText('1 只更新失败');
+ await expect(page.getByTestId('market-value')).toHaveText('$660.00');
+ await page.locator('.bottom-nav').getByRole('button',{name:'备份',exact:true}).click();
+ await page.locator('#import').setInputFiles({name:'v1-backup.js',mimeType:'text/javascript',buffer:Buffer.from(JSON.stringify(old))});
+ await page.getByRole('button',{name:'确认替换并恢复',exact:true}).click();
+ await page.locator('.bottom-nav').getByRole('button',{name:'持仓',exact:true}).click();
+ await expect(page.getByTestId('market-value')).toHaveText('$630.00');
+ await expect(page.locator('.quote-date')).toContainText('手动报价');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+test('更新中编辑交易不会被迟到的网络响应覆盖，Logo失败仍可显示代码',async({page})=>{
+ await seed(page);
+ let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});
+ await page.route('https://query2.finance.yahoo.com/**',async route=>{await gate;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(response)});});
+ await page.route('https://financialmodelingprep.com/**',route=>route.abort());
+ await page.goto('/');await expect(page.getByTestId('sync-status')).toContainText('正在读取');
+ await expect(page.locator('.company-logo')).toHaveCount(0);
+ await expect(page.locator('.ticker-icon')).toHaveText('A');
+ await page.locator('.bottom-nav').getByRole('button',{name:'交易',exact:true}).click();
+ await page.locator('.trade-row').filter({has:page.locator('.badge.buy')}).getByRole('button',{name:'编辑',exact:true}).click();
+ await page.getByLabel('成交单价（美元）',{exact:true}).fill('90');
+ await page.getByRole('button',{name:'保存修改',exact:true}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);release();
+ await page.locator('.bottom-nav').getByRole('button',{name:'持仓',exact:true}).click();
+ await expect(page.getByTestId('sync-status')).toContainText('账本正在编辑或已改变');
+ await expect(page.getByTestId('cost')).toHaveText('$540.60');
+ await expect(page.getByTestId('market-value')).toHaveText('$630.00');
+});

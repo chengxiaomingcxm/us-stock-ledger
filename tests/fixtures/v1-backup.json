@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "currency": "USD",
+  "method": "moving-average",
+  "trades": [
+    {"id":"old-buy","sequence":0,"symbol":"AAPL","side":"buy","date":"2025-01-02","quantity":"10","price":"100","fee":"1","note":"第一版测试数据\n不是用户的真实账本"},
+    {"id":"old-sell","sequence":1,"symbol":"AAPL","side":"sell","date":"2025-01-03","quantity":"4","price":"120","fee":"2","note":"部分卖出"}
+  ],
+  "quotes": [{"symbol":"AAPL","price":"105","date":"2025-01-03"}]
+}

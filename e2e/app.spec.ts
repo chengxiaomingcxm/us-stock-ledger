@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+test.beforeEach(async({page})=>{await page.route('https://query2.finance.yahoo.com/**',route=>route.abort());});
 async function add(page:any,side='buy',q='10',price='100',fee='1'){
  await page.getByRole('button',{name:'记一笔',exact:true}).click();
  await page.getByRole('dialog').locator(`input[value="${side}"]`).check();

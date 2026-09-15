@@ -2,7 +2,7 @@ import Decimal from 'decimal.js';
 Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 export const D = (v: Decimal.Value) => new Decimal(v);
 export interface Trade { id: string; sequence: number; symbol: string; side: 'buy' | 'sell'; date: string; quantity: string; price: string; fee: string; note: string }
-export interface Quote { symbol: string; price: string; date: string }
+export interface Quote { symbol: string; price: string; date: string; source?: 'yahoo-close'; fetchedAt?: string }
 export interface Ledger { version: 1; currency: 'USD'; method: 'moving-average'; trades: Trade[]; quotes: Quote[] }
 export interface Position { symbol: string; quantity: Decimal; cost: Decimal; realized: Decimal; average: Decimal; quote?: Quote; value?: Decimal; unrealized?: Decimal }
 export const emptyLedger = (): Ledger => ({ version: 1, currency: 'USD', method: 'moving-average', trades: [], quotes: [] });
@@ -29,7 +29,12 @@ export function validateLedger(raw: unknown): Ledger {
   const quotes: Quote[] = raw.quotes.map(q => {
     if (!isRecord(q)) throw new Error('股价格式错误。'); const symbol=symbolText(q.symbol);
     if (quoteSymbols.has(symbol)) throw new Error('存在重复股价。'); quoteSymbols.add(symbol);
-    return {symbol, price:numberText(q.price,'最新股价'),date:validDate(q.date)};
+    const quote: Quote = {symbol, price:numberText(q.price,'最新股价'),date:validDate(q.date)};
+    if (q.source!==undefined) {
+      if(q.source!=='yahoo-close' || typeof q.fetchedAt!=='string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(q.fetchedAt) || !Number.isFinite(Date.parse(q.fetchedAt))) throw new Error('自动报价来源或更新时间无效。');
+      quote.source=q.source; quote.fetchedAt=q.fetchedAt;
+    }
+    return quote;
   });
   const data: Ledger = {version:1,currency:'USD',method:'moving-average',trades,quotes}; calculate(data); return data;
 }
