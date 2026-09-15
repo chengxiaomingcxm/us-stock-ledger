@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+artifacts/
+test-results/
+playwright-report/
+.DS_Store
+*.ipa
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/App/capacitor-cordova-ios-plugins/
+ios/App/CapApp-SPM/.build/

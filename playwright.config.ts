@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({testDir:'./e2e',timeout:30000,use:{baseURL:'http://127.0.0.1:4173',viewport:{width:390,height:844},launchOptions:process.platform==='win32'?{executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'}:{}},webServer:{command:'node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173',port:4173,reuseExistingServer:true},reporter:'list',outputDir:'artifacts/test-results'});

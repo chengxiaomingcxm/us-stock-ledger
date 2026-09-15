@@ -1,0 +1,41 @@
+name: Build unsigned iOS IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test ledger calculations and recovery
+        run: pnpm test
+      - name: Build application
+        run: pnpm build
+      - name: Sync native iOS project
+        run: pnpm exec cap sync ios
+      - name: Build real-device application without signing
+        run: bash scripts/build-unsigned-ios.sh
+      - name: Upload IPA for personal signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: StockLedger-unsigned-IPA
+          path: |
+            build/StockLedger-unsigned.ipa
+            build/StockLedger-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 14
