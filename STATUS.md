@@ -27,3 +27,15 @@
 - 第一版 IPA SHA-256：37bb3a0d6ff63e208123060ff940c0c30151d835a1a0062ad6977b97f1ae4415
 
 新旧版本均使用 com.personal.stockledger；安装新版前先导出备份，不要卸载旧版。
+
+
+## 仓库公开与正式发布
+
+- 已确认仓库为 Public（公开）。此前检查 6 次提交的历史文本，未发现密钥或真实账本；备份样本为虚构测试数据。
+- v1.1.0 正式 Release：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.1.0
+- 已附带 StockLedger-1.1.0-unsigned.ipa、同名 .sha256 校验文件及 UPGRADE-1.1.0.md。
+- Release IPA SHA-256 与上方原交付文件一致；版本标签对应原始构建提交 9fb091d6bb58d5d2ff63ea209bab1a2346b8b2e9。
+- 正式附件不受 Actions 临时构建产物的 14 天过期设置影响。
+- 已上传可重复使用的发布工作流、发布校验脚本及版本清单。历史版本首次归档使用 GitHub 页面完成，原因及处理方式见 README。
+- 重跑发布流程已成功，确认已发布版本的标签与 IPA 摘要，未替换附件。验证记录：https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/34970988375 （第 2 次运行）。
+- 本次仅调整仓库与发布管理，App 功能版本仍为 1.1.0，无需因此重新安装。
