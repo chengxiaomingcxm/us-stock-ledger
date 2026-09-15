@@ -16,7 +16,7 @@ APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/App.app"
 test -d "$APP_PATH"
 test -f "$APP_PATH/App"
 file "$APP_PATH/App"
-xcrun lipo -verify_arch arm64 "$APP_PATH/App"
+xcrun lipo "$APP_PATH/App" -verify_arch arm64
 /usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$APP_PATH/Info.plist" | grep -qx 'iPhoneOS'
 test -f "$APP_PATH/public/index.html"
 STAGING="$(mktemp -d "${TMPDIR:-/tmp}/stockledger-ipa.XXXXXX")"
