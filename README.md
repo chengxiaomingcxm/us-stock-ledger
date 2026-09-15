@@ -36,7 +36,7 @@ pnpm dev
 
 本项目包括完整 iOS Xcode 工程。Windows 可以生成网页资源和同步工程，但无法执行 Xcode 编译。
 
-1. 把项目上传到你自己的 GitHub 私有仓库，包含 `.github/workflows/build-ios.yml`。
+1. 把项目上传到你自己的 GitHub 仓库，包含 `.github/workflows/build-ios.yml`。
 2. 打开仓库的 **Actions → Build unsigned iOS IPA → Run workflow**（推送 main 分支也会触发）。
 3. 工作流在 GitHub 的 macOS 26 环境安装锁定依赖、运行测试、构建网页资源并同步 iOS 工程。
 4. Xcode 编译真机 ARM64 程序，禁用构建时签名。脚本验证可执行文件架构、iPhoneOS 平台和内置界面资源，再包装 `Payload/App.app`。
@@ -101,3 +101,21 @@ Logo 使用 [Financial Modeling Prep 的公司图片](https://financialmodelingp
 - 导入仍先完整校验与预览，再由你确认替换。测试使用虚构的第一版格式样本，未上传你的真实账本。
 
 详细更新记录见 [CHANGELOG.md](CHANGELOG.md)，构建验证状态见 [STATUS.md](STATUS.md)。
+
+
+## 正式版本下载与持续发布
+
+正式 IPA 在 [GitHub Releases](https://github.com/chengxiaomingcxm/us-stock-ledger/releases) 下载。每个版本附带版本化 IPA、SHA-256 校验文件及独立升级说明，标签指向该 IPA 的原始构建提交。Release 附件不受本项目 Actions 构建产物的 14 天自动过期设置影响，除非维护者删除发布记录或附件。
+
+后续版本发布流程：
+
+1. 更新应用版本和 build 号，完成旧备份兼容性检查，推送代码并等待 `Build unsigned iOS IPA` 成功。
+2. 新建 `releases/v版本号.md`，写明更新内容、升级步骤、已验证项目及限制。
+3. 参照 `releases/v1.1.0.json`，记录版本、build、该构建的 commit / run_id / artifact 和实际 IPA SHA-256。
+4. 将两个发布文件提交到 main，自动触发 `Publish verified IPA release`。也可在 Actions 手动重跑此工作流。
+5. 发布程序核对构建成功状态、提交、IPA 架构、应用标识、版本、build 和校验值，先创建草稿并上传全部附件，再正式发布。
+6. 已发布版本不覆盖：重跑会核对现有标签和 IPA 摘要并跳过；新修复使用新版本号。若源构建已过期且未发布，需重新构建并记录新的 run_id 与真实校验值。
+
+发布时使用 GitHub Actions 自带的临时令牌，仅发布任务具备 contents:write / actions:read；不需要上传个人 Token、Apple 密码、签名证书或真实账本。主分支普通构建仍只读仓库；公开访问不授予访客写入权限。
+
+个人备份、签名文件和 `.env` 已加入忽略规则。测试中的账本均为虚构数据，不要将真实备份提交到公开仓库。

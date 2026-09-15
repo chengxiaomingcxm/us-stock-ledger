@@ -1,0 +1,28 @@
+name: Publish verified IPA release
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'releases/**'
+      - 'scripts/publish-release.py'
+      - '.github/workflows/publish-release.yml'
+permissions:
+  contents: read
+concurrency:
+  group: publish-releases
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish verified builds without rebuilding or replacing published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 scripts/publish-release.py

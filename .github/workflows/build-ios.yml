@@ -3,6 +3,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'releases/**'
+      - 'scripts/publish-release.py'
+      - '.github/workflows/publish-release.yml'
 permissions:
   contents: read
 concurrency:

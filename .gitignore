@@ -3,6 +3,13 @@ dist/
 build/
 artifacts/
 delivery/
+__pycache__/
+.env
+.env.*
+*.p12
+*.p8
+*.mobileprovision
+stock-ledger-*.json
 test-results/
 playwright-report/
 .DS_Store
