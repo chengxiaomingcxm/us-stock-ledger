@@ -1,11 +1,10 @@
+// Frozen original ledger implementation, source: v1.1.0
 import Decimal from 'decimal.js';
 Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 export const D = (v: Decimal.Value) => new Decimal(v);
 export interface Trade { id: string; sequence: number; symbol: string; side: 'buy' | 'sell'; date: string; quantity: string; price: string; fee: string; note: string }
 export interface Quote { symbol: string; price: string; date: string; source?: 'yahoo-close'; fetchedAt?: string }
-export interface Close { symbol: string; price: string; date: string }
-export interface History { version: 1; closes: Close[]; sessions: string[]; splits: {symbol:string; date:string}[]; checkedAt?: string }
-export interface Ledger { version: 1; currency: 'USD'; method: 'moving-average'; trades: Trade[]; quotes: Quote[]; history?: History }
+export interface Ledger { version: 1; currency: 'USD'; method: 'moving-average'; trades: Trade[]; quotes: Quote[] }
 export interface Position { symbol: string; quantity: Decimal; cost: Decimal; realized: Decimal; average: Decimal; quote?: Quote; value?: Decimal; unrealized?: Decimal }
 export const emptyLedger = (): Ledger => ({ version: 1, currency: 'USD', method: 'moving-average', trades: [], quotes: [] });
 export function today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -14,7 +13,7 @@ export function numberText(v: unknown, label: string, positive = false): string 
   if (typeof v !== 'string' || !/^\d{1,12}(\.\d{1,8})?$/.test(v)) throw new Error(`${label}请填写有效数字，最多 8 位小数。`);
   const d = D(v); if (positive && !d.gt(0)) throw new Error(`${label}必须大于 0。`); return d.toFixed();
 }
-export function validDate(v: unknown): string {
+function validDate(v: unknown): string {
   if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || !Number.isFinite(Date.parse(v+'T00:00:00Z')) || new Date(v+'T00:00:00Z').toISOString().slice(0,10)!==v || v<'1900-01-01' || v>today()) throw new Error('日期必须是真实日期，且不能晚于今天。');
   return v;
 }
@@ -38,19 +37,7 @@ export function validateLedger(raw: unknown): Ledger {
     }
     return quote;
   });
-  const data: Ledger = {version:1,currency:'USD',method:'moving-average',trades,quotes};
-  if(raw.history!==undefined) data.history=validateHistory(raw.history);
-  calculate(data); return data;
-}
-export function validateHistory(raw:unknown):History {
-  if(!isRecord(raw)||raw.version!==1||!Array.isArray(raw.closes)||raw.closes.length>25000||!Array.isArray(raw.sessions)||raw.sessions.length>4000||!Array.isArray(raw.splits)||raw.splits.length>5000)throw Error('收益历史格式错误或超过容量。请使用完整的 JSON 备份。');
-  const seen=new Set<string>();
-  const closes=raw.closes.map(c=>{if(!isRecord(c))throw Error('历史收盘价格式错误');const symbol=symbolText(c.symbol),date=validDate(c.date),key=symbol+date;if(seen.has(key))throw Error('历史收盘价重复');seen.add(key);return {symbol,date,price:numberText(c.price,'历史收盘价',true)};});
-  const sessions=raw.sessions.map(validDate);if(new Set(sessions).size!==sessions.length)throw Error('交易日重复');
-  const splitKeys=new Set<string>();const splits=raw.splits.map(s=>{if(!isRecord(s))throw Error('拆股标记格式错误');const symbol=symbolText(s.symbol),date=validDate(s.date);if(splitKeys.has(symbol+date))throw Error('拆股标记重复');splitKeys.add(symbol+date);return {symbol,date};});
-  const out:History={version:1,closes,sessions:sessions.sort(),splits};
-  if(raw.checkedAt!==undefined){if(typeof raw.checkedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(raw.checkedAt)||!Number.isFinite(Date.parse(raw.checkedAt)))throw Error('历史同步时间错误');out.checkedAt=raw.checkedAt;}
-  return out;
+  const data: Ledger = {version:1,currency:'USD',method:'moving-average',trades,quotes}; calculate(data); return data;
 }
 export function orderedTrades(trades: Trade[]) { return [...trades].sort((a,b)=>a.date.localeCompare(b.date)||a.sequence-b.sequence); }
 export function calculate(data: Ledger) {
@@ -79,7 +66,7 @@ export function calculate(data: Ledger) {
 export function saveTrade(data: Ledger, trade: Trade) { return validateLedger({...data,trades:[...data.trades.filter(t=>t.id!==trade.id),trade]}); }
 export function deleteTrade(data: Ledger,id:string) { return validateLedger({...data,trades:data.trades.filter(t=>t.id!==id)}); }
 export function parseBackup(text:string): Ledger { if(text.length>8_000_000) throw new Error('备份文件过大。'); let raw; try {raw=JSON.parse(text);} catch {throw new Error('文件内容不是有效的 JSON 备份。');} return validateLedger(raw); }
-export function backupText(data:Ledger, compatible=false) {const clean=validateLedger(data);if(compatible)delete clean.history;const text=JSON.stringify(clean,null,2);if(new TextEncoder().encode(text).length>8_000_000)throw Error('备份超过 8 MB，请减少历史数据后再导出。');return text;}
+export function backupText(data:Ledger) {return JSON.stringify(validateLedger(data),null,2);}
 export function money(v:Decimal.Value|undefined) { if(v===undefined)return '—'; const d=D(v); const [whole,frac]=d.abs().toFixed(2).split('.'); return `${d.lt(0)?'−':''}$${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${frac}`; }
 export function signedMoney(v:Decimal.Value|undefined) { return v===undefined?'—':`${D(v).gt(0)?'+':''}${money(v)}`; }
 export function quantity(v:Decimal.Value) {return D(v).toDecimalPlaces(8).toFixed();}
@@ -89,3 +76,4 @@ export function demoLedger(): Ledger { return validateLedger({ ...emptyLedger(),
   {id:'demo-nvda-buy',sequence:2,symbol:'NVDA',side:'buy',date:'2025-03-03',quantity:'30',price:'110',fee:'1',note:''},
   {id:'demo-aapl-sell',sequence:3,symbol:'AAPL',side:'sell',date:'2025-04-08',quantity:'5',price:'215',fee:'1',note:'部分止盈'}
 ],quotes:[{symbol:'AAPL',price:'225',date:'2025-04-09'},{symbol:'MSFT',price:'420',date:'2025-04-09'},{symbol:'NVDA',price:'125',date:'2025-04-09'}]}); }
+

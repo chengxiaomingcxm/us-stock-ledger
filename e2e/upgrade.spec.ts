@@ -7,7 +7,7 @@ async function seed(page:any){
 }
 test('第一版本机数据直接升级，启动同步、手动刷新、失败保留与旧备份恢复',async({page})=>{
  await seed(page);let requests=0, fail=false;
- await page.route('https://query2.finance.yahoo.com/**',async route=>{requests++;await route.fulfill({status:fail?429:200,contentType:'application/json',body:JSON.stringify(response)});});
+ await page.route('https://query2.finance.yahoo.com/**',async route=>{requests++;const body=structuredClone(response);if(route.request().url().includes('/SPY?'))body.chart.result[0].meta.symbol='SPY';await route.fulfill({status:fail?429:200,contentType:'application/json',body:JSON.stringify(body)});});
  await page.goto('/');
  await expect(page.getByTestId('sync-status')).toContainText('1 只取得收盘报价');
  await expect(page.getByTestId('cost')).toHaveText('$600.60');
@@ -15,12 +15,12 @@ test('第一版本机数据直接升级，启动同步、手动刷新、失败�
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
  await expect(page.getByTestId('unrealized')).toHaveText('+$59.40');
  await expect(page.locator('.quote-date')).toContainText('2025-07-03 · 美股收盘');
- expect(requests).toBe(1);
- await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));expect(requests).toBe(1);
+ expect(requests).toBe(2);
+ await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));expect(requests).toBe(2);
  fail=true;await page.getByRole('button',{name:'更新收益',exact:true}).click();
- await expect(page.getByTestId('sync-status')).toContainText('1 只更新失败');
+ await expect(page.getByTestId('sync-status')).toContainText('2 只更新失败');
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
- await page.reload();await expect(page.getByTestId('sync-status')).toContainText('1 只更新失败');
+ await page.reload();await expect(page.getByTestId('sync-status')).toContainText('2 只更新失败');
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
  await page.locator('.bottom-nav').getByRole('button',{name:'备份',exact:true}).click();
  await page.locator('#import').setInputFiles({name:'v1-backup.js',mimeType:'text/javascript',buffer:Buffer.from(JSON.stringify(old))});
