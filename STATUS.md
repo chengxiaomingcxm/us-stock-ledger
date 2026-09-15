@@ -6,16 +6,20 @@
 
 - 用户要求的五项功能及独立示例模式。
 - 27 项账本计算、输入校验、备份和存储恢复测试通过。
-- 2 项浏览器端完整操作测试通过，覆盖修改重算、更新报价、重载保存、导入导出、错误拦截及示例隔离。
-- TypeScript 检查、生产资源构建、iOS 工程生成和资源同步通过。
-- iOS 图标、启动图、隐私声明与 GitHub Actions 待签名 IPA 构建流程已准备。
+- 2 项浏览器完整流程测试通过，覆盖买卖、修改重算、手动报价、导入导出和示例隔离。
+- GitHub 私有仓库已建立并上传完整工程。
+- 云端 Xcode 26.6 编译成功，生成 iPhone 真机 ARM64 IPA；最低 iOS 16.0。
+- 下载后的外层 ZIP 校验值与 GitHub 产物摘要一致；IPA 校验值与云端输出一致。
+- IPA 内容验证：真机平台、ARM64 可执行文件、应用标识、隐私文件及内置页面资源正确，不依赖开发服务器。
 
-## 尚未完成
+## 下载与签名
 
-- 已取得私有仓库 chengxiaomingcxm/us-stock-ledger 的访问权限，正在上传并运行云端 Xcode 编译。
-- 没有生成或交付真实 IPA；源码压缩包不是 IPA。
-- 尚未在 iPhone 真机验证原生存储、系统分享、文件选择器或安装签名。
+- 构建记录：https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/34961045118
+- 构建提交：e06032994ca92d78bd343275accb1f66cb92cb80
+- 产物名称：StockLedger-unsigned-IPA
+- IPA 文件：StockLedger-unsigned.ipa（未签名，需使用个人 Apple 账号签名后安装）。
+- SHA-256：37bb3a0d6ff63e208123060ff940c0c30151d835a1a0062ad6977b97f1ae4415
 
-## 下一步
+## 待真机验证
 
-提供可访问的空 GitHub 私有仓库，上传项目并运行 `.github/workflows/build-ios.yml`，检查 Xcode 构建结果，下载和检验 IPA 后再交付签名安装。
+尚未在用户 iPhone 上验证安装签名、原生持久化、系统分享与文件选择器。用户签名安装后可先使用独立示例模式检查界面，再建立正式账本。
