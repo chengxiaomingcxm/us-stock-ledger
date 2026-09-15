@@ -119,3 +119,8 @@ Logo 使用 [Financial Modeling Prep 的公司图片](https://financialmodelingp
 发布时使用 GitHub Actions 自带的临时令牌，仅发布任务具备 contents:write / actions:read；不需要上传个人 Token、Apple 密码、签名证书或真实账本。主分支普通构建仍只读仓库；公开访问不授予访客写入权限。
 
 个人备份、签名文件和 `.env` 已加入忽略规则。测试中的账本均为虚构数据，不要将真实备份提交到公开仓库。
+
+
+### 历史版本首次归档的权限限制
+
+GitHub 对创建历史提交的 Release 有额外限制：如果该提交的 `.github/workflows/` 与当前默认分支不同，Actions 临时令牌可能返回 403，因为它不能获得 Workflows 写权限。此时在 GitHub 发布页面选择原始提交，上传已校验的三个附件并发布，再重跑发布工作流校验既有 Release。v1.1.0 首次归档采用此方式，重复发布校验已通过。后续版本若修改过工作流，也应检查此限制。
