@@ -8,7 +8,15 @@
 - 52 项单元测试通过，包括真实 v1.0/v1.1 解析器与新版备份互操作。
 - 5 项浏览器流程通过，覆盖历史修改重算、两种导出、本机恢复及原有升级流程。
 - TypeScript、生产构建和原生资源同步通过。
-- 云端构建与正式 Release 待校验，完成后补入提交、运行记录和 SHA-256。
+- 真实网络检查：AAPL 与 SPY 各取得 63 个已完成日线，最新日期 2026-09-14。
+- 云端 Xcode 构建成功：[运行记录](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/34974847468)。
+- 二进制源码提交：0d67d852ee73ad9852bc76e438869e77e60220d0。
+- 已核对 iPhoneOS / ARM64、1.2.0 / build 3、原应用标识与 AppPlugin。所有内置网页文件与本地测试通过的最终 dist 完全一致。
+- IPA 546,910 字节；SHA-256：`56b271203131c31069d88d4dbeab50dc8487a116cd9ca1b46324be0a7cb79987`。
+- 外层 ZIP 摘要与 GitHub artifact digest 一致：`1047d388788622b6e4807cfcf2431b9266d1bf8419d576415e1e7bf1140316f0`。
+- [v1.2.0 正式 Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.2.0) 已发布 IPA、同名 .sha256 与 UPGRADE-1.2.0.md；已核对公开附件摘要及版本标签准确指向构建源码。
+- [自动发布流程](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/34975480297)成功；已发布 v1.1.0 保持原样。
+- 未在用户 iPhone 上验证本次覆盖安装和原生分享。升级前导出备份，保持相同签名账号及应用标识，不先卸载旧版。
 
 ## 1.1.0 / build 2
 
