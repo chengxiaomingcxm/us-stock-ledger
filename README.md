@@ -1,8 +1,12 @@
 # 持仓账本 / Stock Ledger
 
-个人自用的中文美股持仓账本，当前版本 **1.2.0（build 3）**。iOS 16 或更高版本，美元计价。
+个人自用的中文美股持仓账本，当前版本 **1.21（内部版本 1.21.0 / build 4）**。iOS 16 或更高版本，美元计价。
 
-[下载 1.2.0 IPA、校验文件与升级说明](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.2.0)。安装前先导出备份，使用原签名身份覆盖安装。
+[下载 1.21 IPA、校验文件与升级说明](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.21.0)。安装前先导出备份，使用原签名身份覆盖安装。
+
+## 1.21 更新
+
+液态玻璃风格浮动导航与控件、双击缩放防护，以及可切换的最新报价 API。详见 [API 配置指南](API-SETTINGS.md)、[1.21 升级说明](releases/v1.21.0.md)。
 
 ## 1.2 更新
 

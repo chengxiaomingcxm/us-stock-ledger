@@ -22,7 +22,7 @@ test('第一版本机数据直接升级，启动同步、手动刷新、失败�
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
  await page.reload();await expect(page.getByTestId('sync-status')).toContainText('2 只更新失败');
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
- await page.locator('.bottom-nav').getByRole('button',{name:'备份',exact:true}).click();
+ await page.locator('.bottom-nav').getByRole('button',{name:'设置',exact:true}).click();
  await page.locator('#import').setInputFiles({name:'v1-backup.js',mimeType:'text/javascript',buffer:Buffer.from(JSON.stringify(old))});
  await page.getByRole('button',{name:'确认替换并恢复',exact:true}).click();
  await page.locator('.bottom-nav').getByRole('button',{name:'持仓',exact:true}).click();
