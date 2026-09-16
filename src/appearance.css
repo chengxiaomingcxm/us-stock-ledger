@@ -1,0 +1,30 @@
+/* 1.23: semantic gains/losses, independent from buy/sell and action colors. */
+:root{color-scheme:light;--gain:#168246;--loss:#d6293e;--surface:#fff;--page:#f2f2f7;--text:#17191e;--secondary:#59616e;--border:#dedfe6;--control:#e9edf4}
+:root[data-colors="red-up"]{--gain:#d6293e;--loss:#168246}
+:root[data-theme="dark"]{color-scheme:dark;--surface:#1c1c1e;--page:#000;--text:#f2f2f7;--secondary:#b0b4bf;--border:#3c3c43;--control:#2c2c2e;--gain:#51d781;--loss:#ff6975}
+:root[data-theme="dark"][data-colors="red-up"]{--gain:#ff6975;--loss:#51d781}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--surface:#1c1c1e;--page:#000;--text:#f2f2f7;--secondary:#b0b4bf;--border:#3c3c43;--control:#2c2c2e;--gain:#51d781;--loss:#ff6975}:root:not([data-theme="light"])[data-colors="red-up"]{--gain:#ff6975;--loss:#51d781}}
+html,body{background:var(--page);color:var(--text)}
+.positive{color:var(--gain)!important}.negative{color:var(--loss)!important}.neutral{color:var(--text)}
+.valuation-card,.return-card,.compact-holding,.panel,.trade-row,.modal,.sync-panel,.search,.stat-card{background:var(--surface);border-color:var(--border);box-shadow:none}
+.sidebar,.bottom-nav,.modal-head{background:color-mix(in srgb,var(--surface) 88%,transparent);border-color:var(--border);box-shadow:none}
+.modal-head{background:transparent;border:0;box-shadow:none;backdrop-filter:none}
+input,select,textarea{background:var(--surface);color:var(--text);border-color:var(--border)}
+.preference-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);font-size:15px}.preference-row select{width:auto;max-width:62%;margin:0;padding:9px;font-size:16px}
+.color-preview{display:flex;flex-wrap:wrap;gap:12px;font-variant-numeric:tabular-nums;font-size:14px;padding:12px 0}
+.form-tabs,.segmented,.calculation-preview,.import-preview,.calendar-day,.help-copy pre,.holding-filters button,.secondary{background:var(--control);border-color:var(--border);color:var(--text)}
+.form-tabs input:checked+span,.segmented .selected{background:var(--surface);color:var(--text)}
+.holding-filters button.selected{background:#087ff5;color:#fff}
+.bottom-nav .nav-item,.nav-item,.summary-split strong,.trade-amount strong,.trade-name h3,.totals dd,.calculation-preview strong,.backup-count strong{color:var(--text)}
+.nav-item.active,.bottom-nav .nav-item.active{color:#087ff5;background:color-mix(in srgb,#087ff5 18%,var(--surface))}
+.muted,.caption,.form-hint,.dialog-copy,.help-copy,.help-intro p,.settings-panel .setting-row small,.valuation-top h2,.valuation-top p,.valuation-bottom>span,.return-card dt,.holding-name>small,.compact-holding .quote-date,.market-status,.position-facts dt,.trade-detail,.trade-name small,.trade-amount small,.calendar-day span,.daily-latest span,.month-summary small,.chart-range,.totals dt,.form-grid label,.note-field,.summary-split span,.profit-summary>p,.realized-row small{color:var(--secondary)}
+.setting-row,.trade-detail,.realized-row{border-color:var(--border)}
+.refresh-button{background:var(--surface);border-color:var(--border);box-shadow:none}.quote-badge,.privacy-button,.setting-icon{background:color-mix(in srgb,#087ff5 16%,var(--surface));color:#087ff5}
+.valuation-profit{margin-top:16px}.valuation-bottom{margin-top:18px}.valuation-card{padding:18px}.compact-holdings{gap:10px}.holding-open{padding-top:14px}.return-card{padding-top:10px}
+.sell-shortcuts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0;font-size:13px}.sell-shortcuts[hidden]{display:none}.sell-shortcuts span{margin-right:auto}.sell-shortcuts button{padding:8px 16px}
+.undo-bar,.backup-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 12px;margin-bottom:12px;background:var(--control);border-radius:12px;font-size:13px;width:100%;color:var(--text)}.backup-reminder span{color:#087ff5}.sync-warning{color:#b97922}
+.profit-chart path{stroke:#087ff5}.profit-chart circle{fill:#087ff5}
+.valuation-profit,.holding-return,.summary-number{font-variant-numeric:tabular-nums}
+button:focus-visible,select:focus-visible{outline:2px solid #087ff5;outline-offset:3px}
+@media(max-width:700px){.app-header{margin-bottom:12px}.workspace{padding-top:calc(env(safe-area-inset-top) + 10px)}.modal{scroll-padding-bottom:24px}.privacy-button{min-height:44px}}
+@media(prefers-reduced-transparency:reduce){.bottom-nav,.sidebar{background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}}

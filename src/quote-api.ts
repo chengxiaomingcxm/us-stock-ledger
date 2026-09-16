@@ -1,12 +1,12 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
-import { Preferences } from '@capacitor/preferences';
+import { readMarketSettings, writeMarketSettings } from './secure-settings';
 import { D, type Ledger, type Quote } from './ledger';
 import { marketDate } from './market';
 
 export interface ApiSettings { provider: 'yahoo' | 'finnhub' | 'custom'; url: string; key: string; interval: number }
 export interface LiveQuote { quote: Quote; timestamp: number }
 export const defaultApi: ApiSettings = { provider: 'yahoo', url: '', key: '', interval: 60 };
-const settingsKey = 'stock-ledger-market-settings-v1';
+
 export function validateApi(raw: ApiSettings): ApiSettings {
   if (!['yahoo','finnhub','custom'].includes(raw.provider) || ![0,60,300].includes(raw.interval)) throw Error('行情设置无效');
   const clean = {...raw, url: raw.url.trim(), key: raw.key.trim()};
@@ -19,10 +19,10 @@ export function validateApi(raw: ApiSettings): ApiSettings {
   return clean;
 }
 export async function loadApi(): Promise<ApiSettings> {
-  const {value} = await Preferences.get({key:settingsKey});
+  const value = await readMarketSettings();
   return value ? validateApi(JSON.parse(value)) : {...defaultApi};
 }
-export async function saveApi(settings: ApiSettings) { await Preferences.set({key:settingsKey, value:JSON.stringify(validateApi(settings))}); }
+export async function saveApi(settings: ApiSettings) { await writeMarketSettings(JSON.stringify(validateApi(settings))); }
 export function parseLive(raw: any, symbol: string, provider: ApiSettings['provider'], now = Date.now()): LiveQuote {
   if (!raw || typeof raw !== 'object' || raw.error) throw Error('接口未返回有效报价');
   const price = provider === 'finnhub' ? raw.c : raw.price;
