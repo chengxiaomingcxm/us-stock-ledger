@@ -18,7 +18,7 @@ test('首页金额隐藏、详情、筛选排序及帮助文档',async({page})=>
  await page.getByRole('button',{name:/帮助文档/}).click();await expect(page.getByRole('heading',{name:'帮助文档',exact:true})).toBeVisible();await expect(page.locator('#help-home')).toHaveAttribute('open','');
  await page.getByText('备份、恢复与升级',{exact:true}).click();await expect(page.locator('#help-backup')).toContainText('不先卸载旧版');
  await page.getByRole('button',{name:'返回设置',exact:true}).click();await expect(page.getByRole('heading',{name:'设置',exact:true})).toBeVisible();
- await page.getByRole('button',{name:/行情 API 设置/}).click();await page.getByRole('button',{name:'配置帮助',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('#help-api')).toHaveAttribute('open','');
+ await page.locator('.bottom-nav').getByRole('button',{name:'持仓',exact:true}).click();await page.getByRole('button',{name:'查看行情状态',exact:true}).click();await page.getByRole('button',{name:/更换行情来源/}).click();await page.getByRole('button',{name:'配置帮助',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('#help-api')).toHaveAttribute('open','');
 });
 test('首页小屏与手机尺寸布局',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'先看看示例账本',exact:true}).click();

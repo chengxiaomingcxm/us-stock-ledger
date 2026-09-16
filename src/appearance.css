@@ -19,6 +19,7 @@ input,select,textarea{background:var(--surface);color:var(--text);border-color:v
 .nav-item.active,.bottom-nav .nav-item.active{color:#087ff5;background:color-mix(in srgb,#087ff5 18%,var(--surface))}
 .muted,.caption,.form-hint,.dialog-copy,.help-copy,.help-intro p,.settings-panel .setting-row small,.valuation-top h2,.valuation-top p,.valuation-bottom>span,.return-card dt,.holding-name>small,.compact-holding .quote-date,.market-status,.position-facts dt,.trade-detail,.trade-name small,.trade-amount small,.calendar-day span,.daily-latest span,.month-summary small,.chart-range,.totals dt,.form-grid label,.note-field,.summary-split span,.profit-summary>p,.realized-row small{color:var(--secondary)}
 .setting-row,.trade-detail,.realized-row{border-color:var(--border)}
+.sync-source{border:0;padding:12px 4px 2px}
 .refresh-button{background:var(--surface);border-color:var(--border);box-shadow:none}.quote-badge,.privacy-button,.setting-icon{background:color-mix(in srgb,#087ff5 16%,var(--surface));color:#087ff5}
 .valuation-profit{margin-top:16px}.valuation-bottom{margin-top:18px}.valuation-card{padding:18px}.compact-holdings{gap:10px}.holding-open{padding-top:14px}.return-card{padding-top:10px}
 .sell-shortcuts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0;font-size:13px}.sell-shortcuts[hidden]{display:none}.sell-shortcuts span{margin-right:auto}.sell-shortcuts button{padding:8px 16px}

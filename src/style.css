@@ -39,3 +39,4 @@ select{font:inherit;font-size:16px;width:100%;padding:13px;margin-top:8px;backgr
 }
 @media(prefers-reduced-transparency:reduce){:root{--glass:#f4faf6}.sidebar,.bottom-nav,.modal-head,.segmented,.header-actions .primary,.modal-backdrop{-webkit-backdrop-filter:none;backdrop-filter:none}.modal,.panel,.stat-card{background:#fff}}
 @media(prefers-contrast:more){:root{--muted:#3d5146}.caption,.quote-date,.holding-details span,.stat-label,.form-hint,.rules p,.panel-footnote,small{color:#3d5146}.panel,.stat-card,.holding-card,.bottom-nav{border-color:#687f72}}
+.month-navigation label{flex:1;min-width:0}.month-navigation input{min-width:0;flex:1}
