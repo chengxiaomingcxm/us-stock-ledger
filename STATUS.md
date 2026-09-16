@@ -10,7 +10,8 @@
 - [云端构建成功](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35043696558)，源码提交 83377bb0397988e6904369f3abad1792b153ff7a。
 - 已验证 iPhoneOS / ARM64、1.21.0 / build 4、com.personal.stockledger；显式关闭缩放，包内网页与本地 dist 完全相同。
 - IPA 551,077 字节，SHA-256：`c753104f3016ab02e4e7b0f3dfff6ef29dc4993d4a92887fd13f341d9b971ae7`。
-- 发布清单已记录构建与校验值，等待正式 Release 发布流程完成。
+- [v1.21.0 正式 Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.21.0) 已发布 IPA、SHA-256 与升级说明；已核对公开附件摘要和源码标签。
+- [发布流程](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35043920068)成功。
 - 未在 iPhone 17 / iOS 27 真机验证手势、键盘和覆盖安装；不得将浏览器检查当作真机测试。
 
 
