@@ -1,20 +1,19 @@
 # 美股持仓账本｜项目摘要
 
-更新：2026-09-16。当前界面版本 **1.23**，内部版本 **1.23.0（build 6）**。
+更新：2026-09-16。当前界面版本 **1.24**，内部版本 **1.24.0（build 7）**。
 
 ## 仓库与文件
 - GitHub：https://github.com/chengxiaomingcxm/us-stock-ledger
-- 正式下载：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.23.0
+- 正式下载：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.24.0
 - 本地工程：C:/Users/PC/Desktop/New folder (2)/stock-ledger
 - Git 跟踪副本：C:/Users/PC/Desktop/New folder (2)/stock-ledger-github
-- 本地安装包：stock-ledger/delivery/1.23.0/StockLedger-1.23.0-unsigned.ipa
+- 本地安装包：stock-ledger/delivery/1.24.0/StockLedger-1.24.0-unsigned.ipa
 - 技术：TypeScript、Vite、Capacitor；最低 iOS 16；应用标识 com.personal.stockledger。
 
-## 1.23 已完成
-- 设置新增「显示与提醒」：外观跟随系统 / 浅色 / 深色、涨跌颜色绿涨红跌 / 红涨绿跌、备份提醒每 7 天 / 每 30 天 / 关闭；偏好保存在本机并重启保留。
-- 行情 API 密钥在 iOS 上改存系统钥匙串（本地 Swift 插件 LedgerSecretsPlugin），旧值首次使用自动迁移，写入先校验再清理旧位置；浏览器端继续用 Preferences。
-- 交易表单新增一半 / 全部快捷卖出、最近股票代码下拉、手续费默认沿用上一笔；保存后可撤销刚新增的交易；首页在需要备份时显示提醒条。
-- 保留 1.22 的卡片首页、金额隐藏、筛选排序、持仓详情、离线帮助、玻璃底栏与双击缩放防护。
+## 1.24 已完成
+- 行情来源入口从设置页移到首页 / 收益页的「行情状态」面板，点开后通过「更换行情来源」切换 Yahoo / Finnhub / 自定义 API；设置页移除孤立的行情 API 入口。
+- 修复收益页月份选择器在 320px 窄屏下的横向溢出。
+- 保留 1.23 的外观、涨跌颜色、备份提醒、快捷卖出、撤销新增与 iOS 钥匙串密钥存储。
 
 ## 数据与行情约定
 - 用户已有真实账本，不能清空。保持应用身份、原存储键、核心 version: 1 和交易格式稳定。
@@ -29,10 +28,10 @@
 ## 验证与发布
 - 65 项单元测试、13 项浏览器流程通过；生产构建和原生资源同步通过。
 - 320 / 402 / 430 像素宽度、深浅色各页无横向溢出；中央按钮至少 44px，交易流程与偏好重启保留均通过浏览器验证。
-- 云端构建：https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35073759877
-- IPA 源码：fceca08461a1dc2cc7f3d5045d0f8d44cdf88ff0。
-- 已验证 iPhoneOS / ARM64、1.23.0 / build 6、com.personal.stockledger；钥匙串插件随原生工程编译通过。
-- IPA 567506 字节；SHA-256 2afcdd83d24484d728bfc319d03130d796b358917c86cd78f412d0ba166b3078。
+- 云端构建：https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35079261287
+- IPA 源码：c3550bf21b536de4ace30fd050070f9fa41101c2。
+- 已验证 iPhoneOS / ARM64、1.24.0 / build 7、com.personal.stockledger；钥匙串插件随原生工程编译通过。
+- IPA SHA-256：5c7cf21b5081a6863e1b32ecbf1a09ac9bd14b398f8bf92c663e14007f43303a。
 - Release 说明与升级文档已准备，待发布流程核对后公开 IPA、校验文件和升级说明。
 - 尚未在用户 iPhone 17 / iOS 27 真机验证手势、键盘、安全区、分享、外观切换与钥匙串迁移。
 
