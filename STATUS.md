@@ -7,7 +7,10 @@
 - 402 × 874 手机尺寸检查持仓、设置、API 弹窗；控件无横向溢出。
 - 未使用用户实际 API Key；Finnhub 鉴权与自定义接口的错误路径使用模拟响应验证。
 - 日收益历史仍使用 Yahoo；最新行情时效由用户供应商决定。
-- GitHub 云端 IPA 构建与正式发布正在进行，验证结果将在完成后追加。
+- [云端构建成功](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35043696558)，源码提交 83377bb0397988e6904369f3abad1792b153ff7a。
+- 已验证 iPhoneOS / ARM64、1.21.0 / build 4、com.personal.stockledger；显式关闭缩放，包内网页与本地 dist 完全相同。
+- IPA 551,077 字节，SHA-256：`c753104f3016ab02e4e7b0f3dfff6ef29dc4993d4a92887fd13f341d9b971ae7`。
+- 发布清单已记录构建与校验值，等待正式 Release 发布流程完成。
 - 未在 iPhone 17 / iOS 27 真机验证手势、键盘和覆盖安装；不得将浏览器检查当作真机测试。
 
 
