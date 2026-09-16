@@ -9,7 +9,7 @@ test('第一版本机数据直接升级，启动同步、手动刷新、失败�
  await seed(page);let requests=0, fail=false;
  await page.route('https://query2.finance.yahoo.com/**',async route=>{requests++;const body=structuredClone(response);if(route.request().url().includes('/SPY?'))body.chart.result[0].meta.symbol='SPY';await route.fulfill({status:fail?429:200,contentType:'application/json',body:JSON.stringify(body)});});
  await page.goto('/');
- await expect(page.getByTestId('sync-status')).toContainText('1 只取得收盘报价');
+ await expect(page.getByTestId('sync-status')).toContainText('1 只更新');
  await expect(page.getByTestId('cost')).toHaveText('$600.60');
  await expect(page.getByTestId('realized')).toHaveText('+$77.60');
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
@@ -18,9 +18,9 @@ test('第一版本机数据直接升级，启动同步、手动刷新、失败�
  expect(requests).toBe(2);
  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));expect(requests).toBe(2);
  fail=true;await page.getByRole('button',{name:'更新收益',exact:true}).click();
- await expect(page.getByTestId('sync-status')).toContainText('2 只更新失败');
+ await expect(page.getByTestId('sync-status')).toContainText('2 项更新失败');
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
- await page.reload();await expect(page.getByTestId('sync-status')).toContainText('2 只更新失败');
+ await page.reload();await expect(page.getByTestId('sync-status')).toContainText('2 项更新失败');
  await expect(page.getByTestId('market-value')).toHaveText('$660.00');
  await page.locator('.bottom-nav').getByRole('button',{name:'设置',exact:true}).click();
  await page.locator('#import').setInputFiles({name:'v1-backup.js',mimeType:'text/javascript',buffer:Buffer.from(JSON.stringify(old))});
@@ -44,7 +44,7 @@ test('更新中编辑交易不会被迟到的网络响应覆盖，Logo失败仍�
  await page.getByRole('button',{name:'保存修改',exact:true}).click();
  await expect(page.getByRole('dialog')).toHaveCount(0);release();
  await page.locator('.bottom-nav').getByRole('button',{name:'持仓',exact:true}).click();
- await expect(page.getByTestId('sync-status')).toContainText('账本正在编辑或已改变');
+ await expect(page.getByTestId('sync-status')).toContainText('更新已取消');
  await expect(page.getByTestId('cost')).toHaveText('$540.60');
  await expect(page.getByTestId('market-value')).toHaveText('$630.00');
 });

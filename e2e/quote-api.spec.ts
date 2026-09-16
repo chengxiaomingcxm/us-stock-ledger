@@ -23,7 +23,7 @@ test('盘中价更新估值，限流保留报价，备份不含盘中价格或�
  let fail=false;await page.route('https://quotes.example/**',r=>r.fulfill({status:fail?429:200,json:{symbol:'AAPL',currency:'USD',price:'220',timestamp:new Date().toISOString()}}));
  await page.goto('/');await expect(page.getByTestId('market-value')).toHaveText('$1,320.00');await expect(page.locator('.quote-date')).toContainText('最新报价');
  fail=true;await expect(page.getByRole('button',{name:'更新收益',exact:true})).toBeEnabled();await page.getByRole('button',{name:'更新收益',exact:true}).click();
- await expect(page.locator('.sync-panel')).toContainText('请求限流');await expect(page.getByTestId('market-value')).toHaveText('$1,320.00');
+ await expect(page.getByTestId('sync-status')).toContainText('最新价更新失败');await page.getByRole('button',{name:'查看行情状态',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('请求限流');await page.getByRole('button',{name:'关闭',exact:true}).click();await expect(page.getByTestId('market-value')).toHaveText('$1,320.00');
  await page.getByRole('button',{name:'设置',exact:true}).click();const event=page.waitForEvent('download');await page.getByRole('button',{name:/导出完整备份/}).click();const download=await event;const backup=await readFile((await download.path())!,'utf8');
  expect(backup).not.toContain('TEST-ONLY-SECRET');expect(JSON.parse(backup).quotes).toEqual(old.quotes);expect(JSON.parse(backup).trades).toEqual(old.trades);
 });

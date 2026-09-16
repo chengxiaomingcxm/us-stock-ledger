@@ -5,7 +5,7 @@ test('收益日历、历史重算、两种备份导出与本机恢复',async({pa
  await page.addInitScript(data=>{if(!localStorage.getItem('seeded')){localStorage.setItem('CapacitorStorage.stock-ledger-v1-0',JSON.stringify({revision:1,data}));localStorage.setItem('seeded','yes');}},ledger);
  await page.route('https://financialmodelingprep.com/**',r=>r.abort());
  await page.route('https://query2.finance.yahoo.com/**',r=>{const symbol=r.request().url().includes('/SPY?')?'SPY':'AAPL';return r.fulfill({contentType:'application/json',body:JSON.stringify({chart:{result:[{meta:{symbol,currency:'USD',instrumentType:'EQUITY',exchangeTimezoneName:'America/New_York',priceHint:2},timestamp:['2026-09-08','2026-09-09','2026-09-10','2026-09-11'].map(d=>Date.parse(d+'T13:30:00Z')/1000),indicators:{quote:[{close:[100,110,120,130]}]}}]}})});});
- await page.goto('/');await expect(page.getByTestId('sync-status')).toContainText('1 只取得');
+ await page.goto('/');await expect(page.getByTestId('sync-status')).toContainText('1 只更新');
  const nav=page.locator('.bottom-nav');await nav.getByRole('button',{name:'收益',exact:true}).click();
  await page.locator('#history-month').fill('2026-09');
  await expect(page.getByTestId('daily-profit')).toHaveText('+$100.00');
