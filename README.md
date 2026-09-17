@@ -2,9 +2,9 @@
 
 这是我自己用的美股持仓账本，主要用来记买卖、看持仓成本和收益。做成了中文 iPhone App，数据留在本机，不用注册账号。
 
-当前稳定版是 **1.24**；此分支正在开发 **1.25**，尚未发布安装包。支持 iOS 16 及以上。
+当前发布版本是 **1.25**，支持 iOS 16 及以上。本次从 `deepseek-dev` 构建发布，尚未合并到 `main`。
 
-[下载稳定版 1.24](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.24.0) · [使用帮助](HELP.md) · [更新记录](CHANGELOG.md)
+[下载 1.25](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.25.0) · [使用帮助](HELP.md) · [更新记录](CHANGELOG.md)
 
 ## 能做什么
 
@@ -17,7 +17,7 @@
 
 目前只做美元美股和 ETF 记账，不连接券商，也不处理分红、拆股、做空和期权。
 
-## 1.25 开发内容
+## 1.25 更新
 
 这次把首页收益说清楚，也让查交易更好用。
 
