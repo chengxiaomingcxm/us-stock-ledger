@@ -1,14 +1,17 @@
 import UIKit
+import SwiftUI
 import Capacitor
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
+    // 2.0：原生 SwiftUI 界面替换 WebView；Capacitor 仅保留构建与既有插件依赖，不再承载界面。
+    @MainActor
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = LedgerBridgeViewController()
+        window?.rootViewController = UIHostingController(rootView: RootView().environmentObject(AppState()))
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)

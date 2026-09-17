@@ -1,0 +1,198 @@
+import SwiftUI
+
+struct HoldingsView: View {
+    @EnvironmentObject private var state: AppState
+    let onAdd: () -> Void
+
+    @State private var detailSymbol: String?
+    @State private var quoteSymbol: String?
+
+    private var summary: LedgerSummary { state.summary }
+
+    var body: some View {
+        List {
+            Section {
+                TodayCard()
+            }
+            Section("持有收益") {
+                LabeledContent("浮动收益", value: Fmt.signedMoney(summary.unrealized))
+                LabeledContent("持仓成本", value: Fmt.money(summary.cost))
+                LabeledContent("已实现收益", value: Fmt.signedMoney(summary.realized))
+                LabeledContent("累计投资收益", value: Fmt.signedMoney(summary.totalProfit))
+                if !summary.missing.isEmpty {
+                    Label("\(summary.missing.count) 只持仓待报价", systemImage: "questionmark.circle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section("我的持仓") {
+                if summary.open.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("从第一笔投资开始").font(.headline)
+                        Text(state.ledger.trades.isEmpty ? "记录第一笔买入，自动计算成本与收益。" : "当前没有持仓。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Button("记录第一笔交易", action: onAdd)
+                    }
+                    .padding(.vertical, 6)
+                } else {
+                    ForEach(summary.open) { position in
+                        Button { detailSymbol = position.symbol } label: { row(position) }
+                            .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .navigationTitle("持仓账本")
+        .sheet(item: Binding(get: { detailSymbol.map(SymbolBox.init) }, set: { detailSymbol = $0?.value })) { box in
+            PositionDetailView(symbol: box.value, onEditQuote: { quoteSymbol = box.value })
+                .environmentObject(state)
+        }
+        .sheet(item: Binding(get: { quoteSymbol.map(SymbolBox.init) }, set: { quoteSymbol = $0?.value })) { box in
+            QuoteFormView(symbol: box.value)
+                .environmentObject(state)
+        }
+    }
+
+    private func row(_ position: Position) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(position.symbol).font(.headline)
+                Text("\(Fmt.quantity(position.quantity)) 股 · 市值 \(Fmt.money(position.value))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(position.quote.map { "收盘/报价 \($0.date)" } ?? "待报价")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Text(position.unrealized.map { Fmt.percent($0 / max(position.cost, 1)) } ?? "—")
+                    .font(.subheadline)
+                AmountText(value: position.unrealized)
+                    .font(.subheadline.weight(.semibold))
+            }
+            Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(position.symbol)，\(Fmt.quantity(position.quantity)) 股，浮动收益 \(Fmt.signedMoney(position.unrealized))")
+    }
+}
+
+struct SymbolBox: Identifiable {
+    let value: String
+    var id: String { value }
+}
+
+struct TodayCard: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        let result = Engine.todayPnl(state.ledger, previousClose: state.previousClose, today: Fmt.today)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("今日盈亏").font(.subheadline).foregroundStyle(.secondary)
+            Text(result.pnl == nil ? "待补全" : Fmt.signedMoney(result.pnl))
+                .font(.largeTitle.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(result.pnl == nil ? Color.secondary : Color.primary)
+            Text(result.caption).font(.footnote).foregroundStyle(.secondary)
+            LabeledContent("持仓市值", value: Fmt.money(state.summary.value))
+                .font(.footnote)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct PositionDetailView: View {
+    @EnvironmentObject private var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    let symbol: String
+    var onEditQuote: () -> Void = {}
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let position = state.summary.open.first(where: { $0.symbol == symbol }) {
+                    Section {
+                        LabeledContent("浮动收益", value: Fmt.signedMoney(position.unrealized))
+                        LabeledContent("持有股数", value: Fmt.quantity(position.quantity))
+                        LabeledContent("持仓市值", value: Fmt.money(position.value))
+                        LabeledContent("平均成本", value: Fmt.money(position.average))
+                        LabeledContent("持仓成本", value: Fmt.money(position.cost))
+                    }
+                    Section("参考股价") {
+                        LabeledContent("报价", value: position.quote.map { Fmt.money($0.price) } ?? "待报价")
+                        LabeledContent("报价日期", value: position.quote?.date ?? "—")
+                        Button("更新股价", action: onEditQuote)
+                    }
+                    Section("相关交易") {
+                        let related = state.ledger.trades.filter { $0.symbol == symbol }
+                            .sorted { $0.date == $1.date ? $0.sequence > $1.sequence : $0.date > $1.date }
+                        if related.isEmpty {
+                            Text("暂无该股票的交易记录。").foregroundStyle(.secondary)
+                        } else {
+                            ForEach(related) { trade in
+                                LabeledContent("\(trade.date) · \(trade.side.label) \(Fmt.quantity(trade.quantity)) 股",
+                                               value: Fmt.money(trade.gross))
+                            }
+                        }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("已无持仓").font(.headline)
+                        Text("该股票已全部卖出。").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle(symbol)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+    }
+}
+
+struct QuoteFormView: View {
+    @EnvironmentObject private var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    let symbol: String
+
+    @State private var price = ""
+    @State private var date = Fmt.today
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("股价（美元）", text: $price).keyboardType(.decimalPad)
+                    DatePicker("报价日期（美东）", selection: Binding(
+                        get: { DateFormatter.ledgerDate.date(from: date) ?? Date() },
+                        set: { date = DateFormatter.ledgerDate.string(from: $0) }
+                    ), in: ...Date(), displayedComponents: .date)
+                }
+                if let error { Text(error).foregroundStyle(.red) }
+            }
+            .navigationTitle("更新 \(symbol) 股价")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("保存") { save() } }
+            }
+        }
+    }
+
+    private func save() {
+        guard let value = Decimal(string: price.replacingOccurrences(of: ",", with: ""), locale: Locale(identifier: "en_US")), value > 0 else {
+            error = "请填写大于 0 的股价。"
+            return
+        }
+        state.setQuote(symbol: symbol, price: value, date: date)
+        dismiss()
+    }
+}
+
+extension DateFormatter {
+    static let ledgerDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
