@@ -2,6 +2,7 @@ import './style.css';
 import './home.css';
 import './appearance.css';
 import './v125.css';
+import './v126.css';
 import { defaults, loadAppearance, saveAppearance, applyAppearance, backupDue, type Appearance } from './preferences';
 import { helpPage } from './help';
 import { defaultApi, loadApi, saveApi, validateApi, fetchLive, withLive, type ApiSettings, type LiveQuote } from './quote-api';
@@ -11,7 +12,9 @@ import { App } from '@capacitor/app';
 import { fetchClose, syncHistory, marketDate, logoUrl, quoteAgeWarning } from './market';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { D, emptyLedger, calculate, today, saveTrade, deleteTrade, validateLedger, parseBackup, backupText, demoLedger, money, signedMoney, quantity, orderedTrades, type Ledger, type Trade, type Quote } from './ledger';
+import { D, emptyLedger, calculate, today, saveTrade, deleteTrade, validateLedger, parseBackup, backupText, demoLedger, money, signedMoney, quantity, orderedTrades, type Ledger, type Trade, type Quote, type CashKind, type CashRecord } from './ledger';
+import { cashTotals, cashNet, orderedCashRecords, saveCashRecord, deleteCashRecord, setOpening, kindLabel } from './cash';
+import { parseCsv, autoMap, analyzeTradeCsv, analyzeCashCsv, applyTradeImport, applyCashImport, tradeFields, cashFields, tradeFieldLabels, cashFieldLabels, TRADE_ALIASES, CASH_ALIASES, type TradeImport, type CashImport, type TradeField, type CashField, type CsvTable, type Mapping } from './csv-import';
 import { knownClosed } from './history';
 import { todayPnl } from './today-pnl';
 import { rangeStats } from './trade-range';
@@ -113,7 +116,7 @@ function render(){
  const openHelp=[...app.querySelectorAll<HTMLDetailsElement>('.help-chapter[open]')].map(el=>el.id);
 
  const s=calculate(displayLedger()); const titles:Record<string,string>={holdings:'持仓账本',trades:'交易记录',insights:'收益分析',settings:'设置',help:'帮助文档'};
- app.innerHTML=`<aside class="sidebar"><div class="brand"><span class="brand-icon">${icon('chart-no-axes-combined')}</span><div>持仓账本<small>STOCK LEDGER</small></div></div><nav>${nav()}</nav><div class="sidebar-foot">${icon('shield-check')}数据保存在本机<small>个人美股账本 · v1.25</small></div></aside>
+ app.innerHTML=`<aside class="sidebar"><div class="brand"><span class="brand-icon">${icon('chart-no-axes-combined')}</span><div>持仓账本<small>STOCK LEDGER</small></div></div><nav>${nav()}</nav><div class="sidebar-foot">${icon('shield-check')}数据保存在本机<small>个人美股账本 · v1.26</small></div></aside>
  <div class="workspace ${tab==='holdings'?'home-workspace':''}">${demo?`<div class="demo-banner">${icon('eye')}示例模式 · 虚构交易与价格<button data-action="exit-demo">退出示例</button></div>`:''}
 <header class="app-header">${tab==='help'?`<button class="icon-button header-back" data-tab="settings" aria-label="返回设置">${icon('arrow-left')}</button>`:''}<h1>${titles[tab]}</h1><div class="header-actions">${tab==='holdings'||tab==='insights'?`<button class="refresh-button" data-sync aria-label="更新收益" ${syncing||blocked||demo||!data.trades.length?'disabled':''}>${icon('refresh-cw')}</button>`:''}</div></header>
 
@@ -143,6 +146,10 @@ function render(){
  app.querySelectorAll<HTMLButtonElement>('[data-month]').forEach(b=>b.onclick=()=>{const d=new Date(historyMonth+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+Number(b.dataset.month));const next=d.toISOString().slice(0,7);if(next>='1900-01'&&next<=marketDate(Date.now()).slice(0,7)){historyMonth=next;render();}});
  const month=app.querySelector<HTMLInputElement>('#history-month');if(month)month.onchange=()=>{if(/^\d{4}-\d{2}$/.test(month.value)&&month.validity.valid){historyMonth=month.value;render();}};
  app.querySelectorAll<HTMLButtonElement>('[data-position]').forEach(b=>b.onclick=()=>positionModal(b.dataset.position!));
+ app.querySelectorAll<HTMLButtonElement>('[data-cash]').forEach(b=>{b.disabled=demo||blocked;b.onclick=()=>cashModal(b.dataset.cash as CashKind|'opening');});
+ app.querySelectorAll<HTMLButtonElement>('[data-cash-edit]').forEach(b=>b.onclick=()=>{const r=data.cash?.records.find(x=>x.id===b.dataset.cashEdit);if(r)cashModal(r.kind,r);});
+ app.querySelectorAll<HTMLButtonElement>('[data-cash-delete]').forEach(b=>b.onclick=()=>{const r=data.cash?.records.find(x=>x.id===b.dataset.cashDelete);if(r)cashDeleteModal(r);});
+ app.querySelectorAll<HTMLButtonElement>('[data-csv-import]').forEach(b=>{b.disabled=demo||blocked;b.onclick=()=>csvImportModal();});
  const eye=app.querySelector<HTMLButtonElement>('#hide-amounts');if(eye)eye.onclick=()=>{amountsHidden=!amountsHidden;render();app.querySelector<HTMLButtonElement>('#hide-amounts')?.focus();};
  app.querySelectorAll<HTMLButtonElement>('[data-holding-filter]').forEach(b=>b.onclick=()=>{holdingFilter=b.dataset.holdingFilter!;render();});
  const sort=app.querySelector<HTMLSelectElement>('#holding-sort');if(sort)sort.onchange=()=>{holdingSort=sort.value;render();};
@@ -191,9 +198,21 @@ function positionModal(symbol:string){
 }
 function trades(){const r=rangeStats(data,{from:tradeFrom,to:tradeTo,side:sideFilter as 'all'|'buy'|'sell',query:filter});const gains=calculate(displayLedger()).gains;const hasRange=!!(tradeFrom||tradeTo||sideFilter!=='all'||filter);return `<section class="panel"><div class="section-heading"><h2>全部交易 <span>${data.trades.length}</span></h2></div><div class="tools"><div class="segmented">${[['all','全部'],['buy','买入'],['sell','卖出']].map(([id,text])=>`<button data-side-filter="${id}" class="${id===sideFilter?'selected':''}">${text}</button>`).join('')}</div><label class="search">${icon('search')}<input id="search" value="${esc(filter)}" placeholder="搜索代码或备注" aria-label="搜索交易"></label></div><div class="trade-range"><label>从<input id="trade-from" type="date" min="1900-01-01" max="${today()}" value="${esc(tradeFrom)}" aria-label="起始日期"></label><label>至<input id="trade-to" type="date" min="1900-01-01" max="${today()}" value="${esc(tradeTo)}" aria-label="结束日期"></label>${hasRange?'<button class="text-button" id="clear-trade-filters">清除筛选</button>':''}</div>
  <div class="trade-summary" role="status">${tradeFrom&&tradeTo&&tradeFrom>tradeTo?`起始日期晚于结束日期，请调整。`:`范围内 ${r.count} 笔 · 买入 ${quantity(r.buyQty)} 股 · 卖出 ${quantity(r.sellQty)} 股 · 手续费 ${money(r.fees)} · 已实现收益 ${r.hasRealized?signedMoney(r.realized):'—'}`}</div>
- ${!data.trades.length?empty('还没有交易记录','添加买卖记录后，持仓和收益会自动更新。'):!r.list.length?empty('没有找到交易','试试其他股票代码、日期区间或筛选条件。',false):`<div class="trade-list">${r.list.map(t=>{const gross=D(t.quantity).mul(t.price),net=t.side==='buy'?gross.plus(t.fee):gross.minus(t.fee);return `<article class="trade-row"><div class="trade-top"><span class="trade-icon ${t.side}">${icon(t.side==='buy'?'arrow-down-left':'arrow-up-right')}</span><div class="trade-name"><h3>${esc(t.symbol)} <span class="badge ${t.side}">${t.side==='buy'?'买入':'卖出'}</span></h3><small>${t.date} · 顺序 ${t.sequence+1}</small></div><div class="trade-amount"><strong>${money(gross)}</strong><small>成交金额</small></div></div><div class="trade-detail"><span>${quantity(t.quantity)} 股 × ${money(t.price)}</span><span>手续费 ${money(t.fee)}</span></div><div class="trade-detail"><span>${t.side==='buy'?'实际支出':'实际收入'} ${money(net)}</span>${t.side==='sell'?`<span class="${tone(gains.get(t.id))}">已实现 ${signedMoney(gains.get(t.id))}</span>`:''}</div>${t.note?`<p class="trade-note">${esc(t.note)}</p>`:''}<div class="trade-actions"><button class="text-button" data-edit="${esc(t.id)}">${icon('pencil')}编辑</button><button class="text-button delete" data-delete="${esc(t.id)}">${icon('trash-2')}删除</button></div></article>`;}).join('')}</div>`}</section>`;}
-function insights(s:ReturnType<typeof calculate>){return `${marketStatus()}${historyPanel(data,historyMonth)}<section class="panel profit-summary"><div class="eyebrow">INVESTMENT RETURN</div><h2>累计投资收益</h2><div class="summary-number ${tone(s.totalProfit)}">${signedMoney(s.totalProfit)}</div><p>已实现收益 + 当前持仓浮动收益</p><div class="summary-split"><div><span>已实现收益</span><strong class="${tone(s.realized)}">${signedMoney(s.realized)}</strong></div><div><span>浮动收益</span><strong class="${tone(s.unrealized)}">${signedMoney(s.unrealized)}</strong></div></div>${s.missing.length?'<p class="notice-inline">部分股票缺少股价，累计收益暂未计算。</p>':''}</section><div class="two-columns"><section class="panel"><div class="section-heading"><h2>持仓成本分布</h2><span class="caption">按成本占比</span></div>${!s.open.length?'<p class="small-empty">暂无持仓</p>':s.open.map((p,i)=>{const pc=p.cost.div(s.cost).mul(100).toFixed(1);return `<div class="allocation"><div><b>${esc(p.symbol)}</b><span>${pc}% <small>${money(p.cost)}</small></span></div><div class="bar"><div class="color-${i%4}" style="width:${pc}%"></div></div></div>`;}).join('')}</section><section class="panel"><div class="section-heading"><h2>资金记录</h2></div><dl class="totals"><div><dt>累计买入支出</dt><dd>${money(s.buyTotal)}</dd></div><div><dt>累计卖出收入</dt><dd>${money(s.sellTotal)}</dd></div><div><dt>累计手续费</dt><dd>${money(s.fees)}</dd></div><div><dt>交易笔数</dt><dd>${data.trades.length} 笔</dd></div></dl></section></div><section class="panel"><div class="section-heading"><h2>各股票已实现收益</h2></div>${!s.positions.length?'<p class="small-empty">卖出后可在这里查看收益</p>':s.positions.map(p=>`<div class="realized-row"><b>${esc(p.symbol)} <small>${p.quantity.eq(0)?'已平仓':'持仓中'}</small></b><strong class="${tone(p.realized)}">${signedMoney(p.realized)}</strong></div>`).join('')}</section>`;}
-function settings(){return `<section class="panel settings-panel"><div class="section-heading"><h2>持仓账本 <span>1.25</span></h2></div><button class="setting-row" data-help="home"><span class="setting-icon">${icon('circle-help')}</span><span><b>帮助文档</b><small>使用指南、计算规则与常见问题</small></span>${icon('chevron-right')}</button></section><section class="panel settings-panel"><div class="section-heading"><h2>显示与提醒</h2></div><label class="preference-row">外观<select data-preference="theme" aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><label class="preference-row">涨跌颜色<select data-preference="colors" aria-label="涨跌颜色"><option value="green-up">绿涨红跌</option><option value="red-up">红涨绿跌</option></select></label><div class="color-preview"><span class="positive">+$12.34 / +1.23%</span><span class="negative">−$12.34 / −1.23%</span></div><label class="preference-row">备份提醒<select data-preference="reminderDays" aria-label="备份提醒"><option value="7">每 7 天</option><option value="30">每 30 天</option><option value="0">关闭</option></select></label><p class="form-hint">应用内提醒 · ${appearance.lastExport?'上次导出 '+new Date(appearance.lastExport).toLocaleDateString('zh-CN'):'尚未导出备份'}</p></section><section class="panel settings-panel"><div class="section-heading"><h2>备份与恢复</h2><span class="backup-count"><span>${data.trades.length} 笔交易</span></span></div><button class="setting-row" id="export" ${blocked||demo?'disabled':''}><span class="setting-icon">${icon('download')}</span><span><b>导出完整备份</b></span>${icon('chevron-right')}</button><button class="setting-row" id="export-compatible" ${blocked||demo?'disabled':''}><span class="setting-icon">${icon('file-json')}</span><span><b>导出各版本通用备份</b></span>${icon('chevron-right')}</button><button class="setting-row" id="recovery" ${blocked||demo?'disabled':''}><span class="setting-icon">${icon('shield-check')}</span><span><b>本机恢复记录</b></span>${icon('chevron-right')}</button><label class="setting-row ${demo?'disabled':''}" for="import"><span class="setting-icon">${icon('upload')}</span><span><b>从备份恢复</b></span>${icon('chevron-right')}<input id="import" type="file" accept=".json,.js,application/json,text/javascript" ${demo?'disabled':''} class="visually-hidden"></label></section>${demo?'':`<button class="secondary full" data-action="demo">${icon('eye')}查看示例账本</button>`}`;}
+ ${!data.trades.length?empty('还没有交易记录','添加买卖记录后，持仓和收益会自动更新。'):!r.list.length?empty('没有找到交易','试试其他股票代码、日期区间或筛选条件。',false):`<div class="trade-list">${r.list.map(t=>{const gross=D(t.quantity).mul(t.price),net=t.side==='buy'?gross.plus(t.fee):gross.minus(t.fee);return `<article class="trade-row"><div class="trade-top"><span class="trade-icon ${t.side}">${icon(t.side==='buy'?'arrow-down-left':'arrow-up-right')}</span><div class="trade-name"><h3>${esc(t.symbol)} <span class="badge ${t.side}">${t.side==='buy'?'买入':'卖出'}</span>${t.source==='import'?'<span class="badge csv">CSV</span>':''}</h3><small>${t.date} · 顺序 ${t.sequence+1}</small></div><div class="trade-amount"><strong>${money(gross)}</strong><small>成交金额</small></div></div><div class="trade-detail"><span>${quantity(t.quantity)} 股 × ${money(t.price)}</span><span>手续费 ${money(t.fee)}</span></div><div class="trade-detail"><span>${t.side==='buy'?'实际支出':'实际收入'} ${money(net)}</span>${t.side==='sell'?`<span class="${tone(gains.get(t.id))}">已实现 ${signedMoney(gains.get(t.id))}</span>`:''}</div>${t.note?`<p class="trade-note">${esc(t.note)}</p>`:''}<div class="trade-actions"><button class="text-button" data-edit="${esc(t.id)}">${icon('pencil')}编辑</button><button class="text-button delete" data-delete="${esc(t.id)}">${icon('trash-2')}删除</button></div></article>`;}).join('')}</div>`}</section>`;}
+function cashPanel(s:ReturnType<typeof calculate>){
+ const t=cashTotals(data);const records=orderedCashRecords(data).reverse();
+ const assets=t.balance!==undefined&&s.value!==undefined?t.balance.plus(s.value):undefined;
+ const actions=[['opening',data.cash?.opening?'修改期初余额':'设置期初余额'],['deposit','入金'],['withdraw','出金'],['dividend','分红'],['fee','费用']] as const;
+ return `<section class="panel cash-panel"><div class="section-heading"><h2>现金账本</h2><span class="caption">入金出金不计盈亏</span></div>
+ <div class="cash-head"><div class="cash-balance"><span>当前现金余额</span><strong data-testid="cash-balance">${t.balance===undefined?'待设置期初':money(t.balance)}</strong><small>${t.balance===undefined?'旧账本没有现金记录，先设置期初余额，再对照券商账单补记':data.cash?.opening?`期初 ${esc(data.cash.opening.date)} · ${esc(data.cash.opening.note||'—')}`:''}</small></div><div class="cash-assets"><span>总资产（现金 + 持仓市值）</span><strong data-testid="total-assets">${assets===undefined?'—':money(assets)}</strong></div></div>
+ <dl class="cash-totals"><div><dt>期初余额</dt><dd data-testid="cash-opening">${data.cash?.opening?money(data.cash.opening.amount):'未设置'}</dd></div><div><dt>累计入金</dt><dd data-testid="cash-deposit">${money(t.deposit)}</dd></div><div><dt>累计出金</dt><dd data-testid="cash-withdraw">${money(t.withdraw.neg())}</dd></div><div><dt>分红到账（扣税）</dt><dd data-testid="cash-dividend">${money(t.dividend.minus(t.tax))}</dd></div><div><dt>预扣税费</dt><dd data-testid="cash-tax">${money(t.tax.neg())}</dd></div><div><dt>账户费用</dt><dd data-testid="cash-fee">${money(t.fee.neg())}</dd></div></dl>
+ <div class="cash-nets"><span>外部资金净流入<strong data-testid="cash-external">${signedMoney(t.opening.plus(t.deposit).minus(t.withdraw))}</strong></span><span>投资现金流入<strong data-testid="cash-invest">${signedMoney(t.dividend.minus(t.tax).minus(t.fee))}</strong></span></div>
+ <div class="cash-actions">${actions.map(([k,label])=>`<button class="secondary" data-cash="${k}" ${demo||blocked?'disabled':''}>${label}</button>`).join('')}<button class="secondary" data-csv-import ${demo||blocked?'disabled':''}>${icon('upload')}导入 CSV</button></div>
+ ${records.length?`<div class="cash-records" data-testid="cash-records"><div class="cash-record cash-record-head"><span>类型</span><span>金额与说明</span><span></span></div>${records.map(r=>`<div class="cash-record"><span class="cash-kind ${r.kind}">${kindLabel(r.kind)}</span><div class="cash-record-main"><strong class="${r.kind==='withdraw'||r.kind==='fee'?'':r.kind==='deposit'||r.kind==='dividend'?'positive':''}">${r.kind==='deposit'||r.kind==='dividend'?'+':''}${money(r.kind==='withdraw'||r.kind==='fee'?D(r.amount).neg():cashNet(r))}</strong><small>${esc(r.date)}${r.symbol?` · ${esc(r.symbol)}`:''}${r.note?` · ${esc(r.note)}`:''}${r.source==='import'?' · CSV':''}</small></div><div class="cash-record-actions"><button class="text-button" data-cash-edit="${esc(r.id)}" ${demo||blocked?'disabled':''}>编辑</button><button class="text-button delete" data-cash-delete="${esc(r.id)}" ${demo||blocked?'disabled':''}>删除</button></div></div>`).join('')}</div>`:`<p class="small-empty">还没有现金记录。设置期初余额后，可记录入金、出金、分红和账户费用，也可从券商 CSV 导入。</p>`}
+ <p class="form-hint">现金余额独立于投资收益计算；入金出金不会计为盈亏，分红按到账金额核对券商账单。</p></section>`;
+}
+function insights(s:ReturnType<typeof calculate>){return `${marketStatus()}${historyPanel(data,historyMonth)}<section class="panel profit-summary"><div class="eyebrow">INVESTMENT RETURN</div><h2>累计投资收益</h2><div class="summary-number ${tone(s.totalProfit)}">${signedMoney(s.totalProfit)}</div><p>已实现收益 + 当前持仓浮动收益</p><div class="summary-split"><div><span>已实现收益</span><strong class="${tone(s.realized)}">${signedMoney(s.realized)}</strong></div><div><span>浮动收益</span><strong class="${tone(s.unrealized)}">${signedMoney(s.unrealized)}</strong></div></div>${s.missing.length?'<p class="notice-inline">部分股票缺少股价，累计收益暂未计算。</p>':''}</section>${cashPanel(s)}<div class="two-columns"><section class="panel"><div class="section-heading"><h2>持仓成本分布</h2><span class="caption">按成本占比</span></div>${!s.open.length?'<p class="small-empty">暂无持仓</p>':s.open.map((p,i)=>{const pc=p.cost.div(s.cost).mul(100).toFixed(1);return `<div class="allocation"><div><b>${esc(p.symbol)}</b><span>${pc}% <small>${money(p.cost)}</small></span></div><div class="bar"><div class="color-${i%4}" style="width:${pc}%"></div></div></div>`;}).join('')}</section><section class="panel"><div class="section-heading"><h2>资金记录</h2></div><dl class="totals"><div><dt>累计买入支出</dt><dd>${money(s.buyTotal)}</dd></div><div><dt>累计卖出收入</dt><dd>${money(s.sellTotal)}</dd></div><div><dt>累计手续费</dt><dd>${money(s.fees)}</dd></div><div><dt>交易笔数</dt><dd>${data.trades.length} 笔</dd></div></dl></section></div><section class="panel"><div class="section-heading"><h2>各股票已实现收益</h2></div>${!s.positions.length?'<p class="small-empty">卖出后可在这里查看收益</p>':s.positions.map(p=>`<div class="realized-row"><b>${esc(p.symbol)} <small>${p.quantity.eq(0)?'已平仓':'持仓中'}</small></b><strong class="${tone(p.realized)}">${signedMoney(p.realized)}</strong></div>`).join('')}</section>`;}
+function settings(){return `<section class="panel settings-panel"><div class="section-heading"><h2>持仓账本 <span>1.26</span></h2></div><button class="setting-row" data-help="home"><span class="setting-icon">${icon('circle-help')}</span><span><b>帮助文档</b><small>使用指南、计算规则与常见问题</small></span>${icon('chevron-right')}</button></section><section class="panel settings-panel"><div class="section-heading"><h2>显示与提醒</h2></div><label class="preference-row">外观<select data-preference="theme" aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><label class="preference-row">涨跌颜色<select data-preference="colors" aria-label="涨跌颜色"><option value="green-up">绿涨红跌</option><option value="red-up">红涨绿跌</option></select></label><div class="color-preview"><span class="positive">+$12.34 / +1.23%</span><span class="negative">−$12.34 / −1.23%</span></div><label class="preference-row">备份提醒<select data-preference="reminderDays" aria-label="备份提醒"><option value="7">每 7 天</option><option value="30">每 30 天</option><option value="0">关闭</option></select></label><p class="form-hint">应用内提醒 · ${appearance.lastExport?'上次导出 '+new Date(appearance.lastExport).toLocaleDateString('zh-CN'):'尚未导出备份'}</p></section><section class="panel settings-panel"><div class="section-heading"><h2>备份与恢复</h2><span class="backup-count"><span>${data.trades.length} 笔交易</span></span></div><button class="setting-row" id="export" ${blocked||demo?'disabled':''}><span class="setting-icon">${icon('download')}</span><span><b>导出完整备份</b></span>${icon('chevron-right')}</button><button class="setting-row" id="export-compatible" ${blocked||demo?'disabled':''}><span class="setting-icon">${icon('file-json')}</span><span><b>导出各版本通用备份</b></span>${icon('chevron-right')}</button><button class="setting-row" id="recovery" ${blocked||demo?'disabled':''}><span class="setting-icon">${icon('shield-check')}</span><span><b>本机恢复记录</b></span>${icon('chevron-right')}</button><button class="setting-row" data-csv-import ${blocked||demo?'disabled':''}><span class="setting-icon">${icon('upload')}</span><span><b>导入券商 CSV</b><small>交易与资金流水 · 预览确认后写入</small></span>${icon('chevron-right')}</button><label class="setting-row ${demo?'disabled':''}" for="import"><span class="setting-icon">${icon('upload')}</span><span><b>从备份恢复</b></span>${icon('chevron-right')}<input id="import" type="file" accept=".json,.js,application/json,text/javascript" ${demo?'disabled':''} class="visually-hidden"></label></section>${demo?'':`<button class="secondary full" data-action="demo">${icon('eye')}查看示例账本</button>`}`;}
 let previousFocus:HTMLElement|null=null;
 let discardFocus:HTMLElement|null=null;
 function isLive(q:Quote){return !demo&&live.get(q.symbol)?.quote===q;}
@@ -252,6 +271,117 @@ function tradeModal(t?:Trade,prefillSymbol=''){if(blocked)return;const sequence=
  const update=()=>{const f=new FormData(form);const shortcuts=form.querySelector<HTMLElement>('#sell-shortcuts')!;const symbol=String(f.get('symbol')).trim().toUpperCase();const available=calculate(data).open.find(p=>p.symbol===symbol)?.quantity??D(0);shortcuts.hidden=!!t||f.get('side')!=='sell'||String(f.get('date'))!==marketDate(Date.now());form.querySelector('#available-shares')!.textContent='当前可卖 '+quantity(available)+' 股';try{const gross=D(String(f.get('quantity'))).mul(String(f.get('price'))), fee=D(String(f.get('fee')));modalRoot.querySelector('#gross')!.textContent=money(gross);modalRoot.querySelector('#net')!.textContent=money(f.get('side')==='buy'?gross.plus(fee):gross.minus(fee));}catch{modalRoot.querySelector('#gross')!.textContent='—';modalRoot.querySelector('#net')!.textContent='—';}modalRoot.querySelector('#net-label')!.textContent=f.get('side')==='buy'?'实际支出（含费）':'实际收入（扣费后）';};
  form.oninput=update;form.querySelectorAll<HTMLButtonElement>('[data-fill]').forEach(b=>b.onclick=()=>{dirty=true;const symbol=(form.elements.namedItem('symbol') as HTMLInputElement).value.trim().toUpperCase();const available=calculate(data).open.find(p=>p.symbol===symbol)?.quantity??D(0);(form.elements.namedItem('quantity') as HTMLInputElement).value=(b.dataset.fill==='half'?available.div(2).toDecimalPlaces(8,1):available).toFixed();update();});update();form.onsubmit=e=>{e.preventDefault();void submit(async()=>{const f=new FormData(form),get=(k:string)=>String(f.get(k)??'').trim();const id=t?.id??crypto.randomUUID();const next=saveTrade(data,{id,sequence,symbol:get('symbol').toUpperCase(),side:get('side') as 'buy'|'sell',date:get('date'),quantity:get('quantity'),price:get('price'),fee:get('fee'),note:get('note')});await commit(next,t?'编辑交易前':undefined);if(!t)undoTrade=id;});};
  (form.elements.namedItem('symbol') as HTMLInputElement).focus();
+}
+function cashModal(kind: CashKind|'opening', record?: CashRecord){
+ if(demo||blocked)return;
+ const isOpening=kind==='opening';
+ const kinds:[CashKind,string][]=[['deposit','入金'],['withdraw','出金'],['dividend','分红'],['fee','账户费用']];
+ const current=record?.kind??(isOpening?'deposit':kind);
+ modal(isOpening?data.cash?.opening?'修改期初余额':'设置期初余额':record?'编辑资金记录':'记录资金',`<form id="cash-form">
+ ${isOpening?`<p class="form-hint">期初余额是开始用账本前账户里已有的现金。旧账本只有交易记录，无法自动推断，请对照券商账单填写；之后补记的入金、出金、分红会累加到期初余额上。</p>`:''}
+ ${isOpening?'':`<div class="form-tabs">${kinds.map(([k,label])=>`<label><input name="kind" type="radio" value="${k}" ${current===k?'checked':''}><span>${label}</span></label>`).join('')}</div>`}
+ <div class="form-grid"><label>日期（美东）<input name="date" type="date" min="1900-01-01" max="${marketDate(Date.now())}" required value="${esc(record?.date??(isOpening?data.cash?.opening?.date??marketDate(Date.now()):marketDate(Date.now())))}"></label><label>金额（美元）<input name="amount" inputmode="decimal" required placeholder="0.00" value="${esc(record?.amount??(isOpening?data.cash?.opening?.amount??'':''))}"></label></div>
+ <div class="form-grid"><label id="cash-tax-field">预扣税费（选填）<input name="tax" inputmode="decimal" placeholder="0.00" value="${esc(record?.tax??'')}"></label><label id="cash-symbol-field">股票代码（选填）<input name="symbol" list="recent-symbols" maxlength="15" autocapitalize="characters" autocomplete="off" value="${esc(record?.symbol??'')}"></label></div>
+ <datalist id="recent-symbols">${[...new Set(orderedTrades(data.trades).reverse().map(x=>x.symbol))].slice(0,20).map(symbol=>`<option value="${esc(symbol)}"></option>`).join('')}</datalist>
+ <label class="note-field">备注 <span>选填</span><textarea name="note" maxlength="500" rows="2" placeholder="例如：券商账户转入、季度分红…">${esc(record?.note??(isOpening?data.cash?.opening?.note??'':''))}</textarea></label>
+ <div class="calculation-preview"><div><span id="cash-net-label">金额</span><strong id="cash-net">—</strong></div></div>
+ <p id="form-error" class="form-error" role="alert"></p>
+ <div class="form-actions"><button class="primary full" type="submit">${icon('check')}保存记录</button></div>
+ </form>`);
+ const form=modalRoot.querySelector<HTMLFormElement>('#cash-form')!;
+ let dirty=false;const mark=()=>{dirty=true;};form.addEventListener('input',mark);form.addEventListener('change',mark);modalGuard=()=>dirty;
+ const update=()=>{
+  const f=new FormData(form);
+  const k=(f.get('kind')??'deposit') as string;
+  form.querySelector<HTMLElement>('#cash-tax-field')!.hidden=k!=='dividend';
+  form.querySelector<HTMLElement>('#cash-symbol-field')!.hidden=isOpening||(k!=='dividend'&&k!=='fee');
+  let label='金额',net:ReturnType<typeof D>|undefined;
+  try{const amount=D(String(f.get('amount'))),tax=D(String(f.get('tax'))||0);
+   if(isOpening){label='期初余额';net=amount;}
+   else if(k==='deposit'){label='入账金额';net=amount;}
+   else if(k==='withdraw'){label='划出金额';net=amount.neg();}
+   else if(k==='dividend'){label='到账金额（扣税后）';net=amount.minus(tax);}
+   else{label='扣除金额';net=amount.neg();}
+   modalRoot.querySelector('#cash-net')!.textContent=money(net);
+  }catch{modalRoot.querySelector('#cash-net')!.textContent='—';}
+  modalRoot.querySelector('#cash-net-label')!.textContent=label;
+ };
+ form.oninput=update;update();
+ form.onsubmit=e=>{e.preventDefault();void submit(async()=>{
+  const f=new FormData(form),get=(k:string)=>String(f.get(k)??'').trim();
+  const date=get('date'),amount=get('amount'),note=get('note');
+  if(isOpening){await commit(setOpening(data,{amount,date,note}),data.cash?'修改期初余额前':'初始化现金账本前');return;}
+  const k=get('kind') as CashKind;
+  const sym=get('symbol').toUpperCase();
+  const rec:CashRecord={id:record?.id??crypto.randomUUID(),sequence:record?.sequence??(Math.max(-1,...(data.cash?.records??[]).map(x=>x.sequence))+1),date,kind:k,amount,tax:k==='dividend'?get('tax')||undefined:undefined,symbol:(k==='dividend'||k==='fee')&&sym?sym:undefined,note,source:record?.source??'manual'};
+  await commit(saveCashRecord(data,rec),record?'编辑资金记录前':data.cash?undefined:'初始化现金账本前');
+ });};
+ (form.elements.namedItem('amount') as HTMLInputElement).focus();
+}
+function cashDeleteModal(r:CashRecord){
+ if(demo||blocked)return;
+ modal('删除这笔现金记录？',`<p class="dialog-copy">${esc(r.date)} · ${kindLabel(r.kind)} ${money(r.amount)}${r.symbol?` · ${esc(r.symbol)}`:''}<br>删除后会重新计算现金余额。</p><p id="form-error" class="form-error" role="alert"></p><button class="danger full" id="confirm-cash-delete">确认删除</button>`);
+ modalRoot.querySelector<HTMLButtonElement>('#confirm-cash-delete')!.onclick=()=>void submit(async()=>{await commit(deleteCashRecord(data,r.id),'删除资金记录前');});
+}
+function csvImportModal(){
+ if(demo||blocked)return;
+ let kind:'trades'|'cash'='trades';
+ let table:CsvTable|undefined;
+ let analysis:TradeImport|CashImport|undefined;
+ let fallback:CashKind='deposit';
+ modal('导入券商 CSV',`<p class="form-hint">选择带表头的交易或资金流水 CSV（逗号 / 分号 / 制表符分隔，最多 5,000 行）。先核对字段映射与预览，确认后才写入账本；与已有记录重复的行默认跳过。<button type="button" class="text-button" data-help="cash">格式说明</button></p>
+ <div class="form-tabs csv-kinds"><label><input name="csv-kind" type="radio" value="trades" checked><span>交易记录</span></label><label><input name="csv-kind" type="radio" value="cash"><span>资金记录</span></label></div>
+ <label class="csv-file-button">${icon('upload')}<span>选择 CSV 文件</span><input id="csv-file" type="file" accept=".csv,text/csv,text/plain" class="visually-hidden"></label>
+ <p class="form-hint" id="csv-file-name" role="status"></p>
+ <div id="csv-mapping"></div><div id="csv-preview"></div>
+ <p id="form-error" class="form-error" role="alert"></p>
+ <div class="form-actions"><button class="primary full" id="csv-confirm" hidden>确认导入</button></div>`);
+ const body=modalRoot.querySelector<HTMLElement>('#csv-preview')!,mapBox=modalRoot.querySelector<HTMLElement>('#csv-mapping')!,nameEl=modalRoot.querySelector<HTMLElement>('#csv-file-name')!,confirmBtn=modalRoot.querySelector<HTMLButtonElement>('#csv-confirm')!,fileInput=modalRoot.querySelector<HTMLInputElement>('#csv-file')!,error=modalRoot.querySelector<HTMLElement>('#form-error')!;
+ const help=modalRoot.querySelector<HTMLButtonElement>('[data-help="cash"]');
+ if(help)help.onclick=e=>{e.stopPropagation();doClose();tab='help';render();window.scrollTo(0,0);const target=document.getElementById('help-cash');if(target instanceof HTMLDetailsElement){target.open=true;target.scrollIntoView({block:'start'});}};
+ let mapping:Mapping<TradeField>|Mapping<CashField>|undefined;
+ const defaultMapping=()=>table?kind==='trades'?autoMap(table.header,tradeFields,TRADE_ALIASES):autoMap(table.header,cashFields,CASH_ALIASES):undefined;
+ modalRoot.querySelectorAll<HTMLInputElement>('[name="csv-kind"]').forEach(r=>r.onchange=()=>{kind=r.value as 'trades'|'cash';mapping=defaultMapping();if(table)renderAll();});
+ const readMapping=():Mapping<TradeField>|Mapping<CashField>=>{const out:Mapping<TradeField>={};mapBox.querySelectorAll<HTMLSelectElement>('[data-map]').forEach(s=>{if(s.value!=='-1')(out as Record<string,number>)[s.dataset.map!]=Number(s.value);});return out;};
+ const analyze=()=>{if(!table||!mapping)return;analysis=kind==='trades'?analyzeTradeCsv(table,mapping as Mapping<TradeField>,data):analyzeCashCsv(table,mapping as Mapping<CashField>,fallback,data);};
+ const fieldsOf=()=>kind==='trades'?tradeFields:cashFields;
+ const labelsOf=()=>kind==='trades'?(tradeFieldLabels as Record<string,string>):(cashFieldLabels as Record<string,string>);
+ function renderMapping(){
+  if(!table)return;
+  const labels=labelsOf();
+  const opts=(selected:number|undefined)=>`<option value="-1">不使用</option>${table!.header.map((h,i)=>`<option value="${i}" ${i===selected?'selected':''}>${esc(h)}</option>`).join('')}`;
+  mapBox.innerHTML=`<div class="csv-mapping"><div class="section-heading"><h3>字段映射</h3><span class="caption">把 CSV 列对应到账本字段</span></div><div class="csv-map-grid">${fieldsOf().map(f=>`<label>${labels[f]}<select data-map="${f}" aria-label="${labels[f]}列">${opts((mapping as Record<string,number|undefined>)[f])}</select></label>`).join('')}${kind==='cash'&&(mapping as Mapping<CashField>).type===undefined?`<label>统一类型<select id="csv-fallback" aria-label="统一类型">${[['deposit','入金'],['withdraw','出金'],['dividend','分红'],['fee','费用']].map(([k,l])=>`<option value="${k}" ${fallback===k?'selected':''}>${l}</option>`).join('')}</select></label>`:''}</div></div>`;
+  mapBox.querySelectorAll<HTMLSelectElement>('[data-map]').forEach(s=>s.onchange=()=>{mapping=readMapping();renderPreview();});
+  const fb=mapBox.querySelector<HTMLSelectElement>('#csv-fallback');if(fb)fb.onchange=()=>{fallback=fb.value as CashKind;renderPreview();};
+ }
+ function renderPreview(){
+  analyze();
+  if(!analysis)return;
+  const ok=analysis.rows.filter(r=>!r.duplicate).length;
+  const rowsHtml=kind==='trades'
+   ?(analysis as TradeImport).rows.map(r=>{const t=r.trade;return `<label class="csv-row ${r.duplicate?'csv-dup':''}"><input type="checkbox" data-import-row="${r.line}" ${r.duplicate?'':'checked'}><span class="csv-row-cells"><b>${esc(t.symbol)} · ${t.side==='buy'?'买入':'卖出'} ${quantity(t.quantity)} 股 × ${money(t.price)}</b><small>${esc(t.date)}${t.fee!=='0'?` · 手续费 ${money(t.fee)}`:''}${t.note?` · ${esc(t.note)}`:''}${r.duplicate?' · 与已有记录重复，默认跳过':''}</small></span></label>`;}).join('')
+   :(analysis as CashImport).rows.map(r=>{const c=r.record;return `<label class="csv-row ${r.duplicate?'csv-dup':''}"><input type="checkbox" data-import-row="${r.line}" ${r.duplicate?'':'checked'}><span class="csv-row-cells"><b>${kindLabel(c.kind)}${c.symbol?` · ${esc(c.symbol)}`:''} · ${money(c.amount)}${c.tax?` − 税费 ${money(c.tax)}`:''}</b><small>${esc(c.date)}${c.note?` · ${esc(c.note)}`:''}${r.duplicate?' · 与已有记录重复，默认跳过':''}</small></span></label>`;}).join('');
+  const errHtml=analysis.errors.map(e=>`<div class="csv-error-row">第 ${e.line} 行 · ${esc(e.reason)}</div>`).join('');
+  body.innerHTML=`<div class="csv-summary" data-testid="import-summary">共 ${analysis.total} 行 · 可导入 ${ok} · 疑似重复 ${analysis.rows.length-ok} · 错误 ${analysis.errors.length}</div><div class="csv-preview">${rowsHtml}${errHtml}</div>`;
+  confirmBtn.hidden=!analysis.rows.length;
+  confirmBtn.textContent=`确认导入 ${ok} 笔`;
+ }
+ const renderAll=()=>{renderMapping();renderPreview();};
+ fileInput.onchange=()=>{const f=fileInput.files?.[0];if(!f)return;void (async()=>{
+  try{if(f.size>2_000_000)throw Error('文件过大，请选择 2 MB 以内的 CSV。');
+   table=parseCsv(await f.text());nameEl.textContent=`${f.name} · ${table.rows.length} 行数据 · ${table.header.length} 列`;error.textContent='';modalGuard=()=>true;mapping=defaultMapping();renderAll();
+  }catch(e){table=undefined;nameEl.textContent='';mapBox.innerHTML='';body.innerHTML=`<p class="form-error">${esc(e instanceof Error?e.message:String(e))}</p>`;confirmBtn.hidden=true;}
+  finally{fileInput.value='';}
+ })();};
+ confirmBtn.onclick=()=>{
+  if(!analysis||busy)return;
+  const boxes=[...body.querySelectorAll<HTMLInputElement>('[data-import-row]')];
+  let count=0;let next:Ledger;
+  if(kind==='trades'){const selected=(analysis as TradeImport).rows.filter(r=>boxes.find(b=>b.dataset.importRow===String(r.line))?.checked).map(r=>r.trade);count=selected.length;next=applyTradeImport(data,selected,()=>crypto.randomUUID());}
+  else{const selected=(analysis as CashImport).rows.filter(r=>boxes.find(b=>b.dataset.importRow===String(r.line))?.checked).map(r=>r.record);count=selected.length;next=applyCashImport(data,selected,()=>crypto.randomUUID());}
+  if(!count)return;
+  void submit(async()=>{await commit(next,'CSV 导入前');});
+ };
 }
 function quoteModal(symbol:string){if(blocked)return;const q=data.quotes.find(q=>q.symbol===symbol);modal(`更新 ${esc(symbol)} 股价`,`<form id="quote-form"><p class="form-hint">同日手动报价优先；已取得的自动报价仍会保留。</p><label class="note-field">股价（美元）<input name="price" inputmode="decimal" autofocus required value="${q?.price??''}" placeholder="0.00"></label><label class="note-field">报价日期（美东）<input type="date" name="date" min="1900-01-01" max="${marketDate(Date.now())}" required value="${marketDate(Date.now())}"></label><p id="form-error" class="form-error" role="alert"></p><div class="form-actions"><button type="submit" class="primary full">保存股价</button></div></form>`);const f=modalRoot.querySelector<HTMLFormElement>('#quote-form')!;let dirty=false;const mark=()=>{dirty=true;};f.addEventListener('input',mark);f.addEventListener('change',mark);modalGuard=()=>dirty;f.onsubmit=e=>{e.preventDefault();void submit(async()=>{const fd=new FormData(f);const quote:Quote={symbol,price:String(fd.get('price')).trim(),date:String(fd.get('date'))};await commit(validateLedger({...data,quotes:[...data.quotes.filter(x=>x.symbol!==symbol),quote]}),'修改报价前');});};(f.elements.namedItem('price') as HTMLInputElement).focus();}
 function deleteModal(t:Trade){modal('删除这笔交易？',`<p class="dialog-copy">${t.date} · ${esc(t.symbol)} · ${t.side==='buy'?'买入':'卖出'} ${quantity(t.quantity)} 股<br>删除后将重新计算全部持仓和收益。如果导致历史持仓不足，将无法删除。</p><p id="form-error" class="form-error" role="alert"></p><button class="danger full" id="confirm-delete">确认删除</button>`);modalRoot.querySelector<HTMLButtonElement>('#confirm-delete')!.onclick=()=>void submit(async()=>{await commit(deleteTrade(data,t.id),'删除交易前');});}

@@ -1,0 +1,48 @@
+/* 1.26: cash ledger and broker CSV import. */
+.cash-panel .cash-head{display:flex;gap:14px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+.cash-balance strong{display:block;font-size:30px;font-weight:700;letter-spacing:-.4px;margin-top:4px;font-variant-numeric:tabular-nums}
+.cash-balance small{display:block;color:var(--secondary);font-size:12px;margin-top:2px;max-width:320px}
+.cash-balance>span,.cash-assets>span{color:var(--secondary);font-size:12px}
+.cash-assets strong{display:block;font-size:20px;margin-top:4px;font-variant-numeric:tabular-nums}
+.cash-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.cash-totals>div{background:var(--control);border-radius:12px;padding:10px 12px}
+.cash-totals dt{color:var(--secondary);font-size:11px}
+.cash-totals dd{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+.cash-nets{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--secondary);margin-bottom:12px}
+.cash-nets strong{margin-left:4px;color:var(--text);font-variant-numeric:tabular-nums}
+.cash-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.cash-actions .secondary{font-size:13px;padding:9px 13px}
+.cash-records{display:flex;flex-direction:column;border-top:1px solid var(--border);margin-bottom:10px}
+.cash-record{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.cash-record-head{font-size:11px;color:var(--secondary);padding-top:8px}
+.cash-kind{justify-self:start;font-size:11px;padding:4px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+.cash-kind.deposit{color:#1e6b4f;background:color-mix(in srgb,#2e9d6e 16%,var(--surface))}
+.cash-kind.withdraw{color:var(--secondary);background:var(--control)}
+.cash-kind.dividend{color:#0a6ec7;background:color-mix(in srgb,#087ff5 14%,var(--surface))}
+.cash-kind.fee{color:#9a6319;background:color-mix(in srgb,#d89a2e 16%,var(--surface))}
+.cash-record-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cash-record-main strong{font-size:14px;font-variant-numeric:tabular-nums}
+.cash-record-main small{color:var(--secondary);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cash-record-actions{display:flex;gap:6px}
+.cash-record-actions .text-button{font-size:12px}
+.badge.csv{color:#9a6319;background:color-mix(in srgb,#d89a2e 20%,var(--surface))}
+/* CSV import modal */
+.csv-kinds{margin:12px 0}
+.csv-file-button{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:1.5px dashed var(--border);border-radius:12px;color:var(--secondary);cursor:pointer;font-size:14px;margin-bottom:8px}
+.csv-file-button:active{opacity:.7}
+.csv-mapping{background:var(--control);border-radius:12px;padding:12px;margin:8px 0}
+.csv-mapping .section-heading{margin-bottom:8px}
+.csv-map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+.csv-map-grid label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--secondary)}
+.csv-map-grid select{font-size:13px;padding:7px;border-radius:8px;background:var(--surface);color:var(--text);border-color:var(--border);width:100%}
+.csv-summary{font-size:12px;color:var(--secondary);margin:10px 0 6px}
+.csv-preview{display:flex;flex-direction:column;gap:6px;max-height:36vh;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:8px}
+.csv-row{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:10px;background:var(--surface);border:1px solid var(--border);cursor:pointer}
+.csv-row input{width:18px;height:18px;margin-top:2px;flex:none;accent-color:#087ff5}
+.csv-row-cells{display:flex;flex-direction:column;gap:2px;min-width:0}
+.csv-row-cells b{font-size:13px;font-variant-numeric:tabular-nums}
+.csv-row-cells small{color:var(--secondary);font-size:11px}
+.csv-row.csv-dup{opacity:.65;background:var(--control)}
+.csv-error-row{font-size:12px;color:var(--loss);padding:6px 8px;background:color-mix(in srgb,var(--loss) 8%,var(--surface));border-radius:8px}
+@media(max-width:520px){.cash-totals{grid-template-columns:repeat(2,1fr)}.cash-record{grid-template-columns:54px 1fr auto}.cash-record-actions .text-button{padding:4px}}
+@media(prefers-reduced-motion:no-preference){.cash-balance strong{transition:color .15s}}
