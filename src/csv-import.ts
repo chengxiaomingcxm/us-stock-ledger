@@ -170,7 +170,7 @@ function colOf<T extends string>(cells: string[], mapping: Mapping<T>, field: T)
 export interface RowError { line: number; reason: string }
 export type RowStatus = 'new' | 'suspected' | 'duplicate';
 export interface TradeRow { line: number; trade: Trade; time?: string; status: RowStatus }
-export interface TradeImport { mapping: Mapping<TradeField>; rows: TradeRow[]; errors: RowError[]; total: number; batchError?: string; orderAmbiguous: boolean; sameDayMixed: boolean }
+export interface TradeImport { mapping: Mapping<TradeField>; rows: TradeRow[]; errors: RowError[]; total: number; batchError?: string; orderAmbiguous: boolean; sameDayMixed: boolean; interleaved: boolean }
 export interface CashRow { line: number; record: CashRecord; status: RowStatus }
 export interface CashImport { mapping: Mapping<CashField>; fallbackKind?: CashKind; rows: CashRow[]; errors: RowError[]; total: number; batchError?: string }
 
@@ -261,17 +261,24 @@ export function analyzeTradeCsv(table: CsvTable, mapping: Mapping<TradeField>, e
     }
     ordered.push(...group);
   }
-  // 增量导入：导入行与账本已有同日交易混合买卖时，无法得知已有交易的盘中时间，同样需要用户确认相对顺序。
-  const existingSides = new Map<string, Set<string>>();
-  for (const t of existing.trades) { const s = existingSides.get(t.date) ?? new Set<string>(); s.add(t.side); existingSides.set(t.date, s); }
+  // 增量导入：按日期+股票判断导入行与账本已有同日交易是否顺序不确定。
+  const exSide = new Map<string, Set<string>>();
+  for (const t of existing.trades) { const k = t.date + '|' + t.symbol; const s = exSide.get(k) ?? new Set<string>(); s.add(t.side); exSide.set(k, s); }
+  const imSide = new Map<string, Set<string>>();
+  for (const r of rows) { const k = r.trade.date + '|' + r.trade.symbol; const s = imSide.get(k) ?? new Set<string>(); s.add(r.trade.side); imSide.set(k, s); }
   let sameDayMixed = false;
-  for (const r of rows) {
-    const es = existingSides.get(r.trade.date);
-    if (es && es.size && !es.has(r.trade.side)) { sameDayMixed = true; break; }
+  let interleaved = false;
+  for (const [k, im] of imSide) {
+    const ex = exSide.get(k);
+    if (!ex || !ex.size) continue;
+    const union = new Set([...ex, ...im]);
+    if (union.size <= 1) continue;
+    if (ex.size > 1 && im.size > 1) interleaved = true;
+    else sameDayMixed = true;
   }
   const seqStart = existing.trades.reduce((m, x) => Math.max(m, x.sequence), -1) + 1;
   const batchError = batchValidate({ ...existing, trades: [...existing.trades, ...ordered.filter(r => r.status === 'new').map((r, i) => ({ ...r.trade, id: `csv-${i}`, sequence: seqStart + i }))] });
-  return { mapping, rows: ordered, errors, total: table.rows.length, batchError, orderAmbiguous, sameDayMixed };
+  return { mapping, rows: ordered, errors, total: table.rows.length, batchError, orderAmbiguous, sameDayMixed, interleaved };
 }
 
 const cashKey = (r: Pick<CashRecord, 'date' | 'kind' | 'symbol' | 'amount' | 'tax'>) => `${r.date}|${r.kind}|${r.symbol ?? ''}|${r.amount}|${r.tax ?? '0'}`;
@@ -354,23 +361,26 @@ export function analyzeCashCsv(table: CsvTable, mapping: Mapping<CashField>, fal
   return { mapping, fallbackKind, rows, errors, total: table.rows.length, batchError };
 }
 
-export function applyTradeImport(data: Ledger, trades: Trade[], newId: () => string, opts: { insertBeforeSameDay?: boolean } = {}): Ledger {
-  if (!trades.length) return data;
-  const existingExt = new Set(data.trades.filter(t => t.externalId).map(t => t.externalId!));
-  const repeated = trades.filter(t => t.externalId && existingExt.has(t.externalId));
-  if (repeated.length) throw new Error(`其中 ${repeated.length} 条记录的券商编号已存在，可能已导入过。未写入任何数据。`);
-  if (opts.insertBeforeSameDay) {
+export function buildCandidateTrades(data: Ledger, trades: Trade[], newId: () => string, insertBeforeSameDay: boolean): Trade[] {
+  if (insertBeforeSameDay) {
     const entries = [
       ...data.trades.map(t => ({ t, group: 1 as const, order: t.sequence })),
       ...trades.map((t, i) => ({ t: { ...t, id: t.id || newId() }, group: 0 as const, order: i })),
     ];
     entries.sort((a, b) => a.t.date < b.t.date ? -1 : a.t.date > b.t.date ? 1 : a.group - b.group || a.order - b.order);
-    const merged = entries.map((e, i) => ({ ...e.t, sequence: i }));
-    return validateLedgerSafe({ ...data, trades: merged });
+    return entries.map((e, i) => ({ ...e.t, sequence: i }));
   }
   const seqStart = data.trades.reduce((m, t) => Math.max(m, t.sequence), -1) + 1;
-  const added = trades.map((t, i) => ({ ...t, id: t.id || newId(), sequence: seqStart + i }));
-  return validateLedgerSafe({ ...data, trades: [...data.trades, ...added] });
+  return [...data.trades, ...trades.map((t, i) => ({ ...t, id: t.id || newId(), sequence: seqStart + i }))];
+}
+
+export function applyTradeImport(data: Ledger, trades: Trade[], newId: () => string, opts: { insertBeforeSameDay?: boolean } = {}): Ledger {
+  if (!trades.length) return data;
+  const existingExt = new Set(data.trades.filter(t => t.externalId).map(t => t.externalId!));
+  const repeated = trades.filter(t => t.externalId && existingExt.has(t.externalId));
+  if (repeated.length) throw new Error(`其中 ${repeated.length} 条记录的券商编号已存在，可能已导入过。未写入任何数据。`);
+  const merged = buildCandidateTrades(data, trades, newId, !!opts.insertBeforeSameDay);
+  return validateLedgerSafe({ ...data, trades: merged });
 }
 
 export function applyCashImport(data: Ledger, records: CashRecord[], newId: () => string): Ledger {

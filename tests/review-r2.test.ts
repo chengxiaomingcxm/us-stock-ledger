@@ -90,3 +90,31 @@ describe('R2 其他边界', () => {
     expect(() => decodeCsvBytes(Uint8Array.from([0xff, 0xfe, 0x41]))).toThrow('编码');
   });
 });
+
+describe('第三轮：同日顺序与预览校验', () => {
+  const map = (t: ReturnType<typeof parseCsv>) => autoMap(t.header, tradeFields, TRADE_ALIASES);
+  it('已有同日买卖都有时，补录任一方向都判为顺序不确定', () => {
+    const existing = validateLedger({ ...emptyLedger(), trades: [buy({ date: '2025-09-10' }), buy({ id: 'b2', sequence: 1, date: '2025-09-11', quantity: '10', price: '200', fee: '0' }), buy({ id: 's', sequence: 2, date: '2025-09-11', side: 'sell', quantity: '4', price: '180', fee: '0' })] });
+    const t = parseCsv('Date,Symbol,Side,Quantity,Price\n2025-09-11 10:00,AAPL,BUY,1,150');
+    const a = analyzeTradeCsv(t, map(t), existing);
+    expect(a.sameDayMixed).toBe(true);
+  });
+  it('已有与导入同一天都含买卖时，标为交错且无法仅用前后表达', () => {
+    const existing = validateLedger({ ...emptyLedger(), trades: [buy({ date: '2025-09-10' }), buy({ id: 'b2', sequence: 1, date: '2025-09-11', quantity: '10', price: '200', fee: '0' }), buy({ id: 's', sequence: 2, date: '2025-09-11', side: 'sell', quantity: '4', price: '180', fee: '0' })] });
+    const t = parseCsv('Date,Symbol,Side,Quantity,Price\n2025-09-11 10:00,AAPL,SELL,1,150\n2025-09-11 11:00,AAPL,BUY,1,150');
+    const a = analyzeTradeCsv(t, map(t), existing);
+    expect(a.interleaved).toBe(true);
+    expect(a.sameDayMixed).toBe(false);
+  });
+  it('候选账本与提交共用同一排序：追加超卖而插入合法', () => {
+    const existing = validateLedger({ ...emptyLedger(), trades: [buy({ date: '2025-09-10', quantity: '10', price: '100', fee: '0' }), buy({ id: 's', sequence: 1, date: '2025-09-11', side: 'sell', quantity: '10', price: '200', fee: '0' })] });
+    const t = parseCsv('Date,Symbol,Side,Quantity,Price\n2025-09-11 10:00,AAPL,SELL,5,150\n2025-09-11 11:00,AAPL,BUY,5,100');
+    const a = analyzeTradeCsv(t, map(t), existing);
+    expect(a.sameDayMixed).toBe(true);
+    let n = 0;
+    expect(() => applyTradeImport(existing, a.rows.map(r => r.trade), () => 'x' + ++n)).toThrow('超过当时持仓'); // 追加：先卖 10 后无法再卖 5
+    const next = applyTradeImport(existing, a.rows.map(r => r.trade), () => 'x' + ++n, { insertBeforeSameDay: true });
+    expect(calculate(next).realized.toString()).toBe('1250'); // 卖5(250) + 卖10(1000)
+    expect(calculate(next).open).toHaveLength(0);
+  });
+});

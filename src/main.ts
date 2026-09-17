@@ -14,7 +14,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { D, emptyLedger, calculate, today, saveTrade, deleteTrade, validateLedger, parseBackup, backupText, demoLedger, money, signedMoney, quantity, orderedTrades, type Ledger, type Trade, type Quote, type CashKind, type CashRecord } from './ledger';
 import { cashTotals, cashNet, orderedCashRecords, saveCashRecord, deleteCashRecord, setOpening, kindLabel, isBeforeOpening } from './cash';
-import { parseCsv, decodeCsvBytes, autoMap, analyzeTradeCsv, analyzeCashCsv, applyTradeImport, applyCashImport, tradeFields, cashFields, tradeFieldLabels, cashFieldLabels, TRADE_ALIASES, CASH_ALIASES, type TradeImport, type CashImport, type TradeField, type CashField, type CsvTable, type Mapping } from './csv-import';
+import { parseCsv, decodeCsvBytes, autoMap, analyzeTradeCsv, analyzeCashCsv, applyTradeImport, applyCashImport, buildCandidateTrades, tradeFields, cashFields, tradeFieldLabels, cashFieldLabels, TRADE_ALIASES, CASH_ALIASES, type TradeImport, type CashImport, type TradeField, type CashField, type CsvTable, type Mapping } from './csv-import';
 import { knownClosed } from './history';
 import { todayPnl } from './today-pnl';
 import { rangeStats } from './trade-range';
@@ -366,7 +366,7 @@ function csvImportModal(){
   const sel=analysis.rows.filter(r=>r.status!=='duplicate'&&body.querySelector<HTMLInputElement>(`[data-import-row="${r.line}"]`)?.checked);
   if(!sel.length)return undefined;
   try{
-   if(kind==='trades'){const seqStart=data.trades.reduce((m,x)=>Math.max(m,x.sequence),-1)+1;validateLedger({...data,trades:[...data.trades,...(sel as TradeImport['rows']).map((r,i)=>({...r.trade,id:`csv-${i}`,sequence:seqStart+i}))]});}
+   if(kind==='trades'){let n=0;const cand=buildCandidateTrades(data,(sel as TradeImport['rows']).map(r=>r.trade),()=>'prev-'+(++n),placement==='before');validateLedger({...data,trades:cand});}
    else{const seqStart=(data.cash?.records??[]).reduce((m,x)=>Math.max(m,x.sequence),-1)+1;validateLedger({...data,cash:{...data.cash,records:[...(data.cash?.records??[]),...(sel as CashImport['rows']).map((r,i)=>({...r.record,id:`csv-${i}`,sequence:seqStart+i}))]}});}
    return undefined;
   }catch(e){return e instanceof Error?e.message:'批量校验失败';}
@@ -375,8 +375,9 @@ function csvImportModal(){
   if(!analysis){confirmBtn.hidden=true;return;}
   const n=selectedCount();
   const err=selectionError();
-  const ambiguous=kind==='trades'&&((analysis as TradeImport).orderAmbiguous||(analysis as TradeImport).sameDayMixed);
-  const blocked=!!err||(kind==='cash'&&!typeMapped()&&fallback===undefined)||(ambiguous&&!orderConfirmed);
+  const t=kind==='trades'?(analysis as TradeImport):undefined;
+  const ambiguous=!!t&&(t.orderAmbiguous||t.sameDayMixed);
+  const blocked=!!err||!!t?.interleaved||(kind==='cash'&&!typeMapped()&&fallback===undefined)||(ambiguous&&!orderConfirmed);
   confirmBtn.hidden=!analysis.rows.length;
   confirmBtn.textContent=`确认导入 ${n} 笔`;
   confirmBtn.disabled=n===0||blocked;
@@ -398,8 +399,9 @@ function csvImportModal(){
   const batchHtml=analysis.batchError?`<div class="csv-batch-error" role="alert">批量校验未通过：${esc(analysis.batchError)}</div>`:'';
   const trade=kind==='trades'?(analysis as TradeImport):undefined;
   const ambiguous=!!trade&&(trade.orderAmbiguous||trade.sameDayMixed);
+  const interleavedHtml=!!trade?.interleaved?`<div class="csv-batch-error" role="alert">该股票同一天已有买卖且导入也含买卖，无法仅用“之前/之后”表达真实交错顺序，请手动录入或按成交时间拆分文件。</div>`:'';
   const orderHtml=ambiguous?`<label class="csv-order-confirm"><input type="checkbox" id="csv-order-check" ${orderConfirmed?'checked':''}>我已核对同一天内先买后卖的顺序（文件时间按美东时间${trade!.sameDayMixed?'；账本已有同日交易，请选择新记录相对已有交易的位置':''}）</label>${trade!.sameDayMixed?`<label class="csv-order-confirm">同日相对顺序<select id="csv-placement"><option value="after" ${placement==='after'?'selected':''}>追加到当日已有交易之后</option><option value="before" ${placement==='before'?'selected':''}>插入到当日已有交易之前</option></select></label>`:''}`:'';
-  body.innerHTML=`<div class="csv-summary" data-testid="import-summary">共 ${analysis.total} 行 · 可导入 ${ok} · 疑似重复 ${sus} · 已导入 ${dup} · 错误 ${analysis.errors.length}</div>${batchHtml}${orderHtml}<div class="csv-preview">${rowsHtml}${errHtml}</div>`;
+  body.innerHTML=`<div class="csv-summary" data-testid="import-summary">共 ${analysis.total} 行 · 可导入 ${ok} · 疑似重复 ${sus} · 已导入 ${dup} · 错误 ${analysis.errors.length}</div>${batchHtml}${interleavedHtml}${orderHtml}<div class="csv-preview">${rowsHtml}${errHtml}</div>`;
   body.querySelectorAll<HTMLInputElement>('[data-import-row]').forEach(box=>box.onchange=updateConfirm);
   const orderCheck=body.querySelector<HTMLInputElement>('#csv-order-check');if(orderCheck)orderCheck.onchange=()=>{orderConfirmed=orderCheck.checked;updateConfirm();};
   const placementSel=body.querySelector<HTMLSelectElement>('#csv-placement');if(placementSel)placementSel.onchange=()=>{placement=placementSel.value as 'after'|'before';updateConfirm();};
