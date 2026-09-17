@@ -100,11 +100,11 @@ describe('交易 CSV 分析', () => {
     const a = analyzeTradeCsv(t, m, ledger());
     expect(a.rows.map(r => r.status)).toEqual(['suspected', 'new', 'new', 'suspected']);
   });
-  it('券商编号决定已导入：同编号重复、不同编号同参数都是新记录', () => {
+  it('券商编号决定已导入：同编号重复、不同编号同参数保守提示疑似重复', () => {
     const base = saveTrade(emptyLedger(), buy({ externalId: 'T-1' }));
     const t = parseCsv('Date,Symbol,Side,Quantity,Price,Fee,TradeID\n2025-06-01,AAPL,BUY,10,100,1,T-1\n2025-06-01,AAPL,BUY,10,100,1,T-2\n2025-06-01,AAPL,BUY,10,100,1,T-2');
     const a = analyzeTradeCsv(t, autoMap(t.header, tradeFields, TRADE_ALIASES), base);
-    expect(a.rows.map(r => r.status)).toEqual(['duplicate', 'new', 'duplicate']);
+    expect(a.rows.map(r => r.status)).toEqual(['duplicate', 'suspected', 'duplicate']);
   });
   it('收集错误行：方向、数量、币种', () => {
     const t = parseCsv('Date,Symbol,Side,Quantity,Price,Fee,Currency\n2025-07-01,AAPL,HOLD,5,110,1,\n2025-07-01,AAPL,BUY,0,110,1,\n2025-07-01,AAPL,BUY,5,110,1,CNY\n2025-07-01,AAPL,BUY,5,110,1,USD');

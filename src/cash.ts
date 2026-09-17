@@ -16,7 +16,8 @@ export interface CashTotals {
   tradeNet: ReturnType<typeof D>;  // 买卖净现金流
   net: ReturnType<typeof D>;       // 全部现金变化净额（不含期初）
   balance?: ReturnType<typeof D>;  // 期初 + 净额；未设置期初余额时为 undefined
-  investNet: ReturnType<typeof D>; // 分红净额 − 账户费用（账户现金投资收益）
+  investNet: ReturnType<typeof D>; // 分红净额 − 账户费用（边界内，用于现金面板）
+  investNetAll: ReturnType<typeof D>; // 分红净额 − 账户费用（全历史，用于账户总收益）
   externalNet: ReturnType<typeof D>; // 入金 − 出金（外部净流入）
   excludedRecords: number;         // 期初边界之前的现金记录数（仅备查）
   excludedTrades: number;          // 期初边界之前的交易数（已含在期初余额）
@@ -43,9 +44,11 @@ export function cashTotals(data: Ledger): CashTotals {
   const t: CashTotals = {
     opening: D(opening?.amount ?? 0), deposit: D(0), withdraw: D(0), dividend: D(0), tax: D(0), fee: D(0),
     buyOut: D(0), sellIn: D(0), tradeNet: D(0), net: D(0),
-    investNet: D(0), externalNet: D(0), excludedRecords: 0, excludedTrades: 0,
+    investNet: D(0), investNetAll: D(0), externalNet: D(0), excludedRecords: 0, excludedTrades: 0,
   };
   for (const r of data.cash?.records ?? []) {
+    if (r.kind === 'dividend') t.investNetAll = t.investNetAll.plus(r.amount).minus(r.tax ?? 0);
+    else if (r.kind === 'fee') t.investNetAll = t.investNetAll.minus(r.amount);
     if (!inBoundary(r.date)) { t.excludedRecords++; continue; }
     if (r.kind === 'deposit') t.deposit = t.deposit.plus(r.amount);
     else if (r.kind === 'withdraw') t.withdraw = t.withdraw.plus(r.amount);

@@ -123,6 +123,28 @@ test('资金 CSV：币种错误行、取消类型映射后需明确统一类型�
   await page.locator('[data-import-row="3"]').uncheck();
   await expect(page.getByRole('button', { name: '确认导入 0 笔', exact: true })).toBeDisabled();
 });
+test('编辑导入的现金记录保留流水编号，重新导入不再重复入账', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.bottom-nav').getByRole('button', { name: '收益', exact: true }).click();
+  await page.getByRole('button', { name: '导入 CSV', exact: true }).click();
+  await page.getByRole('radio', { name: '资金记录' }).check();
+  const csv = ['Date,Type,Symbol,Amount,Tax,FlowID', '2026-09-11,DIVIDEND,AAPL,120,12,FLOW-1'].join('\n');
+  await page.locator('#csv-file').setInputFiles({ name: 'div.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await expect(page.getByRole('button', { name: '确认导入 1 笔', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '确认导入 1 笔', exact: true }).click();
+  await expect(page.getByTestId('cash-records')).toContainText('分红');
+  // 直接编辑保存，不应丢失流水编号
+  await page.locator('.cash-record', { hasText: '分红' }).getByRole('button', { name: '编辑', exact: true }).click();
+  await page.getByRole('button', { name: '保存记录', exact: true }).click();
+  // 重新导入同一文件：该记录为已导入，不可再写入
+  await page.getByRole('button', { name: '导入 CSV', exact: true }).click();
+  await page.getByRole('radio', { name: '资金记录' }).check();
+  await page.locator('#csv-file').setInputFiles({ name: 'div.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await expect(page.getByTestId('import-summary')).toContainText('已导入 1');
+  await expect(page.getByRole('button', { name: '确认导入 0 笔', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(page.locator('.cash-record', { hasText: '分红' })).toHaveCount(1);
+});
 test('导出完整备份包含现金记录，通用备份剔除现金', async ({ page }) => {
   const withCash = {
     ...ledger,

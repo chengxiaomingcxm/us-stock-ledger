@@ -61,8 +61,10 @@ export function parseCsv(text: string): CsvTable {
 
 export function decodeCsvBytes(buf: ArrayBuffer | Uint8Array): { text: string; encoding: string } {
   const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  if (u8.length >= 2 && u8[0] === 0xff && u8[1] === 0xfe) return { text: new TextDecoder('utf-16le').decode(u8), encoding: 'UTF-16 LE' };
-  if (u8.length >= 2 && u8[0] === 0xfe && u8[1] === 0xff) return { text: new TextDecoder('utf-16be').decode(u8), encoding: 'UTF-16 BE' };
+  try {
+    if (u8.length >= 2 && u8[0] === 0xff && u8[1] === 0xfe) return { text: new TextDecoder('utf-16le', { fatal: true }).decode(u8), encoding: 'UTF-16 LE' };
+    if (u8.length >= 2 && u8[0] === 0xfe && u8[1] === 0xff) return { text: new TextDecoder('utf-16be', { fatal: true }).decode(u8), encoding: 'UTF-16 BE' };
+  } catch { throw new Error('文件编码无法识别（UTF-16 字节不完整）。请把文件另存为 UTF-8 后再导入。'); }
   try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(u8), encoding: 'UTF-8' }; } catch { /* 不是合法 UTF-8 */ }
   try {
     const text = new TextDecoder('gbk').decode(u8);
@@ -88,7 +90,7 @@ export const TRADE_ALIASES: Record<TradeField, string[]> = {
   fee: ['fee', 'commission', 'fees', '手续费', '佣金', '费用', '交易费用'],
   note: ['note', 'notes', 'memo', 'remark', '备注', '说明'],
   currency: ['currency', 'ccy', '币种', '货币', '结算币种'],
-  id: ['tradeid', 'orderid', 'orderno', 'order', 'executionid', 'transactionid', '成交编号', '订单号', '订单编号', '流水号', '成交单号'],
+  id: ['tradeid', 'executionid', 'transactionid', '成交编号', '成交单号', '流水号'],
 };
 export const CASH_ALIASES: Record<CashField, string[]> = {
   date: ['date', 'tradedate', '交易日期', '成交日期', '日期', '时间', 'time', 'datetime'],
@@ -140,7 +142,8 @@ export function parseTradeDateTime(s: string): { date: string; time?: string } {
   let time: string | undefined;
   const rest = t.slice(m[0].length);
   if (rest) {
-    const tm = rest.match(/^[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,6})?(?:[Zz]|[+-]\d{2}:?\d{2})?$/);
+    if (/^[ T].*[Zz]$/.test(rest) || /^[ T][^\n]*[+-]\d{2}:?\d{2}$/.test(rest)) throw new Error('暂不支持带时区后缀的成交时间，请使用美东本地时间（如 09:30:00）');
+    const tm = rest.match(/^[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,6})?$/);
     if (!tm) throw new Error('日期后只能跟合法时间（例如 2026-09-11 09:30:00），多余字符无效');
     if (+tm[1] > 23 || +tm[2] > 59 || (tm[3] !== undefined && +tm[3] > 59)) throw new Error('时间无效');
     time = `${tm[1]}:${tm[2]}${tm[3] ? ':' + tm[3] : ''}`;
@@ -167,7 +170,7 @@ function colOf<T extends string>(cells: string[], mapping: Mapping<T>, field: T)
 export interface RowError { line: number; reason: string }
 export type RowStatus = 'new' | 'suspected' | 'duplicate';
 export interface TradeRow { line: number; trade: Trade; time?: string; status: RowStatus }
-export interface TradeImport { mapping: Mapping<TradeField>; rows: TradeRow[]; errors: RowError[]; total: number; batchError?: string; orderAmbiguous: boolean }
+export interface TradeImport { mapping: Mapping<TradeField>; rows: TradeRow[]; errors: RowError[]; total: number; batchError?: string; orderAmbiguous: boolean; sameDayMixed: boolean }
 export interface CashRow { line: number; record: CashRecord; status: RowStatus }
 export interface CashImport { mapping: Mapping<CashField>; fallbackKind?: CashKind; rows: CashRow[]; errors: RowError[]; total: number; batchError?: string }
 
@@ -228,7 +231,12 @@ export function analyzeTradeCsv(table: CsvTable, mapping: Mapping<TradeField>, e
       };
       let status: RowStatus;
       if (externalId) {
-        status = existingExt.has(externalId) || fileExt.has(externalId) ? 'duplicate' : 'new';
+        if (existingExt.has(externalId) || fileExt.has(externalId)) status = 'duplicate';
+        else {
+          const k = tradeKey(trade);
+          status = seenValues.has(k) ? 'suspected' : 'new';
+          if (status === 'new') seenValues.add(k);
+        }
         fileExt.add(externalId);
       } else {
         const k = tradeKey(trade);
@@ -253,9 +261,17 @@ export function analyzeTradeCsv(table: CsvTable, mapping: Mapping<TradeField>, e
     }
     ordered.push(...group);
   }
+  // 增量导入：导入行与账本已有同日交易混合买卖时，无法得知已有交易的盘中时间，同样需要用户确认相对顺序。
+  const existingSides = new Map<string, Set<string>>();
+  for (const t of existing.trades) { const s = existingSides.get(t.date) ?? new Set<string>(); s.add(t.side); existingSides.set(t.date, s); }
+  let sameDayMixed = false;
+  for (const r of rows) {
+    const es = existingSides.get(r.trade.date);
+    if (es && es.size && !es.has(r.trade.side)) { sameDayMixed = true; break; }
+  }
   const seqStart = existing.trades.reduce((m, x) => Math.max(m, x.sequence), -1) + 1;
   const batchError = batchValidate({ ...existing, trades: [...existing.trades, ...ordered.filter(r => r.status === 'new').map((r, i) => ({ ...r.trade, id: `csv-${i}`, sequence: seqStart + i }))] });
-  return { mapping, rows: ordered, errors, total: table.rows.length, batchError, orderAmbiguous };
+  return { mapping, rows: ordered, errors, total: table.rows.length, batchError, orderAmbiguous, sameDayMixed };
 }
 
 const cashKey = (r: Pick<CashRecord, 'date' | 'kind' | 'symbol' | 'amount' | 'tax'>) => `${r.date}|${r.kind}|${r.symbol ?? ''}|${r.amount}|${r.tax ?? '0'}`;
@@ -316,7 +332,12 @@ export function analyzeCashCsv(table: CsvTable, mapping: Mapping<CashField>, fal
       };
       let status: RowStatus;
       if (externalId) {
-        status = existingExt.has(externalId) || fileExt.has(externalId) ? 'duplicate' : 'new';
+        if (existingExt.has(externalId) || fileExt.has(externalId)) status = 'duplicate';
+        else {
+          const k = cashKey(record);
+          status = seenValues.has(k) ? 'suspected' : 'new';
+          if (status === 'new') seenValues.add(k);
+        }
         fileExt.add(externalId);
       } else {
         const k = cashKey(record);
@@ -333,11 +354,20 @@ export function analyzeCashCsv(table: CsvTable, mapping: Mapping<CashField>, fal
   return { mapping, fallbackKind, rows, errors, total: table.rows.length, batchError };
 }
 
-export function applyTradeImport(data: Ledger, trades: Trade[], newId: () => string): Ledger {
+export function applyTradeImport(data: Ledger, trades: Trade[], newId: () => string, opts: { insertBeforeSameDay?: boolean } = {}): Ledger {
   if (!trades.length) return data;
   const existingExt = new Set(data.trades.filter(t => t.externalId).map(t => t.externalId!));
   const repeated = trades.filter(t => t.externalId && existingExt.has(t.externalId));
   if (repeated.length) throw new Error(`其中 ${repeated.length} 条记录的券商编号已存在，可能已导入过。未写入任何数据。`);
+  if (opts.insertBeforeSameDay) {
+    const entries = [
+      ...data.trades.map(t => ({ t, group: 1 as const, order: t.sequence })),
+      ...trades.map((t, i) => ({ t: { ...t, id: t.id || newId() }, group: 0 as const, order: i })),
+    ];
+    entries.sort((a, b) => a.t.date < b.t.date ? -1 : a.t.date > b.t.date ? 1 : a.group - b.group || a.order - b.order);
+    const merged = entries.map((e, i) => ({ ...e.t, sequence: i }));
+    return validateLedgerSafe({ ...data, trades: merged });
+  }
   const seqStart = data.trades.reduce((m, t) => Math.max(m, t.sequence), -1) + 1;
   const added = trades.map((t, i) => ({ ...t, id: t.id || newId(), sequence: seqStart + i }));
   return validateLedgerSafe({ ...data, trades: [...data.trades, ...added] });
