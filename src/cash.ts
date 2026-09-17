@@ -1,15 +1,28 @@
-import { D, validateLedger, type CashKind, type CashRecord, type Ledger } from './ledger';
+import { D, orderedTrades, validateLedger, type CashKind, type CashRecord, type Ledger } from './ledger';
+
+// 期初余额是“期初日当天开始前”的现金；期初日及之后的入金、出金、分红、费用和股票买卖都计入余额，
+// 之前的记录视为已包含在期初余额中，仅保留备查。买卖联动现金是资产转换，不计入任何收益口径；
+// 未设置期初余额时不根据股票历史推断现金。
 
 export interface CashTotals {
   opening: ReturnType<typeof D>;   // 期初余额
-  deposit: ReturnType<typeof D>;   // 累计入金
-  withdraw: ReturnType<typeof D>;  // 累计出金
-  dividend: ReturnType<typeof D>;  // 分红毛额
-  tax: ReturnType<typeof D>;       // 分红预扣税费
-  fee: ReturnType<typeof D>;       // 账户费用
-  net: ReturnType<typeof D>;       // 已记录资金流净额（不含期初）
+  deposit: ReturnType<typeof D>;   // 累计入金（边界内）
+  withdraw: ReturnType<typeof D>;  // 累计出金（边界内）
+  dividend: ReturnType<typeof D>;  // 分红毛额（边界内）
+  tax: ReturnType<typeof D>;       // 分红预扣税费（边界内）
+  fee: ReturnType<typeof D>;       // 账户费用（边界内）
+  buyOut: ReturnType<typeof D>;    // 买入支出（含手续费，边界内）
+  sellIn: ReturnType<typeof D>;    // 卖出收入（扣手续费，边界内）
+  tradeNet: ReturnType<typeof D>;  // 买卖净现金流
+  net: ReturnType<typeof D>;       // 全部现金变化净额（不含期初）
   balance?: ReturnType<typeof D>;  // 期初 + 净额；未设置期初余额时为 undefined
+  investNet: ReturnType<typeof D>; // 分红净额 − 账户费用（账户现金投资收益）
+  externalNet: ReturnType<typeof D>; // 入金 − 出金（外部净流入）
+  excludedRecords: number;         // 期初边界之前的现金记录数（仅备查）
+  excludedTrades: number;          // 期初边界之前的交易数（已含在期初余额）
 }
+
+export const openingDate = (data: Ledger): string | undefined => data.cash?.opening?.date;
 
 /** 单笔现金记录对余额的净影响（正数增加、负数减少）。 */
 export function cashNet(r: Pick<CashRecord, 'kind' | 'amount' | 'tax'>): ReturnType<typeof D> {
@@ -19,16 +32,44 @@ export function cashNet(r: Pick<CashRecord, 'kind' | 'amount' | 'tax'>): ReturnT
   return D(r.amount).neg();
 }
 
+export function isBeforeOpening(date: string, data: Ledger): boolean {
+  const o = openingDate(data);
+  return !!o && date < o;
+}
+
 export function cashTotals(data: Ledger): CashTotals {
-  const t: CashTotals = { opening: D(data.cash?.opening?.amount ?? 0), deposit: D(0), withdraw: D(0), dividend: D(0), tax: D(0), fee: D(0), net: D(0) };
+  const opening = data.cash?.opening;
+  const inBoundary = (date: string) => !opening || date >= opening.date;
+  const t: CashTotals = {
+    opening: D(opening?.amount ?? 0), deposit: D(0), withdraw: D(0), dividend: D(0), tax: D(0), fee: D(0),
+    buyOut: D(0), sellIn: D(0), tradeNet: D(0), net: D(0),
+    investNet: D(0), externalNet: D(0), excludedRecords: 0, excludedTrades: 0,
+  };
   for (const r of data.cash?.records ?? []) {
-    t.deposit = t.deposit.plus(r.kind === 'deposit' ? r.amount : 0);
-    t.withdraw = t.withdraw.plus(r.kind === 'withdraw' ? r.amount : 0);
-    if (r.kind === 'dividend') { t.dividend = t.dividend.plus(r.amount); t.tax = t.tax.plus(r.tax ?? 0); }
-    if (r.kind === 'fee') t.fee = t.fee.plus(r.amount);
+    if (!inBoundary(r.date)) { t.excludedRecords++; continue; }
+    if (r.kind === 'deposit') t.deposit = t.deposit.plus(r.amount);
+    else if (r.kind === 'withdraw') t.withdraw = t.withdraw.plus(r.amount);
+    else if (r.kind === 'dividend') { t.dividend = t.dividend.plus(r.amount); t.tax = t.tax.plus(r.tax ?? 0); }
+    else t.fee = t.fee.plus(r.amount);
     t.net = t.net.plus(cashNet(r));
   }
-  if (data.cash?.opening) t.balance = t.opening.plus(t.net);
+  if (opening) {
+    for (const tr of orderedTrades(data.trades)) {
+      if (!inBoundary(tr.date)) { t.excludedTrades++; continue; }
+      const gross = D(tr.quantity).mul(tr.price);
+      if (tr.side === 'buy') {
+        t.buyOut = t.buyOut.plus(gross).plus(tr.fee);
+        t.net = t.net.minus(gross).minus(tr.fee);
+      } else {
+        t.sellIn = t.sellIn.plus(gross).minus(tr.fee);
+        t.net = t.net.plus(gross).minus(tr.fee);
+      }
+    }
+  }
+  t.tradeNet = t.sellIn.minus(t.buyOut);
+  if (opening) t.balance = t.opening.plus(t.net);
+  t.investNet = t.dividend.minus(t.tax).minus(t.fee);
+  t.externalNet = t.deposit.minus(t.withdraw);
   return t;
 }
 

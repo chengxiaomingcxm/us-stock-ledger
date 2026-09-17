@@ -1,74 +1,81 @@
-import { D, isSymbolText, validDate, validateLedger, type CashKind, type CashRecord, type Ledger, type Trade } from './ledger';
+import { D, isSymbolText, numberText, validDate, validateLedger, type CashKind, type CashRecord, type Ledger, type Trade } from './ledger';
 
-// 1.26：券商 CSV 导入。支持带表头的交易 / 资金流水 CSV，先字段映射、再预览、去重、确认写入。
+// 1.26：券商 CSV 导入。带表头，字符级解析（引号内可含换行，保留真实行号）；
+// 字段映射 → 逐行校验 → 疑似重复/已导入去重 → 批校验 → 用户确认后写入。
 
-export interface CsvTable { header: string[]; rows: string[][] }
+export interface CsvTable { header: string[]; rows: { line: number; cells: string[] }[] }
 
 const NORM = (s: string) => s.toLowerCase().replace(/[\s_\-()（）【】\[\].:：]+/g, '');
-const cleanNum = (s: string) => s.trim().replace(/^usd\s*/i, '').replace(/[\s,$，]/g, '');
 const normalizeText = (s: string) => s.trim().replace(/\s+/g, '').toLowerCase();
 
-function parseDelimited(line: string, delim: string): string[] {
-  const out: string[] = []; let cur = '', inQ = false;
+function detectDelim(line: string): string {
+  let inQ = false; const counts = [0, 0, 0];
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
-    if (inQ) {
-      if (c === '"') {
-        if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false;
-      } else cur += c;
-    } else if (c === '"') inQ = true;
-    else if (c === delim) { out.push(cur); cur = ''; }
-    else cur += c;
+    if (c === '"') { if (inQ && line[i + 1] === '"') i++; else inQ = !inQ; continue; }
+    if (inQ) continue;
+    if (c === ',') counts[0]++; else if (c === ';') counts[1]++; else if (c === '\t') counts[2]++;
   }
-  if (inQ) throw new Error('引号未闭合，请检查 CSV 文件。');
-  out.push(cur);
-  return out.map(f => f.trim());
+  const max = Math.max(...counts);
+  if (max === 0) throw new Error('没有找到表头分隔符，请使用逗号、分号或制表符分隔的 CSV。');
+  return counts[0] === max ? ',' : counts[1] === max ? ';' : '\t';
 }
 
 export function parseCsv(text: string): CsvTable {
   if (text.length > 2_000_000) throw new Error('文件过大，请选择 2 MB 以内的 CSV。');
-  let body = text.replace(/^\uFEFF/, '');
-  const lines = body.split(/\r\n|\r|\n/).filter(l => l.trim() !== '');
-  if (!lines.length) throw new Error('文件没有内容。');
-  let delim = ',';
-  let best = 0;
-  for (const line of lines.slice(0, 10)) {
-    let inQ = false;
-    const counts = [0, 0, 0];
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') { if (inQ && line[i + 1] === '"') i++; else inQ = !inQ; continue; }
-      if (inQ) continue;
-      if (c === ',') counts[0]++;
-      else if (c === ';') counts[1]++;
-      else if (c === '\t') counts[2]++;
-    }
-    const max = Math.max(...counts);
-    if (max > best) {
-      best = max;
-      delim = counts[0] === max ? ',' : counts[1] === max ? ';' : '\t';
-    }
+  const s = text.replace(/^\uFEFF/, '');
+  if (!s.trim()) throw new Error('文件没有内容。');
+  const firstEnd = s.search(/\r\n|\r|\n/);
+  const delim = detectDelim(firstEnd === -1 ? s : s.slice(0, firstEnd));
+  const raw: { line: number; cells: string[] }[] = [];
+  let lineNo = 1;
+  let row = { line: 1, cells: [] as string[] };
+  let cur = '', inQ = false;
+  const pushField = () => { row.cells.push(cur.trim()); cur = ''; };
+  const endRow = () => { pushField(); if (row.cells.some(x => x !== '')) raw.push(row); row = { line: lineNo, cells: [] }; };
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQ) {
+      if (c === '"') { if (s[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && s[i + 1] === '\n') i++; cur += '\n'; lineNo++; }
+      else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) pushField();
+    else if (c === '\n' || c === '\r') { if (c === '\r' && s[i + 1] === '\n') i++; lineNo++; endRow(); }
+    else cur += c;
   }
-  if (best === 0) throw new Error('没有找到表头分隔符，请使用逗号、分号或制表符分隔的 CSV。');
-  const header = parseDelimited(lines[0], delim);
+  if (inQ) throw new Error('引号未闭合，请检查 CSV 文件。');
+  endRow();
+  if (!raw.length) throw new Error('文件没有内容。');
+  const header = raw[0].cells;
   if (header.length < 2 || header.every(h => h === '')) throw new Error('缺少表头行。');
-  const rows: string[][] = [];
-  for (const line of lines.slice(1)) {
+  const rows: { line: number; cells: string[] }[] = [];
+  for (const r of raw.slice(1)) {
     if (rows.length >= 5000) throw new Error('最多导入 5,000 行，请拆分文件。');
-    const fields = parseDelimited(line, delim);
-    if (fields.length !== header.length) throw new Error(`第 ${rows.length + 2} 行列数与表头不一致（${fields.length} 列）。`);
-    if (fields.every(f => f === '')) continue;
-    rows.push(fields);
+    if (r.cells.length !== header.length) throw new Error(`第 ${r.line} 行列数与表头不一致（${r.cells.length} 列）。`);
+    rows.push(r);
   }
   if (!rows.length) throw new Error('表头之外没有数据行。');
   return { header, rows };
 }
 
-export type TradeField = 'date' | 'symbol' | 'side' | 'quantity' | 'price' | 'fee' | 'note' | 'currency';
-export type CashField = 'date' | 'type' | 'symbol' | 'amount' | 'tax' | 'note';
+export function decodeCsvBytes(buf: ArrayBuffer | Uint8Array): { text: string; encoding: string } {
+  const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (u8.length >= 2 && u8[0] === 0xff && u8[1] === 0xfe) return { text: new TextDecoder('utf-16le').decode(u8), encoding: 'UTF-16 LE' };
+  if (u8.length >= 2 && u8[0] === 0xfe && u8[1] === 0xff) return { text: new TextDecoder('utf-16be').decode(u8), encoding: 'UTF-16 BE' };
+  try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(u8), encoding: 'UTF-8' }; } catch { /* 不是合法 UTF-8 */ }
+  try {
+    const text = new TextDecoder('gbk').decode(u8);
+    if (!text.includes('\uFFFD')) return { text, encoding: 'GBK' };
+  } catch { /* 运行环境不支持 GBK 解码 */ }
+  throw new Error('文件编码无法识别（支持 UTF-8、UTF-8 BOM、UTF-16 和 GBK）。请把文件另存为 UTF-8 后再导入。');
+}
+
+export type TradeField = 'date' | 'symbol' | 'side' | 'quantity' | 'price' | 'fee' | 'note' | 'currency' | 'id';
+export type CashField = 'date' | 'type' | 'symbol' | 'amount' | 'tax' | 'note' | 'currency' | 'id';
 export type Mapping<T extends string> = Partial<Record<T, number>>;
-export const tradeFieldLabels: Record<TradeField, string> = { date: '日期', symbol: '代码', side: '方向', quantity: '数量', price: '单价', fee: '手续费', note: '备注', currency: '币种' };
-export const cashFieldLabels: Record<CashField, string> = { date: '日期', type: '类型', symbol: '代码', amount: '金额', tax: '税费', note: '备注' };
+export const tradeFieldLabels: Record<TradeField, string> = { date: '日期', symbol: '代码', side: '方向', quantity: '数量', price: '单价', fee: '手续费', note: '备注', currency: '币种', id: '券商编号' };
+export const cashFieldLabels: Record<CashField, string> = { date: '日期', type: '类型', symbol: '代码', amount: '金额', tax: '税费', note: '备注', currency: '币种', id: '流水编号' };
 export const tradeFields = Object.keys(tradeFieldLabels) as TradeField[];
 export const cashFields = Object.keys(cashFieldLabels) as CashField[];
 
@@ -81,6 +88,7 @@ export const TRADE_ALIASES: Record<TradeField, string[]> = {
   fee: ['fee', 'commission', 'fees', '手续费', '佣金', '费用', '交易费用'],
   note: ['note', 'notes', 'memo', 'remark', '备注', '说明'],
   currency: ['currency', 'ccy', '币种', '货币', '结算币种'],
+  id: ['tradeid', 'orderid', 'orderno', 'order', 'executionid', 'transactionid', '成交编号', '订单号', '订单编号', '流水号', '成交单号'],
 };
 export const CASH_ALIASES: Record<CashField, string[]> = {
   date: ['date', 'tradedate', '交易日期', '成交日期', '日期', '时间', 'time', 'datetime'],
@@ -89,6 +97,8 @@ export const CASH_ALIASES: Record<CashField, string[]> = {
   amount: ['amount', 'cashamount', '发生金额', '金额', '资金', 'value', '成交金额'],
   tax: ['tax', 'withholding', 'withholdingtax', '预扣税', '税费', '预扣税费'],
   note: ['note', 'notes', 'memo', 'remark', '备注', '说明'],
+  currency: ['currency', 'ccy', '币种', '货币', '结算币种'],
+  id: ['id', 'cashflowid', 'flowid', '流水号', '流水编号', '记录编号', 'transactionid'],
 };
 
 export function autoMap<T extends string>(header: string[], fields: T[], aliases: Record<T, string[]>): Mapping<T> {
@@ -109,22 +119,33 @@ const KIND_VALUES: Record<string, CashKind> = {
   fee: 'fee', f: 'fee', 费用: 'fee', 账户费用: 'fee', 利息支出: 'fee', 服务费: 'fee', 管理费: 'fee',
 };
 
-function parseDateField(s: string): string {
-  const t = s.trim().slice(0, 19);
-  const m = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/) ?? t.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
-  if (!m) throw new Error('日期无效');
-  let y: string, mo: string, d: string;
-  if (m[1].length === 4) { y = m[1]; mo = m[2]; d = m[3]; } else { mo = m[1]; d = m[2]; y = m[3]; }
-  try { return validDate(`${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`); } catch { throw new Error('日期无效或晚于今天'); }
+function parseNumberField(s: string, label: string, positive: boolean): string {
+  const t = s.trim().replace(/^usd\s*/i, '').replace(/^\$/, '');
+  if (!t) throw new Error(`${label}无效`);
+  if (!/^\d+(\.\d+)?$/.test(t) && !/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(t)) throw new Error(`${label}格式无效（示例：1,234.56 或 1234.56，不接受小数逗号或空格分隔）`);
+  const plain = t.replace(/,/g, '');
+  try { return numberText(plain, label, positive); } catch (e) { throw new Error(e instanceof Error ? e.message : `${label}无效`); }
 }
 
-function parseNumberField(s: string, label: string, positive: boolean, allowZero = false): string {
-  const c = cleanNum(s);
-  if (!/^\d+(\.\d+)?$/.test(c)) throw new Error(`${label}无效`);
-  const d = D(c);
-  if (positive && !d.gt(0)) throw new Error(`${label}必须大于 0`);
-  if (!positive && allowZero && d.lt(0)) throw new Error(`${label}不能为负`);
-  return d.toFixed();
+export function parseTradeDateTime(s: string): { date: string; time?: string } {
+  const t = s.trim();
+  let m = t.match(/^(\d{4})[-/ .](\d{1,2})[-/ .](\d{1,2})/);
+  let dateStr: string;
+  if (m) dateStr = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  else {
+    m = t.match(/^(\d{1,2})[-/ .](\d{1,2})[-/ .](\d{4})/);
+    if (!m) throw new Error('日期无效');
+    dateStr = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  }
+  let time: string | undefined;
+  const rest = t.slice(m[0].length);
+  if (rest) {
+    const tm = rest.match(/^[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,6})?(?:[Zz]|[+-]\d{2}:?\d{2})?$/);
+    if (!tm) throw new Error('日期后只能跟合法时间（例如 2026-09-11 09:30:00），多余字符无效');
+    if (+tm[1] > 23 || +tm[2] > 59 || (tm[3] !== undefined && +tm[3] > 59)) throw new Error('时间无效');
+    time = `${tm[1]}:${tm[2]}${tm[3] ? ':' + tm[3] : ''}`;
+  }
+  try { return { date: validDate(dateStr), time }; } catch { throw new Error('日期无效或晚于今天'); }
 }
 
 function parseSymbol(s: string): string {
@@ -135,7 +156,7 @@ function parseSymbol(s: string): string {
 
 function checkCurrency(s: string): void {
   const c = normalizeText(s);
-  if (c && !['usd', '美元', '美金', '$', 'us$'].includes(c)) throw new Error('仅支持美元交易');
+  if (c && !['usd', '美元', '美金', '$', 'us$'].includes(c)) throw new Error('仅支持美元，其他币种不会按汇率换算');
 }
 
 function colOf<T extends string>(cells: string[], mapping: Mapping<T>, field: T): { value?: string; idx?: number } {
@@ -144,104 +165,179 @@ function colOf<T extends string>(cells: string[], mapping: Mapping<T>, field: T)
 }
 
 export interface RowError { line: number; reason: string }
-export interface TradeRow { line: number; trade: Trade; duplicate: boolean }
-export interface TradeImport { mapping: Mapping<TradeField>; rows: TradeRow[]; errors: RowError[]; total: number }
-export interface CashRow { line: number; record: CashRecord; duplicate: boolean }
-export interface CashImport { mapping: Mapping<CashField>; fallbackKind: CashKind; rows: CashRow[]; errors: RowError[]; total: number }
+export type RowStatus = 'new' | 'suspected' | 'duplicate';
+export interface TradeRow { line: number; trade: Trade; time?: string; status: RowStatus }
+export interface TradeImport { mapping: Mapping<TradeField>; rows: TradeRow[]; errors: RowError[]; total: number; batchError?: string; orderAmbiguous: boolean }
+export interface CashRow { line: number; record: CashRecord; status: RowStatus }
+export interface CashImport { mapping: Mapping<CashField>; fallbackKind?: CashKind; rows: CashRow[]; errors: RowError[]; total: number; batchError?: string }
 
-const tradeKey = (t: Pick<Trade, 'date' | 'symbol' | 'side' | 'quantity' | 'price'>) => `${t.date}|${t.symbol}|${t.side}|${t.quantity}|${t.price}`;
+const tradeKey = (t: Pick<Trade, 'date' | 'symbol' | 'side' | 'quantity' | 'price' | 'fee'>) => `${t.date}|${t.symbol}|${t.side}|${t.quantity}|${t.price}|${t.fee}`;
+
+function batchValidate(data: Ledger): string | undefined {
+  try {
+    validateLedger(data);
+    return undefined;
+  } catch (e) {
+    return e instanceof Error ? e.message : '批量校验失败';
+  }
+}
 
 export function analyzeTradeCsv(table: CsvTable, mapping: Mapping<TradeField>, existing: Ledger): TradeImport {
-  const seen = new Set(existing.trades.map(tradeKey));
+  const existingExt = new Set(existing.trades.filter(t => t.externalId).map(t => t.externalId!));
+  const seenValues = new Set(existing.trades.map(tradeKey));
+  const fileExt = new Set<string>();
   const rows: TradeRow[] = []; const errors: RowError[] = [];
-  table.rows.forEach((cells, i) => {
-    const line = i + 2;
+  for (const { line, cells } of table.rows) {
     try {
-      const date = colOf(cells, mapping, 'date');
-      if (date.value === undefined) throw new Error('未选择日期列');
-      const symbol = colOf(cells, mapping, 'symbol');
-      if (symbol.value === undefined) throw new Error('未选择代码列');
-      const side = colOf(cells, mapping, 'side');
-      if (side.value === undefined) throw new Error('未选择方向列');
-      const quantity = colOf(cells, mapping, 'quantity');
-      if (quantity.value === undefined) throw new Error('未选择数量列');
-      const price = colOf(cells, mapping, 'price');
-      if (price.value === undefined) throw new Error('未选择单价列');
-      const currency = colOf(cells, mapping, 'currency');
-      if (currency.value !== undefined) checkCurrency(currency.value);
-      const sideNorm = normalizeText(side.value!);
+      const dateCol = colOf(cells, mapping, 'date');
+      if (dateCol.value === undefined) throw new Error('未选择日期列');
+      const symbolCol = colOf(cells, mapping, 'symbol');
+      if (symbolCol.value === undefined) throw new Error('未选择代码列');
+      const sideCol = colOf(cells, mapping, 'side');
+      if (sideCol.value === undefined) throw new Error('未选择方向列');
+      const quantityCol = colOf(cells, mapping, 'quantity');
+      if (quantityCol.value === undefined) throw new Error('未选择数量列');
+      const priceCol = colOf(cells, mapping, 'price');
+      if (priceCol.value === undefined) throw new Error('未选择单价列');
+      const currencyCol = colOf(cells, mapping, 'currency');
+      if (currencyCol.value) checkCurrency(currencyCol.value);
+      const note = colOf(cells, mapping, 'note').value ?? '';
+      if (note.length > 500) throw new Error('备注过长（最多 500 字）');
+      const sideNorm = normalizeText(sideCol.value!);
       const dir = SIDE_VALUES[sideNorm];
       if (!dir) throw new Error('方向只能是买入 / 卖出');
+      const { date, time } = parseTradeDateTime(dateCol.value!);
+      const extCol = colOf(cells, mapping, 'id');
+      let externalId: string | undefined;
+      if (extCol.value) {
+        const id = extCol.value.trim();
+        if (id.length > 80) throw new Error('券商编号过长（最多 80 位）');
+        externalId = id;
+      }
       const trade: Trade = {
         id: '', sequence: 0,
-        symbol: parseSymbol(symbol.value!),
+        symbol: parseSymbol(symbolCol.value!),
         side: dir,
-        date: parseDateField(date.value!),
-        quantity: parseNumberField(quantity.value!, '数量', true),
-        price: parseNumberField(price.value!, '单价', true),
-        fee: colOf(cells, mapping, 'fee').value ? parseNumberField(colOf(cells, mapping, 'fee').value!, '手续费', false, true) : '0',
-        note: colOf(cells, mapping, 'note').value ?? '',
+        date,
+        quantity: parseNumberField(quantityCol.value!, '数量', true),
+        price: parseNumberField(priceCol.value!, '单价', true),
+        fee: colOf(cells, mapping, 'fee').value ? parseNumberField(colOf(cells, mapping, 'fee').value!, '手续费', false) : '0',
+        note,
         source: 'import',
+        externalId,
       };
-      const k = tradeKey(trade);
-      const duplicate = seen.has(k);
-      seen.add(k);
-      rows.push({ line, trade, duplicate });
+      let status: RowStatus;
+      if (externalId) {
+        status = existingExt.has(externalId) || fileExt.has(externalId) ? 'duplicate' : 'new';
+        fileExt.add(externalId);
+      } else {
+        const k = tradeKey(trade);
+        status = seenValues.has(k) ? 'suspected' : 'new';
+        seenValues.add(k);
+      }
+      rows.push({ line, trade, time, status });
     } catch (e) {
       errors.push({ line, reason: e instanceof Error ? e.message : '解析失败' });
     }
-  });
-  return { mapping, rows, errors, total: table.rows.length };
+  }
+  // 同日顺序：同一天内全部有成交时间时按时间排序；同一天既有买又有卖且时间不全时按文件顺序，但要求用户确认。
+  let orderAmbiguous = false;
+  const byDate = new Map<string, TradeRow[]>();
+  for (const r of rows) { const g = byDate.get(r.trade.date) ?? []; g.push(r); byDate.set(r.trade.date, g); }
+  const ordered: TradeRow[] = [];
+  for (const group of byDate.values()) {
+    const mixed = new Set(group.map(r => r.trade.side)).size > 1;
+    if (group.length >= 2 && mixed) {
+      if (group.every(r => r.time !== undefined)) group.sort((a, b) => (a.time! < b.time! ? -1 : a.time! > b.time! ? 1 : 0));
+      else orderAmbiguous = true;
+    }
+    ordered.push(...group);
+  }
+  const seqStart = existing.trades.reduce((m, x) => Math.max(m, x.sequence), -1) + 1;
+  const batchError = batchValidate({ ...existing, trades: [...existing.trades, ...ordered.filter(r => r.status === 'new').map((r, i) => ({ ...r.trade, id: `csv-${i}`, sequence: seqStart + i }))] });
+  return { mapping, rows: ordered, errors, total: table.rows.length, batchError, orderAmbiguous };
 }
 
 const cashKey = (r: Pick<CashRecord, 'date' | 'kind' | 'symbol' | 'amount' | 'tax'>) => `${r.date}|${r.kind}|${r.symbol ?? ''}|${r.amount}|${r.tax ?? '0'}`;
 
-export function analyzeCashCsv(table: CsvTable, mapping: Mapping<CashField>, fallbackKind: CashKind, existing: Ledger): CashImport {
-  const seen = new Set((existing.cash?.records ?? []).map(cashKey));
+export function analyzeCashCsv(table: CsvTable, mapping: Mapping<CashField>, fallbackKind: CashKind | undefined, existing: Ledger): CashImport {
+  const existingExt = new Set((existing.cash?.records ?? []).filter(r => r.externalId).map(r => r.externalId!));
+  const seenValues = new Set((existing.cash?.records ?? []).map(cashKey));
+  const fileExt = new Set<string>();
   const rows: CashRow[] = []; const errors: RowError[] = [];
-  table.rows.forEach((cells, i) => {
-    const line = i + 2;
+  for (const { line, cells } of table.rows) {
     try {
-      const date = colOf(cells, mapping, 'date');
-      if (date.value === undefined) throw new Error('未选择日期列');
-      const type = colOf(cells, mapping, 'type');
-      const kind = type.value === undefined ? fallbackKind : (KIND_VALUES[normalizeText(type.value)] ?? (() => { throw new Error('资金类型无法识别'); })());
-      const amount = colOf(cells, mapping, 'amount');
-      if (amount.value === undefined) throw new Error('未选择金额列');
-      const symbol = colOf(cells, mapping, 'symbol');
-      const sym = symbol.value ? parseSymbol(symbol.value) : undefined;
+      const dateCol = colOf(cells, mapping, 'date');
+      if (dateCol.value === undefined) throw new Error('未选择日期列');
+      const currencyCol = colOf(cells, mapping, 'currency');
+      if (currencyCol.value) checkCurrency(currencyCol.value);
+      const typeCol = colOf(cells, mapping, 'type');
+      let kind: CashKind;
+      if (typeCol.value === undefined) {
+        if (fallbackKind === undefined) throw new Error('未选择类型列，且未选择统一类型');
+        kind = fallbackKind;
+      } else {
+        const k = KIND_VALUES[normalizeText(typeCol.value)];
+        if (!k) throw new Error('资金类型无法识别（DEPOSIT / WITHDRAW / DIVIDEND / FEE）');
+        kind = k;
+      }
+      const amountCol = colOf(cells, mapping, 'amount');
+      if (amountCol.value === undefined) throw new Error('未选择金额列');
+      const symbolCol = colOf(cells, mapping, 'symbol');
+      const sym = symbolCol.value ? parseSymbol(symbolCol.value) : undefined;
       if (sym && kind !== 'dividend' && kind !== 'fee') throw new Error('只有分红和费用记录可以关联股票');
-      const amountV = parseNumberField(amount.value!, '金额', true);
-      const tax = colOf(cells, mapping, 'tax');
+      const amountV = parseNumberField(amountCol.value!, '金额', true);
+      const note = colOf(cells, mapping, 'note').value ?? '';
+      if (note.length > 500) throw new Error('备注过长（最多 500 字）');
       let taxV: string | undefined;
-      if (tax.value) {
+      const taxCol = colOf(cells, mapping, 'tax');
+      if (taxCol.value) {
         if (kind !== 'dividend') throw new Error('只有分红记录可以填写税费');
-        taxV = parseNumberField(tax.value, '税费', false, true);
+        taxV = parseNumberField(taxCol.value, '税费', false);
         if (D(taxV).gt(amountV)) throw new Error('税费不能超过分红金额');
+      }
+      const extCol = colOf(cells, mapping, 'id');
+      let externalId: string | undefined;
+      if (extCol.value) {
+        const id = extCol.value.trim();
+        if (id.length > 80) throw new Error('流水编号过长（最多 80 位）');
+        externalId = id;
       }
       const record: CashRecord = {
         id: '', sequence: 0,
-        date: parseDateField(date.value!),
+        date: parseTradeDateTime(dateCol.value!).date,
         kind,
         amount: amountV,
         tax: taxV,
         symbol: sym,
-        note: colOf(cells, mapping, 'note').value ?? '',
+        note,
         source: 'import',
+        externalId,
       };
-      const k = cashKey(record);
-      const duplicate = seen.has(k);
-      seen.add(k);
-      rows.push({ line, record, duplicate });
+      let status: RowStatus;
+      if (externalId) {
+        status = existingExt.has(externalId) || fileExt.has(externalId) ? 'duplicate' : 'new';
+        fileExt.add(externalId);
+      } else {
+        const k = cashKey(record);
+        status = seenValues.has(k) ? 'suspected' : 'new';
+        seenValues.add(k);
+      }
+      rows.push({ line, record, status });
     } catch (e) {
       errors.push({ line, reason: e instanceof Error ? e.message : '解析失败' });
     }
-  });
-  return { mapping, fallbackKind, rows, errors, total: table.rows.length };
+  }
+  const seqStart = (existing.cash?.records ?? []).reduce((m, x) => Math.max(m, x.sequence), -1) + 1;
+  const batchError = batchValidate({ ...existing, cash: { ...existing.cash, records: [...(existing.cash?.records ?? []), ...rows.filter(r => r.status === 'new').map((r, i) => ({ ...r.record, id: `csv-${i}`, sequence: seqStart + i }))] } });
+  return { mapping, fallbackKind, rows, errors, total: table.rows.length, batchError };
 }
 
 export function applyTradeImport(data: Ledger, trades: Trade[], newId: () => string): Ledger {
   if (!trades.length) return data;
+  const existingExt = new Set(data.trades.filter(t => t.externalId).map(t => t.externalId!));
+  const repeated = trades.filter(t => t.externalId && existingExt.has(t.externalId));
+  if (repeated.length) throw new Error(`其中 ${repeated.length} 条记录的券商编号已存在，可能已导入过。未写入任何数据。`);
   const seqStart = data.trades.reduce((m, t) => Math.max(m, t.sequence), -1) + 1;
   const added = trades.map((t, i) => ({ ...t, id: t.id || newId(), sequence: seqStart + i }));
   return validateLedgerSafe({ ...data, trades: [...data.trades, ...added] });
@@ -249,6 +345,9 @@ export function applyTradeImport(data: Ledger, trades: Trade[], newId: () => str
 
 export function applyCashImport(data: Ledger, records: CashRecord[], newId: () => string): Ledger {
   if (!records.length) return data;
+  const existingExt = new Set((data.cash?.records ?? []).filter(r => r.externalId).map(r => r.externalId!));
+  const repeated = records.filter(r => r.externalId && existingExt.has(r.externalId));
+  if (repeated.length) throw new Error(`其中 ${repeated.length} 条记录的流水编号已存在，可能已导入过。未写入任何数据。`);
   const seqStart = (data.cash?.records ?? []).reduce((m, r) => Math.max(m, r.sequence), -1) + 1;
   const added = records.map((r, i) => ({ ...r, id: r.id || newId(), sequence: seqStart + i }));
   return validateLedgerSafe({ ...data, cash: { ...data.cash, records: [...(data.cash?.records ?? []), ...added] } });
@@ -258,9 +357,9 @@ function validateLedgerSafe(data: Ledger): Ledger {
   try { return validateLedger(data); } catch (e) { throw new Error(`导入后账本无法通过校验：${e instanceof Error ? e.message : '数据无效'}。当前账本未改变。`); }
 }
 
-export const csvTemplate = `Date,Symbol,Side,Quantity,Price,Fee,Note
-2026-09-10,AAPL,BUY,10,220.5,1,分批建仓
-2026-09-11,MSFT,SELL,2,390,1,部分止盈`;
-export const cashCsvTemplate = `Date,Type,Symbol,Amount,Tax,Note
-2026-09-10,DEPOSIT,,2000,,工资转入
-2026-09-11,DIVIDEND,AAPL,120,12,季度分红`;
+export const csvTemplate = `Date,Symbol,Side,Quantity,Price,Fee,TradeID,Note
+2026-09-10,AAPL,BUY,10,220.5,1,T-1001,分批建仓
+2026-09-11,MSFT,SELL,2,390,1,T-1002,部分止盈`;
+export const cashCsvTemplate = `Date,Type,Symbol,Amount,Tax,FlowID,Note
+2026-09-10,DEPOSIT,,2000,,F-2001,工资转入
+2026-09-11,DIVIDEND,AAPL,120,12,F-2002,季度分红`;

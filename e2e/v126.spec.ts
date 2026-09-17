@@ -23,7 +23,7 @@ test('现金账本：设置期初余额后记录入金、分红与费用，入�
   await page.locator('.bottom-nav').getByRole('button', { name: '收益', exact: true }).click();
   await expect(page.getByTestId('cash-balance')).toHaveText('待设置期初');
   await page.getByRole('button', { name: '设置期初余额', exact: true }).click();
-  await page.getByLabel('日期（美东）').fill('2025-01-01');
+  await page.getByLabel('日期（美东）').fill('2025-07-01');
   await page.getByLabel('金额（美元）').fill('10000');
   await page.getByRole('button', { name: '保存记录', exact: true }).click();
   await expect(page.getByTestId('cash-balance')).toHaveText('$10,000.00');
@@ -81,7 +81,7 @@ test('CSV 资金导入：错误行单独列出，仅写入勾选的有效行', a
   await page.goto('/');
   await page.locator('.bottom-nav').getByRole('button', { name: '收益', exact: true }).click();
   await page.getByRole('button', { name: '设置期初余额', exact: true }).click();
-  await page.getByLabel('日期（美东）').fill('2025-01-01');
+  await page.getByLabel('日期（美东）').fill('2025-07-01');
   await page.getByLabel('金额（美元）').fill('1000');
   await page.getByRole('button', { name: '保存记录', exact: true }).click();
   await page.getByRole('button', { name: '导入 CSV', exact: true }).click();
@@ -102,6 +102,26 @@ test('CSV 资金导入：错误行单独列出，仅写入勾选的有效行', a
   await expect(page.getByTestId('cash-balance')).toHaveText('$1,408.00');
   await expect(page.getByTestId('cash-records')).toContainText('季度分红');
   await expect(page.getByTestId('cash-records')).not.toContainText('坏行');
+});
+test('资金 CSV：币种错误行、取消类型映射后需明确统一类型、勾选实时联动', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.bottom-nav').getByRole('button', { name: '收益', exact: true }).click();
+  await page.getByRole('button', { name: '导入 CSV', exact: true }).click();
+  await page.getByRole('radio', { name: '资金记录' }).check();
+  const csv = ['Date,Type,Amount,Currency', '2026-09-10,DEPOSIT,1000,CNY', '2026-09-11,DEPOSIT,500,USD'].join('\n');
+  await page.locator('#csv-file').setInputFiles({ name: 'cash-curr.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await expect(page.getByTestId('import-summary')).toContainText('错误 1');
+  await expect(page.locator('.csv-error-row')).toContainText('美元');
+  // 取消类型映射：出现统一类型选择器且不能直接提交
+  await page.locator('select[data-map="type"]').selectOption('-1');
+  await expect(page.locator('#csv-fallback')).toBeVisible();
+  await expect(page.getByRole('button', { name: '确认导入 0 笔', exact: true })).toBeDisabled();
+  // 选择统一类型后可按所选类型导入
+  await page.locator('#csv-fallback').selectOption('withdraw');
+  await expect(page.getByRole('button', { name: '确认导入 1 笔', exact: true })).toBeEnabled();
+  // 勾选状态实时反映在按钮数量上
+  await page.locator('[data-import-row="3"]').uncheck();
+  await expect(page.getByRole('button', { name: '确认导入 0 笔', exact: true })).toBeDisabled();
 });
 test('导出完整备份包含现金记录，通用备份剔除现金', async ({ page }) => {
   const withCash = {
@@ -125,6 +145,8 @@ test('导出完整备份包含现金记录，通用备份剔除现金', async ({
   expect(parsed.cash?.records).toHaveLength(1);
   const dl2 = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出各版本通用备份', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('本次导出将不包含');
+  await page.getByRole('button', { name: '继续导出', exact: true }).click();
   const compat = JSON.parse(fs.readFileSync(await (await dl2).path(), 'utf-8'));
   expect(compat.cash).toBeUndefined();
   expect(compat.history).toBeUndefined();

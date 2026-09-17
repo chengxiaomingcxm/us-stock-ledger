@@ -1,12 +1,12 @@
 import Decimal from 'decimal.js';
 Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 export const D = (v: Decimal.Value) => new Decimal(v);
-export interface Trade { id: string; sequence: number; symbol: string; side: 'buy' | 'sell'; date: string; quantity: string; price: string; fee: string; note: string; source?: 'manual' | 'import' }
+export interface Trade { id: string; sequence: number; symbol: string; side: 'buy' | 'sell'; date: string; quantity: string; price: string; fee: string; note: string; source?: 'manual' | 'import'; externalId?: string }
 export interface Quote { symbol: string; price: string; date: string; source?: 'yahoo-close'; fetchedAt?: string }
 export interface Close { symbol: string; price: string; date: string }
 export interface History { version: 1; closes: Close[]; sessions: string[]; splits: {symbol:string; date:string}[]; checkedAt?: string }
 export type CashKind = 'deposit' | 'withdraw' | 'dividend' | 'fee';
-export interface CashRecord { id: string; sequence: number; date: string; kind: CashKind; amount: string; tax?: string; symbol?: string; note: string; source: 'manual' | 'import' }
+export interface CashRecord { id: string; sequence: number; date: string; kind: CashKind; amount: string; tax?: string; symbol?: string; note: string; source: 'manual' | 'import'; externalId?: string }
 export interface Cash { opening?: { amount: string; date: string; note: string }; records: CashRecord[] }
 export interface Ledger { version: 1; currency: 'USD'; method: 'moving-average'; trades: Trade[]; quotes: Quote[]; history?: History; cash?: Cash }
 export interface Position { symbol: string; quantity: Decimal; cost: Decimal; realized: Decimal; average: Decimal; quote?: Quote; value?: Decimal; unrealized?: Decimal }
@@ -27,12 +27,13 @@ export const isSymbolText = (v: unknown): v is string => typeof v === 'string' &
 export function validateLedger(raw: unknown): Ledger {
   if (!isRecord(raw) || raw.version!==1 || raw.currency!=='USD' || raw.method!=='moving-average' || !Array.isArray(raw.trades) || !Array.isArray(raw.quotes)) throw new Error('文件不是受支持的持仓账本备份（版本 1 / 美元 / 移动平均成本）。');
   if (raw.trades.length>5000 || raw.quotes.length>5000) throw new Error('此版本最多支持 5,000 笔交易和 5,000 个报价。');
-  const ids = new Set<string>(); const seqs = new Set<number>(); const quoteSymbols = new Set<string>();
+  const ids = new Set<string>(); const seqs = new Set<number>(); const extIds = new Set<string>(); const quoteSymbols = new Set<string>();
   const trades: Trade[] = raw.trades.map(t => {
     if (!isRecord(t) || typeof t.id!=='string' || !/^[\w-]{1,80}$/.test(t.id) || ids.has(t.id) || !Number.isSafeInteger(t.sequence) || (t.sequence as number)<0 || seqs.has(t.sequence as number) || !['buy','sell'].includes(t.side as string) || typeof t.note!=='string' || t.note.length>500) throw new Error('交易记录格式错误，或存在重复记录编号。');
     ids.add(t.id); seqs.add(t.sequence as number);
     const trade: Trade = { id:t.id, sequence:t.sequence as number, symbol:symbolText(t.symbol), side:t.side as 'buy'|'sell', date:validDate(t.date), quantity:numberText(t.quantity,'股数',true), price:numberText(t.price,'成交单价',true), fee:numberText(t.fee,'手续费'), note:t.note };
     if (t.source!==undefined) { if(!['manual','import'].includes(t.source as string)) throw new Error('交易来源标记无效。'); trade.source=t.source as 'manual'|'import'; }
+    if (t.externalId!==undefined) { if(!isExternalId(t.externalId)) throw new Error('交易外部编号格式无效。'); if(extIds.has(t.externalId)) throw new Error('交易外部编号重复。'); extIds.add(t.externalId); trade.externalId=t.externalId; }
     return trade;
   });
   const quotes: Quote[] = raw.quotes.map(q => {
@@ -50,13 +51,16 @@ export function validateLedger(raw: unknown): Ledger {
   if(raw.cash!==undefined) data.cash=validateCash(raw.cash);
   calculate(data); return data;
 }
+export function isExternalId(v: unknown): v is string { return typeof v === 'string' && /^[A-Za-z0-9\-_.: ]{1,80}$/.test(v.trim()) && v.trim() === v; }
 export function validateCash(raw:unknown):Cash {
   if(!isRecord(raw)||!Array.isArray(raw.records)||raw.records.length>2000)throw Error('现金记录格式错误或超过容量（最多 2,000 笔）。');
   const ids=new Set<string>(),seqs=new Set<number>();
+  const extIds=new Set<string>();
   const records: CashRecord[]=raw.records.map(r=>{
     if(!isRecord(r)||typeof r.id!=='string'||!/^[\w-]{1,80}$/.test(r.id)||ids.has(r.id)||!Number.isSafeInteger(r.sequence)||(r.sequence as number)<0||seqs.has(r.sequence as number)||!cashKinds.includes(r.kind as CashKind)||typeof r.note!=='string'||r.note.length>500)throw Error('现金记录格式错误，或存在重复记录编号。');
     ids.add(r.id);seqs.add(r.sequence as number);
     const rec:CashRecord={id:r.id,sequence:r.sequence as number,date:validDate(r.date),kind:r.kind as CashKind,amount:numberText(r.amount,'金额',true),note:r.note,source:r.source==='import'?'import':'manual'};
+    if (r.externalId!==undefined) { if(!isExternalId(r.externalId))throw Error('现金记录外部编号格式无效。'); if(extIds.has(r.externalId))throw Error('现金记录外部编号重复。'); extIds.add(r.externalId); rec.externalId=r.externalId; }
     if(r.tax!==undefined){
       if(rec.kind!=='dividend')throw Error('只有分红记录可以填写税费。');
       rec.tax=numberText(r.tax,'税费');
@@ -71,7 +75,9 @@ export function validateCash(raw:unknown):Cash {
   const cash:Cash={records};
   if(raw.opening!==undefined){
     if(!isRecord(raw.opening)||typeof raw.opening.note!=='string'||raw.opening.note.length>500)throw Error('期初余额格式错误。');
-    cash.opening={amount:numberText(raw.opening.amount,'期初余额',true),date:validDate(raw.opening.date),note:raw.opening.note};
+    const amount=numberText(raw.opening.amount,'期初余额');
+    if(D(amount).lt(0))throw Error('期初余额不能为负。');
+    cash.opening={amount,date:validDate(raw.opening.date),note:raw.opening.note};
   }
   return cash;
 }

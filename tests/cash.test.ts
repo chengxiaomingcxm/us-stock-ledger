@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { D, emptyLedger, calculate, validateLedger, parseBackup, backupText, demoLedger, type CashRecord, type Trade } from '../src/ledger';
-import { cashTotals, cashNet, orderedCashRecords, saveCashRecord, deleteCashRecord, setOpening } from '../src/cash';
+import { D, emptyLedger, calculate, validateLedger, parseBackup, backupText, deleteTrade, demoLedger, type CashRecord, type Trade } from '../src/ledger';
+import { cashTotals, cashNet, orderedCashRecords, saveCashRecord, deleteCashRecord, setOpening, isBeforeOpening } from '../src/cash';
 
 const trade = (v: Partial<Trade> = {}): Trade => ({ id: 'buy1', sequence: 0, symbol: 'AAPL', side: 'buy', date: '2025-01-01', quantity: '10', price: '100', fee: '1', note: '', ...v });
 const rec = (v: Partial<CashRecord> = {}): CashRecord => ({ id: 'c0', sequence: 0, date: '2025-03-01', kind: 'deposit', amount: '100', note: '', source: 'manual', ...v });
@@ -12,7 +12,7 @@ describe('现金记录净额与余额', () => {
     expect(cashNet({ kind: 'dividend', amount: '120', tax: '12' }).toString()).toBe('108');
     expect(cashNet({ kind: 'fee', amount: '5' }).toString()).toBe('-5');
   });
-  it('余额为期初加全部净流入，未设置期初时无余额', () => {
+  it('余额为期初加边界内净流入，未设置期初时无余额', () => {
     const base = validateLedger({
       ...emptyLedger(),
       cash: {
@@ -36,14 +36,45 @@ describe('现金记录净额与余额', () => {
     expect(t.tax.toString()).toBe('12');
     expect(t.fee.toString()).toBe('5');
   });
-  it('入金出金不改变交易成本与已实现收益', () => {
+  it('买卖联动现金：买入扣含费支出、卖出加扣费收入，不改变证券成本与收益', () => {
+    // A1：期初 2000 在前；买 10@100 费 1；卖 4@120 费 2；剩 6 股报价 110
     const trades = validateLedger({ ...emptyLedger(), trades: [trade(), trade({ id: 's', sequence: 1, side: 'sell', quantity: '4', price: '120', fee: '2' })] });
     const before = calculate(trades);
-    const next = setOpening(saveCashRecord(trades, rec()), { amount: '10000', date: '2025-01-01', note: '' });
+    const next = setOpening(trades, { amount: '2000', date: '2024-12-31', note: '' });
     const after = calculate(next);
     expect(after.cost).toEqual(before.cost);
     expect(after.realized).toEqual(before.realized);
-    expect(cashTotals(next).balance?.toString()).toBe('10100');
+    expect(cashTotals(next).balance?.toString()).toBe('1477');
+    expect(cashTotals(next).buyOut.toString()).toBe('1001');
+    expect(cashTotals(next).sellIn.toString()).toBe('478');
+    // 再卖 6 股@130 费 3：现金 2254，证券已实现 254
+    const all = validateLedger({ ...next, trades: [...next.trades, { id: 's2', sequence: 2, symbol: 'AAPL', side: 'sell', date: '2025-01-02', quantity: '6', price: '130', fee: '3', note: '' }] });
+    expect(cashTotals(all).balance?.toString()).toBe('2254');
+    expect(calculate(all).realized.toString()).toBe('254');
+  });
+  it('期初边界：之前的交易与流水不重复计入，当日及之后计入，修改期初日期重算', () => {
+    const base = validateLedger({
+      ...emptyLedger(),
+      trades: [trade({ date: '2025-09-01' }), trade({ id: 'b2', sequence: 1, date: '2025-09-12', quantity: '1', price: '100', fee: '0' })],
+      cash: { records: [rec({ id: 'r1', sequence: 0, date: '2025-09-01', kind: 'deposit', amount: '500' }), rec({ id: 'r2', sequence: 1, date: '2025-09-12', kind: 'deposit', amount: '300' })] },
+    });
+    const d = setOpening(base, { amount: '1000', date: '2025-09-11', note: '' });
+    let t = cashTotals(d);
+    expect(t.excludedTrades).toBe(1);
+    expect(t.excludedRecords).toBe(1);
+    expect(t.balance?.toString()).toBe('1200'); // 1000 − 100 + 300
+    expect(isBeforeOpening('2025-09-01', d)).toBe(true);
+    expect(isBeforeOpening('2025-09-12', d)).toBe(false);
+    // 修改期初日期为 9 月 1 日：同日记录全部计入
+    const moved = setOpening(d, { amount: '1000', date: '2025-09-01', note: '' });
+    expect(cashTotals(moved).excludedTrades).toBe(0);
+    expect(cashTotals(moved).balance?.toString()).toBe('699'); // 1000 + 500 + 300 − 1001 − 100
+  });
+  it('交易编辑、删除后现金自动重算', () => {
+    const d = setOpening(validateLedger({ ...emptyLedger(), trades: [trade()] }), { amount: '5000', date: '2024-12-31', note: '' });
+    expect(cashTotals(d).balance?.toString()).toBe('3999'); // 5000 − 1001
+    const removed = deleteTrade(d, 'buy1');
+    expect(cashTotals(removed).balance?.toString()).toBe('5000');
   });
 });
 
@@ -56,6 +87,11 @@ describe('现金记录增删改', () => {
     d = deleteCashRecord(d, 'a');
     expect(d.cash?.records).toHaveLength(0);
     expect(cashTotals(d).net.toString()).toBe('0');
+  });
+  it('期初余额允许为零，拒绝负数', () => {
+    const d = setOpening(emptyLedger(), { amount: '0', date: '2025-01-01', note: '满仓' });
+    expect(cashTotals(d).balance?.toString()).toBe('0');
+    expect(() => setOpening(emptyLedger(), { amount: '-1', date: '2025-01-01', note: '' })).toThrow();
   });
   it('期初余额只能有一份，修改覆盖旧值', () => {
     let d = setOpening(emptyLedger(), { amount: '10000', date: '2025-01-01', note: '第一笔' });
@@ -95,16 +131,17 @@ describe('现金校验与备份', () => {
     expect(compat.cash).toBeUndefined();
     expect(compat.history).toBeUndefined();
   });
-  it('旧版备份没有现金字段，读取后自动迁移、不覆盖交易', () => {
+  it('旧版备份没有现金字段，读取后保持未初始化；首次启用期初后边界生效', () => {
     const legacy = { version: 1, currency: 'USD', method: 'moving-average', trades: [trade()], quotes: [] };
     const loaded = parseBackup(JSON.stringify(legacy));
     expect(loaded.cash).toBeUndefined();
-    const migrated = setOpening(loaded, { amount: '9000', date: '2025-01-01', note: '期初' });
+    expect(cashTotals(loaded).balance).toBeUndefined();
+    const migrated = setOpening(loaded, { amount: '9000', date: '2024-12-31', note: '期初' });
     expect(migrated.trades).toEqual(loaded.trades);
-    expect(cashTotals(migrated).balance?.toString()).toBe('9000');
+    expect(cashTotals(migrated).balance?.toString()).toBe('7999'); // 9000 − 1001（期初后买入）
   });
   it('示例账本包含期初与分红，余额可算', () => {
     const t = cashTotals(demoLedger());
-    expect(t.balance?.toString()).toBe('70103');
+    expect(t.balance?.toString()).toBe('61154');
   });
 });

@@ -43,6 +43,16 @@
 .csv-row-cells b{font-size:13px;font-variant-numeric:tabular-nums}
 .csv-row-cells small{color:var(--secondary);font-size:11px}
 .csv-row.csv-dup{opacity:.65;background:var(--control)}
+.csv-row.csv-locked{opacity:.55;background:var(--control)}
+.csv-row.csv-locked input:disabled{opacity:.5}
 .csv-error-row{font-size:12px;color:var(--loss);padding:6px 8px;background:color-mix(in srgb,var(--loss) 8%,var(--surface));border-radius:8px}
+.csv-batch-error{font-size:12px;color:var(--loss);padding:8px;border:1px solid color-mix(in srgb,var(--loss) 45%,transparent);border-radius:10px;margin:6px 0;background:color-mix(in srgb,var(--loss) 8%,var(--surface))}
+.csv-order-confirm{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--secondary);padding:8px;border-radius:10px;background:var(--control);margin:6px 0}
+.csv-order-confirm input{width:16px;height:16px;margin-top:2px;flex:none;accent-color:#087ff5}
+.csv-fallback-hint{margin:8px 0 0}
+.account-profit{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--control);margin-top:12px;font-size:13px}
+.account-profit span{color:var(--secondary)}
+.account-profit strong{font-size:17px;font-variant-numeric:tabular-nums;color:var(--text)}
+.summary-split.summary-cash{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
 @media(max-width:520px){.cash-totals{grid-template-columns:repeat(2,1fr)}.cash-record{grid-template-columns:54px 1fr auto}.cash-record-actions .text-button{padding:4px}}
 @media(prefers-reduced-motion:no-preference){.cash-balance strong{transition:color .15s}}
