@@ -1,0 +1,49 @@
+/* 1.25: 今日盈亏卡片、交易区间、行情清单、表单常驻保存与未保存提醒。 */
+.valuation-card{padding:16px 18px 12px}
+.valuation-top h2{font-size:15px}
+.valuation-top p{max-width:100%;line-height:1.5;margin-top:3px}
+.valuation-profit{font-size:34px;font-weight:780;letter-spacing:-1.2px;line-height:1.15;margin:14px 0 2px}
+.valuation-percent{font-size:17px;font-weight:730;min-height:22px}
+.valuation-bottom{margin-top:12px;gap:10px}
+.valuation-bottom strong{font-size:19px}
+.valuation-coverage{font-size:11px;color:var(--secondary);margin-top:10px;border-top:1px solid var(--border);padding-top:9px}
+.gain-line{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px;color:var(--secondary);margin:6px 0 10px}
+.gain-line strong{font-size:20px;font-weight:750;letter-spacing:-.5px;overflow-wrap:anywhere;text-align:right;font-variant-numeric:tabular-nums}
+.trade-range{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 10px}
+.trade-range label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--secondary)}
+.trade-range input{width:auto;min-width:138px;font-size:16px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text)}
+.trade-range .text-button{margin-left:auto}
+.trade-summary{font-size:12px;color:var(--secondary);background:var(--control);border-radius:12px;padding:10px 14px;margin-bottom:14px;line-height:1.7;overflow-wrap:anywhere}
+.trade-summary b{color:var(--text);font-variant-numeric:tabular-nums}
+.quote-list{padding:16px 18px}
+.quote-list .section-heading{margin-bottom:8px}
+.quote-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.quote-row:last-child{border-bottom:0}
+.quote-row b{font-size:15px}
+.quote-row small{display:block;color:var(--secondary);font-size:11px;line-height:1.6;margin-top:2px}
+.quote-row strong{font-size:15px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right}
+.form-actions{position:sticky;bottom:-8px;margin-top:14px;padding:10px 0 4px;background:linear-gradient(to top,var(--surface) 55%,transparent);z-index:2}
+.form-actions .primary{width:100%;min-height:48px}
+.modal{scroll-padding-bottom:24px}
+.discard-layer{z-index:60}
+.discard-layer .modal{max-height:none;border-radius:22px}
+.discard-layer .dialog-copy{margin:6px 0 16px}
+.discard-layer #discard-yes{margin-bottom:10px}
+.position-today{display:flex;justify-content:space-between;align-items:baseline;gap:12px;background:var(--control);border-radius:14px;padding:10px 14px;margin:4px 0 18px;font-size:13px;color:var(--secondary)}
+.position-today strong{font-size:17px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right}
+.position-quote-state{font-size:13px;max-width:60%;line-height:1.5}
+.position-trades{margin:0 0 20px}
+.position-trades h3{font-size:14px;display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+.position-trades h3 small{font-size:11px}
+.related-trade{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--secondary)}
+.related-trade strong{color:var(--text);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right}
+.position-actions{display:flex;gap:10px}
+.position-actions button{flex:1;min-height:46px}
+@media(max-width:700px){
+ .valuation-profit{font-size:32px}
+ .gain-line strong{font-size:18px}
+ .trade-range input{min-width:0;flex:1;width:100%}
+ .trade-range label{flex:1}
+ .quote-row strong{font-size:14px}
+}
+@media(prefers-contrast:more){.valuation-coverage,.trade-summary,.quote-row small{color:var(--text)}}
