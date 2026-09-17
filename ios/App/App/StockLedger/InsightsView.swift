@@ -228,7 +228,8 @@ struct CashFormView: View {
             if kind == .dividend || kind == .fee, !symbol.trimmingCharacters(in: .whitespaces).isEmpty {
                 parsedSymbol = try LedgerValidation.symbol(symbol)
             }
-            let existing = if case .edit(let record) = mode { record } else { nil }
+            var existing: CashRecord?
+            if case .edit(let record) = mode { existing = record }
             state.saveCash(CashRecord(
                 id: existing?.id ?? UUID(),
                 sequence: existing?.sequence ?? 0,
