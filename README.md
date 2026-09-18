@@ -4,6 +4,8 @@
 
 当前发布版本是 **1.26**，支持 iOS 16 及以上。已发布版本的源码和文档已合并到 `main`，与 `deepseek-dev` 同步。
 
+**2.0 正在开发中**：界面改用 SwiftUI 原生实现（同样的四个页面与记账流程），功能以对齐 1.26 为目标，代码在 `deepseek-dev` 分支，尚未发布。2.0 使用独立的账本格式，不读取 1.x 数据，升级前请用 1.26 导出备份。进展见 [更新记录](CHANGELOG.md)。
+
 [下载 1.26](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.26.0) · [使用帮助](HELP.md) · [更新记录](CHANGELOG.md)
 
 ## 能做什么
