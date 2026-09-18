@@ -38,10 +38,22 @@ codesign --force --sign - "$APP"
 xcrun simctl install "$UDID" "$APP"
 
 for screen in holdings trades returns settings calendar; do
-  xcrun simctl launch --terminate-running-process "$UDID" "com.stockledger.screens" "$screen" >/dev/null
-  sleep 5
+  echo "=== launching $screen ==="
+  xcrun simctl launch --terminate-running-process --console "$UDID" "com.stockledger.screens" "$screen" > "$ROOT/$screen.console" 2>&1 &
+  LAUNCH_PID=$!
+  sleep 6
   xcrun simctl io "$UDID" screenshot "$ROOT/$screen.png"
   xcrun simctl terminate "$UDID" "com.stockledger.screens" 2>/dev/null || true
+  kill "$LAUNCH_PID" 2>/dev/null || true
+  wait "$LAUNCH_PID" 2>/dev/null || true
+  echo "--- console of $screen ---"
+  cat "$ROOT/$screen.console" 2>/dev/null || true
+  echo "--- end console ---"
 done
+
+echo '--- last 3 minutes of Screens process log ---'
+xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "Screens"' 2>/dev/null | tail -120 || true
+echo '--- recent crash reports ---'
+ls "$HOME/Library/Logs/DiagnosticReports" 2>/dev/null | grep -i screens || true
 
 echo 'English UI screenshots ready.'
