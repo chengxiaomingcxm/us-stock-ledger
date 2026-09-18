@@ -10,7 +10,8 @@ struct InsightsView: View {
     private var cash: CashTotals { state.cashTotals }
 
     var body: some View {
-        List {
+        let days = state.dayReturns
+        return List {
             Section("累计投资收益") {
                 AmountText(value: summary.totalProfit)
                     .font(.largeTitle.weight(.bold))
@@ -71,6 +72,40 @@ struct InsightsView: View {
                                 Button("删除", role: .destructive) { state.deleteCash(record.id) }
                             }
                     }
+                }
+            }
+
+            Section {
+                ReturnCalendar(days: days)
+            } header: {
+                HStack {
+                    Text("收益日历")
+                    Spacer()
+                    if state.syncingHistory {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("同步历史") { Task { await state.syncHistory() } }
+                            .font(.footnote)
+                            .disabled(state.ledger.trades.isEmpty)
+                    }
+                }
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("按上一交易日收盘与当日收盘计算每日收益，重放当前账本；缺少收盘价的交易日标记为待补全，不以零代替。历史行情来自 Yahoo 日线，与最新报价来源设置独立。")
+                    if let synced = state.historySyncedAt {
+                        Text("上次同步：\(Fmt.clock(synced))")
+                    }
+                    ForEach(state.historyErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
+                        Text("\(entry.key)：\(entry.value)")
+                    }
+                }
+            }
+
+            if !days.isEmpty {
+                Section("累计资产曲线") {
+                    CumulativeChart(points: days.compactMap { row in
+                        row.cumulative.map { (date: row.date, value: $0) }
+                    })
                 }
             }
 
@@ -245,6 +280,212 @@ struct CashFormView: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - 收益日历
+
+struct ReturnCalendar: View {
+    @Environment(\.colorScheme) private var scheme
+    @AppStorage("appearance.colors") private var colorPreference = "green-up"
+
+    let days: [Engine.DayReturn]
+
+    @State private var month = ""
+    @State private var selected: Engine.DayReturn?
+
+    private var colors: ThemeColors { ThemeColors(redUp: colorPreference == "red-up") }
+    private var months: [String] { Array(Set(days.map { String($0.date.prefix(7)) })).sorted() }
+    private var stats: Engine.MonthStats { Engine.monthStats(days, month: month) }
+
+    private struct Cell: Identifiable {
+        var key: String
+        var day: Int?
+        var row: Engine.DayReturn?
+        var id: String { key }
+    }
+
+    private var cells: [Cell] {
+        guard month.count == 7, let first = MarketClock.day(month + "-01") else { return [] }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = MarketClock.timeZone
+        guard let range = calendar.range(of: .day, in: .month, for: first) else { return [] }
+        let weekday = calendar.component(.weekday, from: first)
+        let map = Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
+        var list: [Cell] = []
+        for offset in 1 ..< weekday { list.append(Cell(key: "blank-\(offset)", day: nil, row: nil)) }
+        for day in range {
+            let key = String(format: "%@-%02d", month, day)
+            list.append(Cell(key: key, day: day, row: map[key]))
+        }
+        return list
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if months.isEmpty {
+                Text("尚未同步历史行情。同步后可查看每日与月度收益。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                Picker("月份", selection: $month) {
+                    ForEach(months, id: \.self) { Text($0).tag($0) }
+                }
+                LabeledContent("本月收益", value: Fmt.signedMoney(stats.profit))
+                LabeledContent("交易日", value: "\(stats.rows.count) 天")
+                if stats.missing > 0 {
+                    Text("\(stats.missing) 天收盘价不完整，未计入月度合计。")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                    ForEach(["日", "一", "二", "三", "四", "五", "六"], id: \.self) { label in
+                        Text(label).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    ForEach(cells) { cell in
+                        dayCell(cell)
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    legend(color: colors.gain(scheme), text: "盈利")
+                    legend(color: colors.loss(scheme), text: "亏损")
+                    Label("待补全", systemImage: "circle.dotted").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .onAppear { if month.isEmpty { month = months.last ?? "" } }
+        .onChange(of: months) { value in if !value.contains(month) { month = value.last ?? "" } }
+        .sheet(item: $selected) { row in
+            DayReturnDetail(row: row)
+        }
+    }
+
+    @ViewBuilder
+    private func dayCell(_ cell: Cell) -> some View {
+        if let day = cell.day {
+            Button {
+                if let row = cell.row { selected = row }
+            } label: {
+                VStack(spacing: 3) {
+                    Text("\(day)").font(.caption).monospacedDigit()
+                    Circle()
+                        .fill(dotColor(for: cell.row))
+                        .frame(width: 6, height: 6)
+                        .overlay {
+                            if cell.row != nil, cell.row?.profit == nil {
+                                Circle().strokeBorder(Color.secondary.opacity(0.6), lineWidth: 1)
+                            }
+                        }
+                }
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(background(for: cell.row), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .disabled(cell.row == nil)
+            .accessibilityLabel(accessibilityLabel(cell))
+        } else {
+            Color.clear.frame(height: 40)
+        }
+    }
+
+    private func background(for row: Engine.DayReturn?) -> Color {
+        guard let profit = row?.profit, profit != 0 else { return .clear }
+        return (profit > 0 ? colors.gain(scheme) : colors.loss(scheme)).opacity(0.15)
+    }
+
+    private func dotColor(for row: Engine.DayReturn?) -> Color {
+        guard let profit = row?.profit else { return .clear }
+        if profit > 0 { return colors.gain(scheme) }
+        if profit < 0 { return colors.loss(scheme) }
+        return .secondary
+    }
+
+    private func accessibilityLabel(_ cell: Cell) -> String {
+        guard let day = cell.day else { return "" }
+        guard let row = cell.row else { return "\(month)-\(day) 非交易日" }
+        return "\(row.date) \(row.profit == nil ? "待补全" : Fmt.signedMoney(row.profit))"
+    }
+
+    private func legend(color: Color, text: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct DayReturnDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    let row: Engine.DayReturn
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    LabeledContent("日期", value: row.date)
+                    LabeledContent("上一交易日", value: row.previous ?? "—")
+                    LabeledContent("当日收益", value: Fmt.signedMoney(row.profit))
+                    LabeledContent("累计资产", value: Fmt.money(row.cumulative))
+                }
+                if !row.contributions.isEmpty {
+                    Section("按股票") {
+                        ForEach(row.contributions) { item in
+                            LabeledContent(item.symbol, value: item.profit.map { Fmt.signedMoney($0) } ?? (item.reason ?? "待补全"))
+                        }
+                    }
+                }
+                if !row.missing.isEmpty {
+                    Section("缺失行情") {
+                        ForEach(row.missing, id: \.self) { text in
+                            Text(text).font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(row.date)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+    }
+}
+
+// MARK: - 累计资产曲线
+
+struct CumulativeChart: View {
+    let points: [(date: String, value: Decimal)]
+
+    var body: some View {
+        if points.count < 2 {
+            Text("同步两个以上交易日后可查看曲线。")
+                .font(.footnote).foregroundStyle(.secondary)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { geometry in
+                    let values = points.map { NSDecimalNumber(decimal: $0.value).doubleValue }
+                    let minimum = values.min() ?? 0
+                    let maximum = values.max() ?? 1
+                    let span = max(maximum - minimum, 0.0001)
+                    let step = geometry.size.width / CGFloat(max(values.count - 1, 1))
+                    Path { path in
+                        for (index, value) in values.enumerated() {
+                            let x = CGFloat(index) * step
+                            let y = geometry.size.height * (1 - CGFloat((value - minimum) / span))
+                            if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                            else { path.addLine(to: CGPoint(x: x, y: y)) }
+                        }
+                    }
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+                }
+                .frame(height: 140)
+                .accessibilityElement()
+                .accessibilityLabel("累计资产曲线，从 \(Fmt.money(points.first?.value)) 到 \(Fmt.money(points.last?.value))，共 \(points.count) 个交易日")
+
+                HStack {
+                    Text(points.first?.date ?? "").font(.caption2).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(points.last?.date ?? "").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }

@@ -63,9 +63,22 @@ enum MarketClock {
 
     private static let parser: DateFormatter = dayFormatter
 
+    private static let utcFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
     static func date(_ time: Date = Date()) -> String { dayFormatter.string(from: time) }
 
     static func day(_ value: String) -> Date? { parser.date(from: value) }
+
+    /// 按 UTC 零点换算日期，用于逐日推算（避免夏令时造成 23/25 小时偏差）。
+    static func utcDay(_ value: String) -> Date? { utcFormatter.date(from: value) }
+    static func utcDate(_ time: Date) -> String { utcFormatter.string(from: time) }
 
     /// 仅按周末推算上一个工作日，节假日由行情来源的收盘价序列决定，不在此猜测。
     static func previousWeekday(_ value: String) -> String? {
@@ -238,16 +251,61 @@ enum QuoteService {
     // MARK: Yahoo
 
     private static func fetchYahoo(symbol: String, now: Date) async throws -> LiveQuote {
-        let provider = providerSymbol(symbol)
-        let escaped = provider.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? provider
-        guard let url = URL(string: "https://query2.finance.yahoo.com/v8/finance/chart/\(escaped)?interval=1d&range=3mo&includePrePost=false") else {
-            throw QuoteError.message("接口地址无效。")
-        }
-        let body = try await get(url, headers: ["User-Agent": "StockLedger/2.0 (personal portfolio)"])
-        return try parseYahoo(body, symbol: symbol, provider: provider, now: now)
+        let series = try await fetchSeries(symbol: symbol, now: now)
+        guard let latest = series.closes.last else { throw QuoteError.message("暂时没有已完成交易日的收盘价。") }
+        let previous = series.closes.count > 1 ? series.closes[series.closes.count - 2] : nil
+        return LiveQuote(price: latest.price,
+                         date: latest.date,
+                         previousClose: previous?.price,
+                         previousCloseDate: previous?.date,
+                         source: "yahoo-close")
     }
 
-    static func parseYahoo(_ raw: Any, symbol: String, provider: String, now: Date = Date()) throws -> LiveQuote {
+    // MARK: 日线序列（收益日历与上一收盘价）
+
+    struct DailySeries {
+        var closes: [PricePoint] = []   // 升序
+        var splits: [SplitEvent] = []
+        var sessions: [String] = []
+    }
+
+    private static func seriesURL(_ symbol: String) -> URL? {
+        let provider = providerSymbol(symbol)
+        let escaped = provider.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? provider
+        return URL(string: "https://query2.finance.yahoo.com/v8/finance/chart/\(escaped)?interval=1d&range=3mo&includePrePost=false&events=splits")
+    }
+
+    static func fetchSeries(symbol: String, now: Date = Date()) async throws -> DailySeries {
+        guard let url = seriesURL(symbol) else { throw QuoteError.message("接口地址无效。") }
+        let body = try await get(url, headers: ["User-Agent": "StockLedger/2.0 (personal portfolio)"])
+        return try parseSeries(body, symbol: symbol, provider: providerSymbol(symbol), now: now)
+    }
+
+    /// 逐只获取日线；SPY 用于交易日历。失败只影响该股票，其他股票照常写入。
+    static func fetchSeriesAll(symbols: [String]) async -> (series: [String: DailySeries], errors: [String: String]) {
+        var series: [String: DailySeries] = [:]
+        var errors: [String: String] = [:]
+        var index = 0
+        while index < symbols.count {
+            let chunk = Array(symbols[index ..< min(index + 2, symbols.count)])
+            index += 2
+            await withTaskGroup(of: (String, DailySeries?, String?).self) { group in
+                for symbol in chunk {
+                    group.addTask {
+                        do { return (symbol, try await fetchSeries(symbol: symbol), nil) }
+                        catch { return (symbol, nil, (error as? QuoteError)?.errorDescription ?? error.localizedDescription) }
+                    }
+                }
+                for await (symbol, value, failure) in group {
+                    if let value { series[symbol] = value }
+                    if let failure { errors[symbol] = failure }
+                }
+            }
+        }
+        return (series, errors)
+    }
+
+    static func parseSeries(_ raw: Any, symbol: String, provider: String, now: Date = Date()) throws -> DailySeries {
         guard let root = raw as? [String: Any],
               let chart = root["chart"] as? [String: Any],
               chart["error"] == nil || chart["error"] is NSNull,
@@ -277,12 +335,12 @@ enum QuoteService {
         let hint = (meta["priceHint"] as? NSNumber)?.intValue
         let precision = (hint.map { (0 ... 8).contains($0) } ?? false) ? hint! : 8
 
-        var candidates: [Quote] = []
+        var points: [PricePoint] = []
         for index in times.indices {
             guard let seconds = times[index], seconds.isFinite, seconds > 0 else { continue }
             let time = Date(timeIntervalSince1970: seconds)
             guard time <= now else { continue }
-            guard let price = price(closes[index]) else { continue }
+            guard let value = price(closes[index]) else { continue }
             let date = MarketClock.date(time)
             if date > today { continue }
             if date == today {
@@ -292,12 +350,28 @@ enum QuoteService {
                       MarketClock.date(Date(timeIntervalSince1970: end)) == date,
                       now >= Date(timeIntervalSince1970: end + 900) else { continue }
             }
-            candidates.append(Quote(symbol: symbol, price: round(price, scale: precision), date: date, source: "yahoo-close", fetchedAt: now))
+            points.append(PricePoint(symbol: symbol, date: date, price: round(value, scale: precision)))
         }
-        candidates.sort { $0.date > $1.date }
-        guard let latest = candidates.first else { throw QuoteError.message("暂时没有已完成交易日的收盘价。") }
-        guard latest.price > 0, latest.price < Decimal(1_000_000_000_000) else { throw QuoteError.message("股价超出支持范围。") }
-        let previous = candidates.count > 1 ? candidates[1] : nil
+        points.sort { $0.date < $1.date }
+        guard let last = points.last, last.price > 0, last.price < Decimal(1_000_000_000_000) else {
+            throw QuoteError.message("暂时没有已完成交易日的收盘价。")
+        }
+
+        var splits: [SplitEvent] = []
+        if let events = result["events"] as? [String: Any], let raw = events["splits"] as? [String: Any] {
+            for case let item as [String: Any] in raw.values {
+                guard let seconds = strictDouble(item["date"]), seconds > 0, seconds <= now.timeIntervalSince1970 else { continue }
+                splits.append(SplitEvent(symbol: symbol, date: MarketClock.date(Date(timeIntervalSince1970: seconds))))
+            }
+        }
+        return DailySeries(closes: points, splits: splits, sessions: points.map(\.date))
+    }
+
+    /// 兼容旧调用：只取最新一条收盘价。
+    static func parseYahoo(_ raw: Any, symbol: String, provider: String, now: Date = Date()) throws -> LiveQuote {
+        let series = try parseSeries(raw, symbol: symbol, provider: provider, now: now)
+        guard let latest = series.closes.last else { throw QuoteError.message("暂时没有已完成交易日的收盘价。") }
+        let previous = series.closes.count > 1 ? series.closes[series.closes.count - 2] : nil
         return LiveQuote(price: latest.price,
                          date: latest.date,
                          previousClose: previous?.price,
@@ -318,7 +392,7 @@ enum QuoteService {
 
     static func parseFinnhub(_ raw: Any, symbol: String, now: Date = Date()) throws -> LiveQuote {
         guard let body = raw as? [String: Any] else { throw QuoteError.message("接口未返回有效报价。") }
-        guard let price = price(body["c"]), price > 0, price < Decimal(1_000_000_000_000) else {
+        guard let current = price(body["c"]), current > 0, current < Decimal(1_000_000_000_000) else {
             throw QuoteError.message("报价价格无效。")
         }
         guard let seconds = strictDouble(body["t"]), seconds > 0, seconds <= now.timeIntervalSince1970 + 60 else {
@@ -331,7 +405,7 @@ enum QuoteService {
             previous = close
             previousDate = MarketClock.previousWeekday(MarketClock.date(Date(timeIntervalSince1970: seconds)))
         }
-        return LiveQuote(price: round(price, scale: 8),
+        return LiveQuote(price: round(current, scale: 8),
                          date: MarketClock.date(Date(timeIntervalSince1970: seconds)),
                          previousClose: previous,
                          previousCloseDate: previousDate,

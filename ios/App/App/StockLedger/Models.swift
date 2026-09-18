@@ -89,12 +89,32 @@ struct CashOpening: Codable, Hashable {
     var note: String = ""
 }
 
+/// 历史收盘价与交易日历：只为收益日历与月度统计服务，不参与持仓成本计算。
+struct PricePoint: Codable, Hashable {
+    var symbol: String
+    var date: String
+    var price: Decimal
+}
+
+struct SplitEvent: Codable, Hashable {
+    var symbol: String
+    var date: String
+}
+
+struct LedgerHistory: Codable {
+    var sessions: [String] = []
+    var closes: [PricePoint] = []
+    var splits: [SplitEvent] = []
+    var checkedAt: Date?
+}
+
 struct Ledger: Codable {
     var format: Int = 2
     var trades: [Trade] = []
     var quotes: [Quote] = []
     var cash: [CashRecord] = []
     var opening: CashOpening?
+    var history: LedgerHistory = LedgerHistory()
 
     func quote(for symbol: String) -> Quote? { quotes.first { $0.symbol == symbol } }
 

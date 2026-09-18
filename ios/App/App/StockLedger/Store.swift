@@ -43,6 +43,9 @@ final class AppState: ObservableObject {
     @Published private(set) var syncingQuotes = false
     @Published private(set) var quoteErrors: [String: String] = [:]
     @Published private(set) var lastSyncedAt: Date?
+    @Published private(set) var syncingHistory = false
+    @Published private(set) var historyErrors: [String: String] = [:]
+    @Published private(set) var historySyncedAt: Date?
 
     init(ledger: Ledger = LedgerStore.load(), settings: QuoteSettings = QuoteService.load()) {
         self.ledger = ledger
@@ -51,6 +54,7 @@ final class AppState: ObservableObject {
 
     var summary: LedgerSummary { Engine.summary(ledger) }
     var cashTotals: CashTotals { Engine.cashTotals(ledger) }
+    var dayReturns: [Engine.DayReturn] { Engine.dailyReturns(ledger) }
 
     func commit(_ next: Ledger) {
         ledger = next
@@ -115,22 +119,85 @@ final class AppState: ObservableObject {
         quoteErrors = result.errors
         guard !result.quotes.isEmpty else { return }
 
-        var next = ledger
+        var incoming: [Quote] = []
         for (symbol, live) in result.quotes {
-            if let existing = next.quote(for: symbol) {
-                // 绝不覆盖更新的报价；同日手动报价优先于自动报价。
-                if existing.date > live.date || (existing.date == live.date && existing.source == nil) { continue }
-            }
-            next.quotes.removeAll { $0.symbol == symbol }
-            next.quotes.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date()))
+            incoming.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date()))
             if let previous = live.previousClose, live.previousCloseDate != live.date {
                 previousClose[symbol] = previous
                 if let date = live.previousCloseDate { previousCloseDates[symbol] = date }
                 else { previousCloseDates.removeValue(forKey: symbol) }
             }
         }
-        commit(next)
+        applyQuotes(incoming)
         lastSyncedAt = Date()
+    }
+
+    /// 同步历史收盘价与交易日历：收益日历、月度统计和上一收盘价都基于这些数据。
+    func syncHistory() async {
+        guard !syncingHistory else { return }
+        let cutoff = MarketClock.date(Date().addingTimeInterval(-100 * 86_400))
+        var symbols = Set(openSymbols).union(ledger.trades.filter { $0.date >= cutoff }.map(\.symbol))
+        symbols.insert("SPY") // 交易日历基准
+        syncingHistory = true
+        defer { syncingHistory = false }
+
+        let result = await QuoteService.fetchSeriesAll(symbols: symbols.sorted())
+        historyErrors = result.errors
+        guard !result.series.isEmpty else { return }
+
+        var sessions = Set(ledger.history.sessions)
+        var closes: [String: PricePoint] = [:]
+        for point in ledger.history.closes { closes[point.symbol + "|" + point.date] = point }
+        var splits: [String: SplitEvent] = [:]
+        for event in ledger.history.splits { splits[event.symbol + "|" + event.date] = event }
+
+        var incoming: [Quote] = []
+        for (symbol, series) in result.series {
+            if symbol == "SPY" { sessions.formUnion(series.sessions) }
+            for point in series.closes where symbol != "SPY" { closes[point.symbol + "|" + point.date] = point }
+            for event in series.splits { splits[event.symbol + "|" + event.date] = event }
+            guard symbol != "SPY", let latest = series.closes.last else { continue }
+            incoming.append(Quote(symbol: symbol, price: latest.price, date: latest.date, source: "yahoo-close", fetchedAt: Date()))
+            if series.closes.count > 1 {
+                let previous = series.closes[series.closes.count - 2]
+                if previous.date < latest.date {
+                    previousClose[symbol] = previous.price
+                    previousCloseDates[symbol] = previous.date
+                }
+            }
+        }
+
+        // 超出容量时整天淘汰，绝不按单条随意截断某个交易日。
+        var all = closes.values.sorted { $0.date == $1.date ? $0.symbol < $1.symbol : $0.date < $1.date }
+        while all.count > 25_000, let oldest = all.first?.date {
+            all.removeAll { $0.date == oldest }
+        }
+
+        var next = ledger
+        next.history = LedgerHistory(sessions: Array(sessions.sorted().suffix(4_000)),
+                                     closes: all,
+                                     splits: splits.values.sorted { $0.date == $1.date ? $0.symbol < $1.symbol : $0.date < $1.date },
+                                     checkedAt: Date())
+        commit(next)
+        applyQuotes(incoming)
+        historySyncedAt = Date()
+    }
+
+    /// 合并报价：绝不覆盖更新的报价；同日手动报价优先于自动报价。
+    @discardableResult
+    private func applyQuotes(_ incoming: [Quote]) -> Bool {
+        let open = Set(openSymbols)
+        var next = ledger
+        var changed = false
+        for quote in incoming where open.contains(quote.symbol) {
+            if let existing = next.quote(for: quote.symbol),
+               existing.date > quote.date || (existing.date == quote.date && existing.source == nil) { continue }
+            next.quotes.removeAll { $0.symbol == quote.symbol }
+            next.quotes.append(quote)
+            changed = true
+        }
+        if changed { commit(next) }
+        return changed
     }
 
     // MARK: - 现金

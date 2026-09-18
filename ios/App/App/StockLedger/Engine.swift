@@ -137,6 +137,175 @@ enum Engine {
         return date < opening.date
     }
 
+    // MARK: - 收益日历
+
+    struct Contribution: Identifiable {
+        var symbol: String
+        var profit: Decimal?
+        var reason: String?
+        var id: String { symbol }
+    }
+
+    struct DayReturn: Identifiable {
+        var date: String
+        var previous: String?
+        var profit: Decimal?
+        var cumulative: Decimal?
+        var contributions: [Contribution]
+        var missing: [String]
+        var id: String { date }
+    }
+
+    /// 已公布的 NYSE 休市日（2026–2028）；未知工作日绝不当作休市。
+    private static let holidays: Set<String> = [
+        "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03",
+        "2026-09-07", "2026-11-26", "2026-12-25",
+        "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31", "2027-06-18", "2027-07-05",
+        "2027-09-06", "2027-11-25", "2027-12-24",
+        "2028-01-17", "2028-02-21", "2028-04-14", "2028-05-29", "2028-06-19", "2028-07-04", "2028-09-04",
+        "2028-11-23", "2028-12-25",
+    ]
+
+    static func knownClosed(_ date: String) -> Bool {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let parsed = formatter.date(from: date) else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let weekday = calendar.component(.weekday, from: parsed)
+        return weekday == 1 || weekday == 7 || holidays.contains(date)
+    }
+
+    /// 每日收益：期末市值 − 期初（上一交易日收盘）市值 + 当日卖出净额 − 当日买入含费支出。
+    /// 重放当前账本，历史交易被修改后不会留下过期收益；任一必需收盘价缺失时该日显示待补全。
+    static func dailyReturns(_ ledger: Ledger) -> [DayReturn] {
+        let sessions = ledger.history.sessions.sorted()
+        let trades = ledger.orderedTrades
+        guard !sessions.isEmpty, !trades.isEmpty else { return [] }
+
+        var prices: [String: Decimal] = [:]
+        for close in ledger.history.closes { prices[close.symbol + "|" + close.date] = close.price }
+        var firstTrade: [String: String] = [:]
+        for trade in trades where firstTrade[trade.symbol] == nil { firstTrade[trade.symbol] = trade.date }
+        let splitSymbols = Set(ledger.history.splits.filter { split in
+            guard let first = firstTrade[split.symbol] else { return false }
+            return split.date >= first
+        }.map(\.symbol))
+        guard let firstDate = trades.first?.date else { return [] }
+
+        var quantity: [String: Decimal] = [:]
+        var cash = Decimal(0)
+        var index = 0
+        var output: [DayReturn] = []
+
+        func apply(_ trade: Trade) -> Decimal {
+            let net = trade.side == .buy ? -(trade.gross + trade.fee) : trade.gross - trade.fee
+            quantity[trade.symbol, default: 0] += trade.side == .buy ? trade.quantity : -trade.quantity
+            cash += net
+            return net
+        }
+
+        for (position, date) in sessions.enumerated() {
+            let previous = position > 0 ? sessions[position - 1] : nil
+            if date < firstDate { continue }
+
+            var stray: Set<String> = []
+            while index < trades.count, trades[index].date < date {
+                let trade = trades[index]
+                index += 1
+                if let previous, trade.date > previous { stray.insert(trade.symbol) }
+                _ = apply(trade)
+            }
+
+            var gap = false
+            if let previous, let start = MarketClock.utcDay(previous), let end = MarketClock.utcDay(date) {
+                var cursor = start.addingTimeInterval(86_400)
+                while cursor < end {
+                    if !knownClosed(MarketClock.utcDate(cursor)) { gap = true; break }
+                    cursor = cursor.addingTimeInterval(86_400)
+                }
+            }
+
+            let opening = quantity
+            var flows: [String: Decimal] = [:]
+            while index < trades.count, trades[index].date == date {
+                let trade = trades[index]
+                index += 1
+                flows[trade.symbol, default: 0] += apply(trade)
+            }
+
+            let symbols = Set(opening.filter { $0.value > 0 }.keys)
+                .union(quantity.filter { $0.value > 0 }.keys)
+                .union(flows.keys)
+                .sorted()
+
+            var total = Decimal(0)
+            var value = Decimal(0)
+            var endComplete = true
+            var missing: [String] = []
+            var contributions: [Contribution] = []
+
+            for symbol in symbols {
+                let startQty = opening[symbol] ?? 0
+                let endQty = quantity[symbol] ?? 0
+                let before = previous.flatMap { prices[symbol + "|" + $0] }
+                let after = prices[symbol + "|" + date]
+                let isSplit = splitSymbols.contains(symbol)
+                var reason: String?
+                if isSplit { reason = "发现拆股，需先核对股数与成本" }
+                else if stray.contains(symbol) { reason = "相邻交易日之间有交易记录，请核对美东交易日期" }
+                else if gap, startQty > 0 { reason = "相邻收盘记录之间有未确认日期" }
+                else if startQty > 0, before == nil { reason = "缺少 \(previous ?? "前一交易日") 收盘价" }
+                else if endQty > 0, after == nil { reason = "缺少 \(date) 收盘价" }
+
+                if endQty > 0, let after, !isSplit { value += endQty * after } else if endQty > 0 { endComplete = false }
+                if isSplit { endComplete = false }
+
+                if let reason {
+                    missing.append("\(symbol)：\(reason)")
+                    contributions.append(Contribution(symbol: symbol, profit: nil, reason: reason))
+                } else {
+                    let endValue = endQty > 0 && after != nil ? endQty * after! : 0
+                    let startValue = startQty > 0 && before != nil ? startQty * before! : 0
+                    let profit = endValue - startValue + (flows[symbol] ?? 0)
+                    total += profit
+                    contributions.append(Contribution(symbol: symbol, profit: profit, reason: nil))
+                }
+            }
+
+            if splitSymbols.contains(where: { firstTrade[$0].map { $0 <= date } ?? false }) { endComplete = false }
+
+            output.append(DayReturn(
+                date: date,
+                previous: previous,
+                profit: missing.isEmpty ? total : nil,
+                cumulative: endComplete ? value + cash : nil,
+                contributions: contributions,
+                missing: missing
+            ))
+        }
+        return output
+    }
+
+    struct MonthStats {
+        var rows: [DayReturn] = []
+        var complete = 0
+        var missing = 0
+        var profit = Decimal(0)
+    }
+
+    static func monthStats(_ days: [DayReturn], month: String) -> MonthStats {
+        let rows = days.filter { $0.date.hasPrefix(month) }
+        var stats = MonthStats(rows: rows)
+        for row in rows {
+            if let profit = row.profit { stats.profit += profit; stats.complete += 1 } else { stats.missing += 1 }
+        }
+        return stats
+    }
+
     /// 交易区间筛选与汇总（日期区间、买卖类型、关键字）。
     struct RangeResult {
         var list: [Trade] = []
