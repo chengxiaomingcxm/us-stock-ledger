@@ -191,7 +191,10 @@ final class AppState: ObservableObject {
 
     /// 同步全部持仓报价：请求失败只记录原因并保留已有价格，绝不写入零价或错误价格。
     func refreshQuotes() async {
-        let symbols = Engine.summary(ledger).open.map(\.symbol)
+        let recent = MarketClock.date(Date().addingTimeInterval(-10 * 86400))
+        // Recently closed positions still contribute to the displayed session's return.
+        let symbols = Set(Engine.summary(ledger).open.map(\.symbol))
+            .union(ledger.trades.filter { $0.date >= recent }.map(\.symbol)).sorted()
         guard !symbols.isEmpty, !syncingQuotes else { return }
         let settings = quoteSettings
         syncingQuotes = true
@@ -278,7 +281,7 @@ final class AppState: ObservableObject {
     /// 合并报价：绝不覆盖更新的报价；同日手动报价优先于自动报价。
     @discardableResult
     private func applyQuotes(_ incoming: [Quote]) -> Bool {
-        let open = Set(Engine.summary(ledger).open.map(\.symbol))
+        let open = Set(ledger.trades.map(\.symbol))
         var next = ledger
         var changed = false
         for quote in incoming where open.contains(quote.symbol) {

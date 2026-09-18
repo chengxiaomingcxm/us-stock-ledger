@@ -120,7 +120,7 @@ struct TodayCard: View {
                     }
                 }
                 .font(.footnote)
-                .disabled(state.syncingQuotes || state.openSymbols.isEmpty)
+                .disabled(state.syncingQuotes || state.ledger.trades.isEmpty)
             }
             Text(result.pnl == nil ? "待补全" : Fmt.signedMoney(result.pnl))
                 .font(.largeTitle.weight(.bold))
