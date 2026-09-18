@@ -27,6 +27,8 @@ struct StatementImportView: View {
                 if !urls.isEmpty {
                     Button("重新读取 \(urls.count) 份结单") { load(urls) }.disabled(loading)
                 }
+                Text("在文件列表里先点一下结单，让它出现勾选，再点右上角「打开」。")
+                    .font(.footnote).foregroundStyle(.secondary)
                 Text("本机读取，支持多份一起核对。仅支持汇丰投资服务综合结单，非美元记录不导入。")
                     .font(.footnote).foregroundStyle(.secondary)
                 if loading { ProgressView("正在读取与核对…") }
@@ -67,13 +69,23 @@ struct StatementImportView: View {
             Button("确认导入 \(count) 笔") { commit() }
             Button("取消", role: .cancel) { }
         } message: { Text("买卖联动现金，关联手续费只计一次；不会新增推算的入金、出金或期初余额。") }
-        .fileImporter(isPresented: $showingPicker, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
-            switch result {
-            case .success(let selected): load(selected)
-            case .failure(let failure): error = failure.localizedDescription
-            }
+        .sheet(isPresented: $showingPicker) {
+            DocumentPicker(
+                onPick: { picked in
+                    showingPicker = false
+                    guard !picked.isEmpty else { return }
+                    load(picked)
+                },
+                onCancel: { showingPicker = false }
+            )
+            .ignoresSafeArea()
         }
-        .onDisappear { readTask?.cancel(); operation = UUID(); password = "" }
+        .onDisappear {
+            readTask?.cancel()
+            operation = UUID()
+            password = ""
+            cleanUpCopies(urls)
+        }
     }
 
     private func load(_ selected: [URL]) {
@@ -81,7 +93,11 @@ struct StatementImportView: View {
         let token = UUID()
         operation = token
         urls = selected
-        rows = []; error = nil; notice = nil; warnings = []; loading = true
+        rows = []
+        error = nil
+        warnings = []
+        notice = "已选择 \(selected.count) 份文件，正在读取…"
+        loading = true
         let ledger = state.ledger, secret = password
         let worker = Task.detached(priority: .userInitiated) {
             try HSBCStatement.parse(pages: StatementImport.pages(from: selected, password: secret), ledger: ledger)
@@ -92,11 +108,21 @@ struct StatementImportView: View {
                 let report = try await worker.value
                 guard operation == token else { return }
                 rows = report.rows; warnings = report.warnings; password = ""
+                if report.rows.isEmpty, let first = report.warnings.first { notice = first }
             } catch {
                 guard operation == token else { return }
+                notice = nil
                 self.error = error.localizedDescription
             }
             loading = false
+        }
+    }
+
+    /// 文件选择器以副本方式交付，读取完成后在离开页面时删除，避免结单副本留在沙盒里。
+    private func cleanUpCopies(_ files: [URL]) {
+        let temporary = FileManager.default.temporaryDirectory.standardizedFileURL.path
+        for url in files where url.standardizedFileURL.path.hasPrefix(temporary) {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 
@@ -109,5 +135,39 @@ struct StatementImportView: View {
             rows = []; urls = []; password = ""; error = nil
             notice = "已导入 \(imported) 笔；可在交易和收益页面核对。"
         } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// 用 UIKit 的文件选择器代替 SwiftUI 的 `fileImporter`。
+/// `fileImporter` 在 NavigationStack 里出现过「选了文件、点右上角打开没有任何反应」的问题：
+/// 结果回调依赖 SwiftUI 的隐式呈现匹配，一旦失配就没有任何反馈。
+/// 这里改为显式代理回调、并以副本方式交付（asCopy），避免安全作用域与 iCloud 占位文件造成的静默失败。
+struct DocumentPicker: UIViewControllerRepresentable {
+    let onPick: ([URL]) -> Void
+    let onCancel: () -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let controller = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf], asCopy: true)
+        controller.allowsMultipleSelection = true
+        controller.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        private let parent: DocumentPicker
+
+        init(_ parent: DocumentPicker) { self.parent = parent }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            parent.onPick(urls)
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            parent.onCancel()
+        }
     }
 }
