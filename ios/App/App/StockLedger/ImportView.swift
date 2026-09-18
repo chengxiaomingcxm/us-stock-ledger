@@ -55,7 +55,7 @@ struct ImportView: View {
                     Label(L10n.tr(fileName.isEmpty ? "选择 CSV 文件" : "重新选择文件"), systemImage: "doc.badge.plus")
                 }
                 if !fileName.isEmpty { LabeledContent(L10n.tr("文件"), value: fileName) }
-                if !header.isEmpty { LabeledContent(L10n.tr("识别到"), value: "\(header.count) \(L10n.tr("列")) · \(rows.count) \(L10n.tr("行记录"))")
+                if !header.isEmpty { LabeledContent(L10n.tr("识别到"), value: "\(header.count) \(L10n.tr("列")) · \(rows.count) \(L10n.tr("行记录"))") }
             } header: {
                 Text(L10n.tr("第一步：文件与类型"))
             } footer: {
