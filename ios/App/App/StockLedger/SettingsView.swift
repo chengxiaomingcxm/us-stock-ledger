@@ -13,7 +13,10 @@ struct SettingsView: View {
     @State private var pendingImport: Ledger?
     @State private var importError: String?
     @State private var shareBox: ShareBox?
+    @State private var showingDemoConfirm = false
+    @State private var showingClearConfirm = false
     @AppStorage("backup.lastExport") private var lastExport = 0.0
+    @AppStorage("demo.loaded") private var demoLoaded = false
 
     @State private var providerDraft: QuoteProvider = .yahoo
     @State private var urlDraft = ""
@@ -114,6 +117,17 @@ struct SettingsView: View {
                 Text("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。")
             }
 
+            Section {
+                Button("载入示例账本") { showingDemoConfirm = true }
+                if demoLoaded {
+                    Button("退出示例并清空账本", role: .destructive) { showingClearConfirm = true }
+                }
+            } header: {
+                Text("示例")
+            } footer: {
+                Text("示例账本包含几笔买卖、分红和费用，只用于体验界面与计算；载入会替换当前账本，建议先导出备份。")
+            }
+
             Section("帮助") {
                 NavigationLink("使用说明") { HelpView() }
                 LabeledContent("账本格式", value: "2（不与 1.x 共用）")
@@ -164,6 +178,24 @@ struct SettingsView: View {
             ShareSheet(items: [box.value]) { completed in
                 if completed { lastExport = Date().timeIntervalSince1970 }
             }
+        }
+        .alert("载入示例账本？", isPresented: $showingDemoConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("载入示例", role: .destructive) {
+                state.loadDemo()
+                demoLoaded = true
+            }
+        } message: {
+            Text("将替换当前的 \(state.ledger.trades.count) 笔交易与 \(state.ledger.cash.count) 笔现金记录。")
+        }
+        .alert("清空当前账本？", isPresented: $showingClearConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("清空", role: .destructive) {
+                state.clearAll()
+                demoLoaded = false
+            }
+        } message: {
+            Text("账本会恢复为空。请确认已导出备份，清空操作无法撤销。")
         }
     }
 
@@ -254,7 +286,7 @@ struct HelpView: View {
                 Text("收益日历按每个交易日重放账本：当日收益 = 当日收盘市值 − 上一交易日收盘市值 + 当日卖出净额 − 当日买入含费支出。需要先「同步历史」获取收盘价与交易日历（来自 Yahoo 日线），缺少收盘价的交易日显示为待补全，不计入月度合计。累计资产曲线使用同一份收盘价数据，不含现金。")
             }
             Section("券商 CSV 导入") {
-                Text("支持逗号、分号或制表符分隔的成交明细，自动识别中英文列名，也可手动指定列。导入前会显示可导入、疑似重复、已导入与无法导入的行数：按成交编号判定为已导入的行不会重复记账；与账本中日期、代码、方向、数量、单价和手续费完全相同的行标记为疑似重复，默认不勾选。同一天已有该股票交易时，需要选择追加到同日之后或插入到同日之前，因为顺序会影响已实现收益；若出现超卖会整体拒绝，账本保持不变。")
+                Text("分两种类型：成交明细用于补全持仓与已实现收益，资金流水用于补全入金、出金、分红与账户费用。支持逗号、分号或制表符分隔，自动识别中英文列名，也可手动指定列；表头缺少类型列时可指定统一类型。导入前会显示可导入、疑似重复、已导入与无法导入的行数：按编号判定为已导入的行不会重复记账；与账本中关键字段完全相同的行标记为疑似重复，默认不勾选。成交明细在同一天已有该股票交易时，需要选择追加到同日之后或插入到同日之前，因为顺序会影响已实现收益；若出现超卖会整体拒绝，账本保持不变。")
             }
         }
         .navigationTitle("使用说明")

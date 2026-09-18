@@ -28,6 +28,43 @@ enum LedgerStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return String(decoding: try encoder.encode(ledger), as: UTF8.self)
     }
+
+    /// 示例账本：仅用于体验界面与计算，不包含任何真实数据。
+    static func demo() -> Ledger {
+        func amount(_ text: String) -> Decimal {
+            Decimal(string: text, locale: Locale(identifier: "en_US")) ?? 0
+        }
+        var ledger = Ledger()
+        func trade(_ symbol: String, _ side: TradeSide, _ date: String,
+                   _ quantity: String, _ price: String, _ fee: String, _ note: String = "") -> Trade {
+            let record = Trade(id: UUID(), sequence: ledger.trades.count, symbol: symbol, side: side,
+                               date: date, quantity: amount(quantity), price: amount(price),
+                               fee: amount(fee), note: note, source: "manual", externalId: nil)
+            return record
+        }
+        ledger.trades = [
+            trade("VOO", .buy, "2026-04-02", "15", "512.30", "1", "示例：买入 ETF"),
+            trade("AAPL", .buy, "2026-06-15", "20", "198.40", "1"),
+            trade("AAPL", .buy, "2026-07-06", "10", "212.75", "1"),
+            trade("AAPL", .sell, "2026-08-12", "12", "231.20", "1.05", "示例：部分止盈"),
+            trade("MSFT", .buy, "2026-05-20", "8", "428.90", "1"),
+        ]
+        ledger.quotes = [
+            Quote(symbol: "AAPL", price: amount("229.15"), date: "2026-09-17", source: nil, fetchedAt: nil),
+            Quote(symbol: "MSFT", price: amount("512.40"), date: "2026-09-17", source: nil, fetchedAt: nil),
+            Quote(symbol: "VOO", price: amount("578.05"), date: "2026-09-17", source: nil, fetchedAt: nil),
+        ]
+        ledger.opening = CashOpening(amount: amount("5000"), date: "2026-04-01", note: "示例期初余额")
+        ledger.cash = [
+            CashRecord(id: UUID(), sequence: 0, date: "2026-04-01", kind: .deposit, amount: amount("20000"),
+                       tax: nil, symbol: nil, note: "示例入金", source: "manual", externalId: nil),
+            CashRecord(id: UUID(), sequence: 1, date: "2026-08-15", kind: .dividend, amount: amount("6.24"),
+                       tax: amount("0.94"), symbol: "AAPL", note: "示例分红", source: "manual", externalId: nil),
+            CashRecord(id: UUID(), sequence: 2, date: "2026-09-01", kind: .fee, amount: amount("1.25"),
+                       tax: nil, symbol: nil, note: "示例账户费用", source: "manual", externalId: nil),
+        ]
+        return ledger
+    }
 }
 
 @MainActor
@@ -231,5 +268,15 @@ final class AppState: ObservableObject {
     func replace(with ledger: Ledger) {
         undoTrade = nil
         commit(ledger)
+    }
+
+    // MARK: - 示例与清空
+
+    func loadDemo() {
+        replace(with: LedgerStore.demo())
+    }
+
+    func clearAll() {
+        replace(with: Ledger())
     }
 }

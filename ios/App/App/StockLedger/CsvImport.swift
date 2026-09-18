@@ -58,11 +58,65 @@ enum RowStatus: String {
     }
 }
 
+enum ImportMode: String, CaseIterable, Identifiable {
+    case trade, cash
+
+    var id: String { rawValue }
+
+    var label: String { self == .trade ? "成交明细" : "资金流水" }
+
+    var detail: String {
+        self == .trade
+            ? "券商的买卖成交记录，用于补全持仓与已实现收益。"
+            : "入金、出金、分红与账户费用，用于补全现金余额。"
+    }
+}
+
+enum CashField: String, CaseIterable, Identifiable {
+    case date, type, symbol, amount, tax, note, currency, id
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .date: return "日期"
+        case .type: return "类型"
+        case .symbol: return "代码"
+        case .amount: return "金额"
+        case .tax: return "税费"
+        case .note: return "备注"
+        case .currency: return "币种"
+        case .id: return "流水编号"
+        }
+    }
+
+    var required: Bool {
+        switch self {
+        case .date, .amount: return true
+        default: return false
+        }
+    }
+
+    var aliases: [String] {
+        switch self {
+        case .date: return ["date", "tradedate", "交易日期", "成交日期", "日期", "时间", "time", "datetime"]
+        case .type: return ["type", "kind", "cashflowtype", "资金类型", "类型", "方向", "action", "操作"]
+        case .symbol: return ["symbol", "ticker", "code", "stockcode", "证券代码", "股票代码", "代码", "标的", "标的代码"]
+        case .amount: return ["amount", "cashamount", "发生金额", "金额", "资金", "value", "成交金额"]
+        case .tax: return ["tax", "withholding", "withholdingtax", "预扣税", "税费", "预扣税费"]
+        case .note: return ["note", "notes", "memo", "remark", "备注", "说明"]
+        case .currency: return ["currency", "ccy", "币种", "货币", "结算币种"]
+        case .id: return ["id", "cashflowid", "flowid", "流水号", "流水编号", "记录编号", "transactionid"]
+        }
+    }
+}
+
 struct ImportRow: Identifiable {
     var id = UUID()
     var line: Int
     var status: RowStatus
     var trade: Trade?
+    var cash: CashRecord?
     var message: String?
     var selected: Bool
 }
@@ -71,6 +125,7 @@ struct ImportReport {
     var delimiter: Character = ","
     var header: [String] = []
     var mapping: [TradeField: Int] = [:]
+    var cashMapping: [CashField: Int] = [:]
     var rows: [ImportRow] = []
     /// 按当前勾选与顺序规则生成候选账本后发现的整体问题（例如超卖），存在时不允许导入。
     var batchError: String?
@@ -331,9 +386,9 @@ enum CsvImport {
                     status = .suspected
                     message = "与账本中已有记录日期、代码、方向、数量、单价与手续费完全相同"
                 }
-                report.rows.append(ImportRow(line: line, status: status, trade: trade, message: message, selected: status == .ready))
+                report.rows.append(ImportRow(line: line, status: status, trade: trade, cash: nil, message: message, selected: status == .ready))
             } catch {
-                report.rows.append(ImportRow(line: line, status: .error, trade: nil,
+                report.rows.append(ImportRow(line: line, status: .error, trade: nil, cash: nil,
                                              message: (error as? CsvImportError)?.errorDescription ?? error.localizedDescription,
                                              selected: false))
             }
@@ -400,6 +455,158 @@ enum CsvImport {
     private static func signature(_ date: String, _ symbol: String, _ side: TradeSide,
                                   _ quantity: Decimal, _ price: Decimal, _ fee: Decimal) -> String {
         [date, symbol, side.rawValue, "\(quantity)", "\(price)", "\(fee)"].joined(separator: "|")
+    }
+
+    // MARK: - 资金流水
+
+    private static let kindValues: [String: CashKind] = [
+        "deposit": .deposit, "d": .deposit, "入金": .deposit, "转入": .deposit, "存入": .deposit, "存款": .deposit, "transferin": .deposit,
+        "withdraw": .withdraw, "w": .withdraw, "出金": .withdraw, "转出": .withdraw, "取出": .withdraw, "提款": .withdraw, "transferout": .withdraw,
+        "dividend": .dividend, "div": .dividend, "分红": .dividend, "股息": .dividend, "interest": .dividend, "利息": .dividend,
+        "fee": .fee, "f": .fee, "费用": .fee, "账户费用": .fee, "服务费": .fee, "管理费": .fee, "利息支出": .fee,
+    ]
+
+    static func cashKind(_ raw: String) throws -> CashKind {
+        guard let kind = kindValues[normalise(raw)] else {
+            throw CsvImportError.message("资金类型无法识别（支持 入金/出金/分红/费用）")
+        }
+        return kind
+    }
+
+    static func autoMap(_ header: [String], fields: [CashField]) -> [CashField: Int] {
+        var used = Set<Int>()
+        var map: [CashField: Int] = [:]
+        for field in fields {
+            let index = header.indices.first { index in
+                !used.contains(index) && field.aliases.contains { normalise($0) == normalise(header[index]) }
+            }
+            if let index { map[field] = index; used.insert(index) }
+        }
+        return map
+    }
+
+    /// 解析资金流水：类型列可缺省，此时必须指定统一类型（与 1.x 的强制选择一致）。
+    static func analyzeCash(text: String, ledger: Ledger,
+                            mapping overrideMapping: [CashField: Int]? = nil,
+                            unifiedKind: CashKind? = nil) throws -> ImportReport {
+        let table = parse(text)
+        guard let headerRow = table.first, headerRow.count > 1 else {
+            throw CsvImportError.message("文件没有可识别的表头。")
+        }
+        var report = ImportReport()
+        report.delimiter = delimiter(text: text)
+        report.header = headerRow
+        report.cashMapping = overrideMapping ?? autoMap(headerRow, fields: CashField.allCases)
+
+        let missing = CashField.allCases.filter { $0.required && report.cashMapping[$0] == nil }
+        if !missing.isEmpty {
+            throw CsvImportError.message("请先指定必需列：\(missing.map(\.label).joined(separator: "、"))。")
+        }
+        if report.cashMapping[.type] == nil, unifiedKind == nil {
+            throw CsvImportError.message("未选择类型列，请指定统一类型（入金 / 出金 / 分红 / 费用）。")
+        }
+
+        let existingIds = Set(ledger.cash.compactMap { $0.externalId })
+        let existingValues = Set(ledger.cash.map { cashSignature($0) })
+        var seenIds = Set<String>()
+
+        for (offset, cells) in table.dropFirst().enumerated() {
+            let line = offset + 2
+            let raw = cells.map { $0.trimmingCharacters(in: .whitespaces) }
+            if raw.allSatisfy({ $0.isEmpty }) { continue }
+            do {
+                func value(_ key: CashField) -> String? {
+                    guard let index = report.cashMapping[key], index < raw.count else { return nil }
+                    return raw[index].isEmpty ? nil : raw[index]
+                }
+                guard let dateText = value(.date) else { throw CsvImportError.message("缺少日期") }
+                guard let amountText = value(.amount) else { throw CsvImportError.message("缺少金额") }
+                let kind = try value(.type).map { try cashKind($0) } ?? unifiedKind!
+
+                if let currency = value(.currency), currency.uppercased() != "USD" {
+                    throw CsvImportError.message("只支持美元记录，币种为 \(currency)")
+                }
+                let date = try dateTime(dateText)
+                let amount = try number(amountText, "金额")
+                var tax: Decimal?
+                if let taxText = value(.tax) {
+                    guard kind == .dividend else { throw CsvImportError.message("只有分红记录可以填写税费") }
+                    let parsed = try number(taxText, "税费", allowZero: true)
+                    guard parsed <= amount else { throw CsvImportError.message("税费不能超过分红金额") }
+                    tax = parsed
+                }
+                var symbol: String?
+                if let symbolText = value(.symbol) {
+                    guard kind == .dividend || kind == .fee else {
+                        throw CsvImportError.message("只有分红和费用记录可以填写股票代码")
+                    }
+                    symbol = try LedgerValidation.symbol(symbolText)
+                }
+                let note = try value(.note).map { try LedgerValidation.note($0) } ?? ""
+                let externalId = value(.id)
+
+                let record = CashRecord(id: UUID(), sequence: 0, date: date, kind: kind, amount: amount,
+                                        tax: tax, symbol: symbol, note: note,
+                                        source: "import", externalId: externalId)
+                var status: RowStatus = .ready
+                var message: String?
+                if let externalId, existingIds.contains(externalId) {
+                    status = .duplicate
+                    message = "账本中已有相同流水编号"
+                } else if let externalId, !seenIds.insert(externalId).inserted {
+                    status = .duplicate
+                    message = "文件内重复的流水编号"
+                } else if existingValues.contains(cashSignature(record)) {
+                    status = .suspected
+                    message = "与账本中已有记录的日期、类型、金额与税费完全相同"
+                }
+                report.rows.append(ImportRow(line: line, status: status, trade: nil, cash: record, message: message, selected: status == .ready))
+            } catch {
+                report.rows.append(ImportRow(line: line, status: .error, trade: nil, cash: nil,
+                                             message: (error as? CsvImportError)?.errorDescription ?? error.localizedDescription,
+                                             selected: false))
+            }
+        }
+
+        if report.rows.isEmpty { throw CsvImportError.message("文件里没有可读取的资金记录。") }
+        return report
+    }
+
+    /// 预览与提交共用：按勾选生成现金记录并统一重排 sequence。
+    static func candidateCash(ledger: Ledger, rows: [ImportRow]) -> Ledger {
+        var next = ledger
+        let imported = rows.filter { $0.selected }.compactMap(\.cash)
+        next.cash = mergeCash(ledger.orderedCash, imported)
+        return next
+    }
+
+    static func mergeCash(_ existing: [CashRecord], _ imported: [CashRecord]) -> [CashRecord] {
+        var result = existing.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+        result.append(contentsOf: imported)
+        result.sort { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+        return result.enumerated().map { index, record in
+            var copy = record
+            copy.sequence = index
+            return copy
+        }
+    }
+
+    private static func cashSignature(_ record: CashRecord) -> String {
+        [record.date, record.kind.rawValue, "\(record.amount)", "\(record.tax ?? 0)", record.symbol ?? ""].joined(separator: "|")
+    }
+
+    static let cashTemplate = "Date,Type,Symbol,Amount,Tax,FlowID,Note"
+
+    /// 按表头猜测文件是成交明细还是资金流水；猜错时可手动切换后重新校验。
+    static func detectMode(_ header: [String]) -> ImportMode {
+        let tradeMap = autoMap(header)
+        let cashMap = autoMap(header, fields: CashField.allCases)
+        let tradeScore = TradeField.allCases.filter { tradeMap[$0] != nil }.count
+        let cashScore = CashField.allCases.filter { cashMap[$0] != nil }.count
+        let looksLikeTrade = tradeMap[.quantity] != nil || tradeMap[.price] != nil
+        if cashMap[.amount] != nil, !looksLikeTrade { return .cash }
+        if cashMap[.type] != nil, cashMap[.amount] != nil, !looksLikeTrade { return .cash }
+        return cashScore > tradeScore ? .cash : .trade
     }
 
     static let template = "Trade Date,Symbol,Side,Quantity,Price,Fee,Execution ID,Currency,Note\n2026-09-17,AAPL,Buy,10,229.15,1.00,EX-0001,USD,示例行"

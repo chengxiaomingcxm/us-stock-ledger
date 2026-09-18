@@ -73,7 +73,7 @@ struct HoldingsView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(position.quote.map { "\($0.sourceLabel) · \($0.date)" } ?? "待报价")
+                Text(quoteLabel(position))
                     .font(.caption2).foregroundStyle(.secondary)
                 Text(position.unrealized.map { Fmt.percent($0 / max(position.cost, 1)) } ?? "—")
                     .font(.subheadline)
@@ -85,6 +85,12 @@ struct HoldingsView: View {
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(position.symbol)，\(Fmt.quantity(position.quantity)) 股，浮动收益 \(Fmt.signedMoney(position.unrealized))")
+    }
+
+    private func quoteLabel(_ position: Position) -> String {
+        guard let quote = position.quote else { return "待报价" }
+        let stale = Engine.isStaleQuote(quote) ? " · 较早" : ""
+        return "\(quote.sourceLabel) · \(quote.date)\(stale)"
     }
 }
 
@@ -162,6 +168,10 @@ struct PositionDetailView: View {
                         LabeledContent("报价", value: position.quote.map { Fmt.money($0.price) } ?? "待报价")
                         LabeledContent("报价日期", value: position.quote?.date ?? "—")
                         LabeledContent("报价来源", value: position.quote?.sourceLabel ?? "—")
+                        if let quote = position.quote, Engine.isStaleQuote(quote) {
+                            Label("报价较早（\(quote.date)），可用下方按钮同步最新行情。", systemImage: "clock")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                         if let previous = state.previousClose[position.symbol] {
                             LabeledContent("上一收盘", value: "\(Fmt.money(previous))\(state.previousCloseDates[position.symbol].map { "（\($0)）" } ?? "")")
                         }

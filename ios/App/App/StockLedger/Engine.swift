@@ -137,6 +137,13 @@ enum Engine {
         return date < opening.date
     }
 
+    /// 报价是否明显过期（超过 4 个自然日）：只用于提示，不隐藏已有价格。
+    static func isStaleQuote(_ quote: Quote, now: Date = Date()) -> Bool {
+        guard let quoted = MarketClock.utcDay(quote.date),
+              let today = MarketClock.utcDay(MarketClock.date(now)) else { return false }
+        return today.timeIntervalSince(quoted) > 4 * 86_400
+    }
+
     // MARK: - 收益日历
 
     struct Contribution: Identifiable {

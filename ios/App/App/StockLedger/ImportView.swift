@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// 2.0 券商 CSV 导入界面：选择文件 → 字段映射 → 预览与确认 → 写入账本。
+// 2.0 券商 CSV 导入界面：选择文件与类型（成交明细 / 资金流水）→ 字段映射 → 预览确认 → 写入账本。
 // 预览阶段展示错误行与疑似重复，提交时再校验一次；未确认前不改动账本。
 
 struct ImportView: View {
@@ -11,8 +11,11 @@ struct ImportView: View {
     @State private var showingPicker = false
     @State private var fileName = ""
     @State private var text = ""
+    @State private var mode: ImportMode = .trade
     @State private var header: [String] = []
-    @State private var mapping: [TradeField: Int] = [:]
+    @State private var tradeMapping: [TradeField: Int] = [:]
+    @State private var cashMapping: [CashField: Int] = [:]
+    @State private var unifiedKind: CashKind = .deposit
     @State private var rows: [ImportRow] = []
     @State private var insertBefore = false
     @State private var error: String?
@@ -24,11 +27,28 @@ struct ImportView: View {
     private var suspectedCount: Int { rows.filter { $0.status == .suspected }.count }
     private var duplicateCount: Int { rows.filter { $0.status == .duplicate }.count }
     private var readyCount: Int { rows.filter { $0.status == .ready }.count }
-    private var requiredMissing: Bool { TradeField.allCases.contains { $0.required && mapping[$0] == nil } }
+
+    private var requiredMissing: Bool {
+        switch mode {
+        case .trade:
+            return TradeField.allCases.contains { $0.required && tradeMapping[$0] == nil }
+        case .cash:
+            return CashField.allCases.contains { $0.required && cashMapping[$0] == nil }
+        }
+    }
 
     var body: some View {
         List {
             Section {
+                Picker("导入类型", selection: $mode) {
+                    ForEach(ImportMode.allCases) { item in
+                        Text(item.label).tag(item)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: mode) { _ in remap(auto: false) }
+                Text(mode.detail).font(.caption).foregroundStyle(.secondary)
+
                 Button {
                     showingPicker = true
                 } label: {
@@ -37,19 +57,36 @@ struct ImportView: View {
                 if !fileName.isEmpty { LabeledContent("文件", value: fileName) }
                 if !header.isEmpty { LabeledContent("识别到", value: "\(header.count) 列 · \(rows.count) 行记录") }
             } header: {
-                Text("第一步：选择文件")
+                Text("第一步：文件与类型")
             } footer: {
-                Text("支持逗号、分号或制表符分隔；UTF-8 / UTF-16 / GBK 编码。文件只在本机读取，不上传。可参考：\(CsvImport.template.split(separator: "\n").first.map(String.init) ?? "")")
+                Text("支持逗号、分号或制表符分隔；UTF-8 / UTF-16 / GBK 编码。文件只在本机读取，不上传。")
             }
 
             if !header.isEmpty {
                 Section {
-                    ForEach(TradeField.allCases) { field in
-                        Picker(field.label + (field.required ? "（必需）" : ""), selection: binding(for: field)) {
-                            Text("未映射").tag(Int?.none)
-                            ForEach(header.indices, id: \.self) { index in
-                                Text("第 \(index + 1) 列 · \(header[index])").tag(Int?.some(index))
+                    if mode == .trade {
+                        ForEach(TradeField.allCases) { field in
+                            Picker(field.label + (field.required ? "（必需）" : ""), selection: tradeBinding(for: field)) {
+                                Text("未映射").tag(Int?.none)
+                                ForEach(header.indices, id: \.self) { index in
+                                    Text("第 \(index + 1) 列 · \(header[index])").tag(Int?.some(index))
+                                }
                             }
+                        }
+                    } else {
+                        ForEach(CashField.allCases) { field in
+                            Picker(field.label + (field.required ? "（必需）" : ""), selection: cashBinding(for: field)) {
+                                Text("未映射").tag(Int?.none)
+                                ForEach(header.indices, id: \.self) { index in
+                                    Text("第 \(index + 1) 列 · \(header[index])").tag(Int?.some(index))
+                                }
+                            }
+                        }
+                        if cashMapping[.type] == nil {
+                            Picker("统一类型（缺少类型列时必选）", selection: $unifiedKind) {
+                                ForEach(CashKind.allCases) { Text($0.label).tag($0) }
+                            }
+                            .onChange(of: unifiedKind) { _ in remap(auto: false) }
                         }
                     }
                     Button("按表头重新识别") { remap(auto: true) }
@@ -63,18 +100,18 @@ struct ImportView: View {
                 Section {
                     LabeledContent("可导入", value: "\(readyCount) 行")
                     LabeledContent("疑似重复", value: "\(suspectedCount) 行（默认不勾选）")
-                    LabeledContent("已导入", value: "\(duplicateCount) 行（按成交编号跳过）")
+                    LabeledContent("已导入", value: "\(duplicateCount) 行（按编号跳过）")
                     LabeledContent("无法导入", value: "\(errorCount) 行")
-                    Toggle("插入到同日已有交易之前", isOn: $insertBefore)
-                        .onChange(of: insertBefore) { _ in revalidate() }
-                    if let batchError {
-                        Label(batchError, systemImage: "exclamationmark.triangle")
-                            .font(.footnote).foregroundStyle(.red)
+                    if mode == .trade {
+                        Toggle("插入到同日已有交易之前", isOn: $insertBefore)
+                            .onChange(of: insertBefore) { _ in revalidate() }
                     }
                 } header: {
                     Text("第三步：确认")
                 } footer: {
-                    Text("同日买卖的相对顺序会影响已实现收益。账本同一天已有该股票交易时，请先确认顺序再导入。")
+                    Text(mode == .trade
+                         ? "同日买卖的相对顺序会影响已实现收益。账本同一天已有该股票交易时，请先确认顺序再导入。"
+                         : "资金记录按日期顺序写入；重复导入不会重复记账，期初余额仍需按券商账单手动设置。")
                 }
 
                 Section("预览") {
@@ -136,8 +173,16 @@ struct ImportView: View {
     }
 
     private func title(_ row: ImportRow) -> String {
-        guard let trade = row.trade else { return "该行无法解析" }
-        return "\(trade.date) \(trade.symbol) \(trade.side.label) \(Fmt.quantity(trade.quantity)) 股 × \(Fmt.moneyPlain(trade.price))\(trade.fee > 0 ? " 费 \(Fmt.moneyPlain(trade.fee))" : "")"
+        if let trade = row.trade {
+            let fee = trade.fee > 0 ? " 费 \(Fmt.moneyPlain(trade.fee))" : ""
+            return "\(trade.date) \(trade.symbol) \(trade.side.label) \(Fmt.quantity(trade.quantity)) 股 × \(Fmt.moneyPlain(trade.price))\(fee)"
+        }
+        if let cash = row.cash {
+            let tax = cash.tax.map { " 税 \(Fmt.moneyPlain($0))" } ?? ""
+            let symbol = cash.symbol.map { " · \($0)" } ?? ""
+            return "\(cash.date) \(cash.kind.label) \(Fmt.moneyPlain(cash.amount))\(tax)\(symbol)"
+        }
+        return "该行无法解析"
     }
 
     private func toggle(_ row: ImportRow) {
@@ -146,11 +191,21 @@ struct ImportView: View {
         revalidate()
     }
 
-    private func binding(for field: TradeField) -> Binding<Int?> {
+    private func tradeBinding(for field: TradeField) -> Binding<Int?> {
         Binding(
-            get: { mapping[field] },
+            get: { tradeMapping[field] },
             set: { value in
-                if let value { mapping[field] = value } else { mapping.removeValue(forKey: field) }
+                if let value { tradeMapping[field] = value } else { tradeMapping.removeValue(forKey: field) }
+                remap(auto: false)
+            }
+        )
+    }
+
+    private func cashBinding(for field: CashField) -> Binding<Int?> {
+        Binding(
+            get: { cashMapping[field] },
+            set: { value in
+                if let value { cashMapping[field] = value } else { cashMapping.removeValue(forKey: field) }
                 remap(auto: false)
             }
         )
@@ -171,6 +226,9 @@ struct ImportView: View {
                 let data = try Data(contentsOf: url)
                 text = try CsvImport.decode(data)
                 fileName = url.lastPathComponent
+                if let head = CsvImport.parse(text).first {
+                    mode = CsvImport.detectMode(head)
+                }
                 remap(auto: true)
             } catch {
                 self.error = (error as? CsvImportError)?.errorDescription ?? error.localizedDescription
@@ -181,11 +239,11 @@ struct ImportView: View {
     private func remap(auto: Bool) {
         guard !text.isEmpty else { return }
         do {
-            if auto {
-                let table = CsvImport.parse(text)
-                guard let head = table.first else { throw CsvImportError.message("文件没有可识别的表头。") }
+            if auto || header.isEmpty {
+                guard let head = CsvImport.parse(text).first else { throw CsvImportError.message("文件没有可识别的表头。") }
                 header = head
-                mapping = CsvImport.autoMap(head)
+                tradeMapping = CsvImport.autoMap(head)
+                cashMapping = CsvImport.autoMap(head, fields: CashField.allCases)
             }
             guard !header.isEmpty else { return }
             if requiredMissing {
@@ -193,14 +251,24 @@ struct ImportView: View {
                 batchError = nil
                 return
             }
-            let report = try CsvImport.analyze(text: text, ledger: state.ledger, mapping: mapping)
-            header = report.header
-            mapping = report.mapping
-            rows = report.rows
+            switch mode {
+            case .trade:
+                let report = try CsvImport.analyze(text: text, ledger: state.ledger, mapping: tradeMapping)
+                header = report.header
+                tradeMapping = report.mapping
+                rows = report.rows
+            case .cash:
+                let report = try CsvImport.analyzeCash(text: text, ledger: state.ledger,
+                                                       mapping: cashMapping,
+                                                       unifiedKind: cashMapping[.type] == nil ? unifiedKind : nil)
+                header = report.header
+                cashMapping = report.cashMapping
+                rows = report.rows
+            }
             revalidate()
-            if auto, !report.rows.isEmpty {
-                let skipped = report.errorCount + report.duplicateCount
-                notice = skipped > 0 ? "已识别 \(report.rows.count) 行，其中 \(skipped) 行需要留意。" : "已识别 \(report.rows.count) 行，可直接导入。"
+            if auto, !rows.isEmpty {
+                let skipped = errorCount + duplicateCount
+                notice = skipped > 0 ? "已识别 \(rows.count) 行，其中 \(skipped) 行需要留意。" : "已识别 \(rows.count) 行，可直接导入。"
             }
         } catch {
             rows = []
@@ -209,22 +277,31 @@ struct ImportView: View {
     }
 
     private func revalidate() {
+        guard mode == .trade else {
+            batchError = nil
+            return
+        }
         batchError = CsvImport.batchProblem(ledger: state.ledger, rows: rows, insertBeforeSameDay: insertBefore)
     }
 
     private func commit() {
         guard batchError == nil else { return }
-        let candidate = CsvImport.candidate(ledger: state.ledger, rows: rows, insertBeforeSameDay: insertBefore)
-        if let problem = CsvImport.validate(candidate) {
-            batchError = problem
-            return
-        }
         let count = selectedCount
-        state.replace(with: candidate)
+        switch mode {
+        case .trade:
+            let candidate = CsvImport.candidate(ledger: state.ledger, rows: rows, insertBeforeSameDay: insertBefore)
+            if let problem = CsvImport.validate(candidate) {
+                batchError = problem
+                return
+            }
+            state.replace(with: candidate)
+        case .cash:
+            state.replace(with: CsvImport.candidateCash(ledger: state.ledger, rows: rows))
+        }
         text = ""
         header = []
         rows = []
         error = nil
-        notice = "已导入 \(count) 行，可在交易页核对。"
+        notice = "已导入 \(count) 行，可在\(mode == .trade ? "交易" : "收益")页核对。"
     }
 }
