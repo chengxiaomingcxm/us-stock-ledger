@@ -212,6 +212,7 @@ final class AppState: ObservableObject {
         let clean = try QuoteService.validate(settings)
         try QuoteService.save(clean)
         quoteSettings = clean
+        rebuild(ledger) // Invalidate a snapshot being prepared under the previous provider settings.
     }
 
     var openSymbolList: [String] { openSymbols }
