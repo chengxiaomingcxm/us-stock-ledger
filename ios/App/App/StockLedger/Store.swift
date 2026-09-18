@@ -35,11 +35,13 @@ enum LedgerStore {
             Decimal(string: text, locale: Locale(identifier: "en_US")) ?? 0
         }
         var ledger = Ledger()
+        var sequence = 0
         func trade(_ symbol: String, _ side: TradeSide, _ date: String,
                    _ quantity: String, _ price: String, _ fee: String, _ note: String = "") -> Trade {
-            let record = Trade(id: UUID(), sequence: ledger.trades.count, symbol: symbol, side: side,
+            let record = Trade(id: UUID(), sequence: sequence, symbol: symbol, side: side,
                                date: date, quantity: amount(quantity), price: amount(price),
                                fee: amount(fee), note: note, source: "manual", externalId: nil)
+            sequence += 1
             return record
         }
         ledger.trades = [
