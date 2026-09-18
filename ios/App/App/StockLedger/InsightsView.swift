@@ -593,6 +593,7 @@ private final class ProfitPlotView: UIView {
         let height = max(bounds.height - 16, 1)
         var transform = CGAffineTransform(scaleX: bounds.width, y: height)
         CATransaction.begin(); CATransaction.setDisableActions(true)
+        curve.frame = bounds; axis.frame = bounds
         curve.path = data.curve.copy(using: &transform)
         let y = height * CGFloat(data.maximum / max(data.maximum - data.minimum, 0.0001))
         let zero = CGMutablePath(); zero.move(to: CGPoint(x: 0, y: y)); zero.addLine(to: CGPoint(x: bounds.width, y: y))
