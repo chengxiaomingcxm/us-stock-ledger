@@ -198,6 +198,7 @@ final class AppState: ObservableObject {
         defer { syncingQuotes = false }
 
         let result = await QuoteService.fetchAll(symbols: symbols, settings: settings)
+        guard !Task.isCancelled, settings == quoteSettings else { return }
         quoteErrors = result.errors
         guard !result.quotes.isEmpty else { return }
 

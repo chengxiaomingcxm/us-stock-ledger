@@ -32,12 +32,17 @@ struct ThemeColors {
 
 struct RootView: View {
     @EnvironmentObject private var state: AppState
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appearance.theme") private var theme = "system"
     @AppStorage("appearance.colors") private var colorSchemePreference = "green-up"
 
     @State private var tab: Int = 0
     @State private var showingTradeForm = false
     @State private var editingTrade: Trade?
+    private struct RefreshTrigger: Equatable {
+        var settings: QuoteSettings
+        var active: Bool
+    }
 
     var body: some View {
         TabView(selection: $tab) {
@@ -82,6 +87,15 @@ struct RootView: View {
                 .environmentObject(state)
         }
         .preferredColorScheme(Appearance.scheme(theme))
+        .task(id: RefreshTrigger(settings: state.quoteSettings, active: scenePhase == .active)) {
+            let interval = state.quoteSettings.interval
+            guard scenePhase == .active, interval > 0 else { return }
+            while !Task.isCancelled {
+                await state.refreshQuotes()
+                do { try await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000) }
+                catch { return }
+            }
+        }
     }
 
     private func presentNewTrade() {
