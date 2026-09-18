@@ -57,8 +57,12 @@ capture() {
   xcrun simctl terminate "$UDID" "com.stockledger.calendar-$variant"
 }
 
-build_app baseline
-capture baseline 2026-09 light large
+# The historical comparison is useful during investigation, but need not
+# recompile the old app for every subsequent main build.
+if [[ "${RENDER_BASELINE:-0}" == 1 ]]; then
+  build_app baseline
+  capture baseline 2026-09 light large
+fi
 build_app fixed
 capture fixed 2026-09 light large
 capture fixed 2026-08 light large

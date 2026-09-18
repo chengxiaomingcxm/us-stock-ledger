@@ -24,6 +24,11 @@ final class CalendarRenderApp: UIResponder, UIApplicationDelegate {
         let presentation = InsightsPresentation(days: month == "empty" ? [] : days)
         let content = NavigationStack {
             List {
+                Section("滚动复用测试") {
+                    ForEach(0..<24, id: \.self) { index in
+                        LabeledContent("合成账本行 \(index + 1)", value: "—")
+                    }
+                }
                 Section("收益日历 · 合成测试数据") {
                     ReturnCalendar(data: presentation).equatable()
                 }
@@ -37,6 +42,29 @@ final class CalendarRenderApp: UIResponder, UIApplicationDelegate {
         window.rootViewController = controller
         window.makeKeyAndVisible()
         self.window = window
+        // The real calendar starts below several account sections. Scroll it
+        // into view, out again, and back to exercise List row reuse.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            guard let list = self.collection(in: controller.view), list.numberOfSections > 1 else {
+                fatalError("Calendar harness could not locate the List")
+            }
+            let calendar = IndexPath(item: 0, section: 1)
+            list.scrollToItem(at: calendar, at: .top, animated: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                list.setContentOffset(.zero, animated: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    list.scrollToItem(at: calendar, at: .top, animated: false)
+                }
+            }
+        }
         return true
+    }
+
+    private func collection(in view: UIView) -> UICollectionView? {
+        if let list = view as? UICollectionView { return list }
+        for child in view.subviews {
+            if let list = collection(in: child) { return list }
+        }
+        return nil
     }
 }
