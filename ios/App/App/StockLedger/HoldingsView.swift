@@ -128,7 +128,7 @@ struct TodayCard: View {
             Text(result.pnl == nil ? "待补全" : Fmt.signedMoney(result.pnl))
                 .font(.largeTitle.weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(result.pnl == nil ? Color.secondary : profitColor(result.pnl))
+                .foregroundStyle(profitColor(result.pnl))
             Text(result.caption).font(.footnote).foregroundStyle(.secondary)
             if let percent = result.percent {
                 Text("较上一收盘 \(Fmt.percent(percent))")
@@ -149,7 +149,8 @@ struct TodayCard: View {
     }
 
     /// 今日盈亏同样跟随涨跌配色设置，不用系统默认颜色。
-    private func profitColor(_ value: Decimal) -> Color {
+    private func profitColor(_ value: Decimal?) -> Color {
+        guard let value else { return .secondary }
         let colors = ThemeColors(redUp: colorPreference == "red-up")
         if value > 0 { return colors.gain(scheme) }
         if value < 0 { return colors.loss(scheme) }
