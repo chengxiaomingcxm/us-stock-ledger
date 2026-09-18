@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct InsightsView: View {
     @EnvironmentObject private var state: AppState
@@ -366,12 +367,20 @@ struct ReturnCalendar: View, Equatable {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 7), spacing: 3) {
-                    ForEach(["日", "一", "二", "三", "四", "五", "六"], id: \.self) { label in
-                        Text(label).font(.caption2).foregroundStyle(.secondary)
+                VStack(spacing: 3) {
+                    HStack(spacing: 3) {
+                        ForEach(["日", "一", "二", "三", "四", "五", "六"], id: \.self) { label in
+                            Text(label).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                        }
                     }
-                    ForEach(cells) { cell in
-                        dayCell(cell)
+                    ForEach(0..<6, id: \.self) { week in
+                        HStack(spacing: 3) {
+                            ForEach(0..<7, id: \.self) { weekday in
+                                let index = week * 7 + weekday
+                                if cells.indices.contains(index) { dayCell(cells[index]).frame(maxWidth: .infinity) }
+                                else { Color.clear.frame(maxWidth: .infinity).frame(height: 40) }
+                            }
+                        }.frame(height: 40)
                     }
                 }
 
@@ -529,46 +538,73 @@ struct CumulativeProfitChart: View, Equatable {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
-                Canvas(rendersAsynchronously: true) { context, size in
-                    let labelArea: CGFloat = 16
-                    let plotHeight = max(size.height - labelArea, 1)
-                    let values = data.values
-                    let maximum = data.maximum
-                    let minimum = data.minimum
-                    let span = max(maximum - minimum, 0.0001)
-                    let step = size.width / CGFloat(max(values.count - 1, 1))
-                    let zeroY = plotHeight * CGFloat((maximum - 0) / span)
-
-                    var axis = Path()
-                    axis.move(to: CGPoint(x: 0, y: zeroY))
-                    axis.addLine(to: CGPoint(x: size.width, y: zeroY))
-                    context.stroke(axis, with: .color(.secondary.opacity(0.35)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-
-                    var curve = Path()
-                    for (index, value) in values.enumerated() {
-                        let x = CGFloat(index) * step
-                        let y = plotHeight * CGFloat((maximum - value) / span)
-                        if index == 0 { curve.move(to: CGPoint(x: x, y: y)) }
-                        else { curve.addLine(to: CGPoint(x: x, y: y)) }
-                    }
-                    context.stroke(curve, with: .color(lineColor), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
-
-                    for index in data.ticks {
-                        let x = min(max(CGFloat(index) * step, 14), size.width - 14)
-                        var tick = Path()
-                        tick.move(to: CGPoint(x: x, y: plotHeight))
-                        tick.addLine(to: CGPoint(x: x, y: plotHeight + 4))
-                        context.stroke(tick, with: .color(.secondary.opacity(0.4)), lineWidth: 1)
-                        context.draw(Text(String(points[index].date.suffix(5)))
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary),
-                                     at: CGPoint(x: x, y: plotHeight + 9))
-                    }
-                }
+                ProfitPlot(data: data, color: UIColor(lineColor), labelColor: (scheme == .dark ? UIColor.lightGray : UIColor.darkGray))
                 .frame(height: 168)
                 .accessibilityElement()
                 .accessibilityLabel("累计收益曲线，当前 \(Fmt.signedMoney(points.last?.value))，最高 \(Fmt.signedMoney(highest))，最低 \(Fmt.signedMoney(lowest))，共 \(points.count) 个交易日")
             }
         }
+    }
+}
+
+/// Retained Core Animation layers: scrolling translates an existing chart, never redraws it.
+private struct ProfitPlot: UIViewRepresentable {
+    let data: InsightsPresentation
+    let color: UIColor
+    let labelColor: UIColor
+    func makeUIView(context: Context) -> ProfitPlotView { ProfitPlotView() }
+    func updateUIView(_ view: ProfitPlotView, context: Context) {
+        view.update(data: data, color: color, labelColor: labelColor)
+    }
+}
+private final class ProfitPlotView: UIView {
+    private let curve = CAShapeLayer()
+    private let axis = CAShapeLayer()
+    private var labels: [UILabel] = []
+    private var data = InsightsPresentation()
+    private var previousBounds = CGRect.null
+    private var renderedRevision: UUID?
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        curve.fillColor = nil; curve.lineWidth = 2; curve.lineJoin = .round
+        axis.fillColor = nil; axis.lineWidth = 1; axis.lineDashPattern = [3, 3]
+        layer.addSublayer(axis); layer.addSublayer(curve)
+        for _ in 0..<6 {
+            let label = UILabel()
+            label.font = .monospacedDigitSystemFont(ofSize: 9, weight: .regular)
+            label.textAlignment = .center
+            addSubview(label); labels.append(label)
+        }
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func update(data: InsightsPresentation, color: UIColor, labelColor: UIColor) {
+        self.data = data
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        curve.strokeColor = color.cgColor; axis.strokeColor = labelColor.withAlphaComponent(0.35).cgColor
+        for label in labels { label.textColor = labelColor }
+        CATransaction.commit()
+        if renderedRevision != data.revision { setNeedsLayout() }
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds != previousBounds || renderedRevision != data.revision else { return }
+        previousBounds = bounds; renderedRevision = data.revision
+        let height = max(bounds.height - 16, 1)
+        var transform = CGAffineTransform(scaleX: bounds.width, y: height)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        curve.path = data.curve.copy(using: &transform)
+        let y = height * CGFloat(data.maximum / max(data.maximum - data.minimum, 0.0001))
+        let zero = CGMutablePath(); zero.move(to: CGPoint(x: 0, y: y)); zero.addLine(to: CGPoint(x: bounds.width, y: y))
+        axis.path = zero
+        for i in labels.indices {
+            guard data.ticks.indices.contains(i) else { labels[i].isHidden = true; continue }
+            let index = data.ticks[i]
+            labels[i].isHidden = false
+            labels[i].text = String(data.points[index].date.suffix(5))
+            let x = bounds.width * CGFloat(index) / CGFloat(max(data.values.count - 1, 1))
+            labels[i].frame = CGRect(x: min(max(x - 20, 0), max(bounds.width - 40, 0)), y: height + 2, width: 40, height: 14)
+        }
+        CATransaction.commit()
     }
 }

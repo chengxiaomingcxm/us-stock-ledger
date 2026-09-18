@@ -22,6 +22,7 @@ struct SettingsView: View {
     @State private var urlDraft = ""
     @State private var keyDraft = ""
     @State private var intervalDraft = 60
+    @State private var modeDraft = "auto"
     @State private var quoteNotice: String?
     @State private var quoteFailure: String?
 
@@ -45,7 +46,14 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("行情来源", selection: $providerDraft) {
+                Picker("价格显示", selection: $modeDraft) {
+                    Text("自动（休市用收盘）").tag("auto")
+                    Text("最近收盘价").tag("close")
+                    Text("所选接口最新报价").tag("live")
+                }
+                Text("收盘价使用 Yahoo 已完成日线；盘中报价使用下方所选接口。API Key 保存后需同步行情。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Picker("盘中行情来源", selection: $providerDraft) {
                     ForEach(QuoteProvider.allCases) { provider in
                         Text(provider.label).tag(provider)
                     }
@@ -135,7 +143,7 @@ struct SettingsView: View {
             }
 
             Section {
-                LabeledContent("版本", value: "2.0.0 (1)")
+                LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
                 LabeledContent("应用标识", value: "com.personal.stockledger")
             } footer: {
                 Text("2.0 使用原生 SwiftUI 界面，账本保存在本机，不上传任何数据。")
@@ -206,13 +214,14 @@ struct SettingsView: View {
         urlDraft = settings.url
         keyDraft = settings.key
         intervalDraft = settings.interval
+        modeDraft = settings.priceMode ?? "auto"
     }
 
     private func saveQuotes() {
         quoteNotice = nil
         quoteFailure = nil
         do {
-            try state.saveQuoteSettings(QuoteSettings(provider: providerDraft, url: urlDraft, key: keyDraft, interval: intervalDraft))
+            try state.saveQuoteSettings(QuoteSettings(provider: providerDraft, url: urlDraft, key: keyDraft, interval: intervalDraft, priceMode: modeDraft))
             loadQuoteDrafts()
             quoteNotice = keyDraft.isEmpty ? "行情设置已保存。" : "行情设置已保存到系统钥匙串。"
         } catch {

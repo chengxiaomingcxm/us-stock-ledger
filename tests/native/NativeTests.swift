@@ -165,6 +165,33 @@ struct NativeTests {
         while state.rebuilding { try await Task.sleep(nanoseconds: 1_000_000) }
         check(state.cashTotals.deposit == 19, "only newest computation is published")
         check(state.insights.revision == historyID, "cash change does not replay securities history")
+        var market = Ledger()
+        market.trades = [Trade(sequence: 0, symbol: "TEST", side: .buy, date: "2026-09-15", quantity: 1, price: 90, fee: 0)]
+        market.quotes = [Quote(symbol: "TEST", price: 110, date: "2026-09-17", source: "yahoo-close", previousClose: 100, previousCloseDate: "2026-09-16")]
+        let premarket = ISO8601DateFormatter().date(from: "2026-09-18T05:00:00Z")!
+        let closed = Engine.displayedReturn(market, now: premarket)
+        check(closed.pnl == 10 && closed.title == "最近收盘收益", "yesterday close remains valid after NY midnight")
+        check(closed.caption.contains("2026-09-17"), "caption uses actual price date")
+        market.trades.append(Trade(sequence: 1, symbol: "TEST", side: .buy, date: "2026-09-18", quantity: 10, price: 200, fee: 5))
+        check(Engine.displayedReturn(market, now: premarket).pnl == 10, "future-session trades excluded from last-close return")
+        var automatic = QuoteSettings(provider: .finnhub, key: "synthetic")
+        check(QuoteService.usesClosingPrices(automatic, now: premarket), "automatic premarket mode requests completed closes")
+        let midday = ISO8601DateFormatter().date(from: "2026-09-18T15:00:00Z")!
+        check(!QuoteService.usesClosingPrices(automatic, now: midday), "automatic regular session uses configured API")
+        automatic.priceMode = "close"
+        check(QuoteService.usesClosingPrices(automatic, now: midday), "explicit closing mode stays closing during session")
+        automatic.priceMode = "live"
+        check(!QuoteService.usesClosingPrices(automatic, now: premarket), "explicit API mode respected")
+        let mondayHoliday = ISO8601DateFormatter().date(from: "2026-09-07T15:00:00Z")!
+        automatic.priceMode = nil
+        check(QuoteService.usesClosingPrices(automatic, now: mondayHoliday), "known holiday uses completed closes")
+        let oldSettings = Data(#"{"provider":"finnhub","url":"","key":"synthetic","interval":60}"#.utf8)
+        let decodedSettings = try JSONDecoder().decode(QuoteSettings.self, from: oldSettings)
+        check(decodedSettings.priceMode == nil, "old API settings remain readable")
+        let persistedQuote = try JSONDecoder().decode(Quote.self, from: JSONEncoder().encode(market.quotes[0]))
+        check(persistedQuote.previousClose == 100 && persistedQuote.previousCloseDate == "2026-09-16", "restart retains exact baseline")
+        market.quotes[0].date = "2026-09-18"
+        check(Engine.todayPnl(market, previousClose: ["TEST": 100], today: "2026-09-17").pnl == nil, "future quote cannot value a past session")
         print("PASS: \(assertions) assertions; 25,000 closes / 4,000 sessions / 1,000 trades: \(elapsed)s; main actor heartbeats: \(heartbeats)")
     }
 }

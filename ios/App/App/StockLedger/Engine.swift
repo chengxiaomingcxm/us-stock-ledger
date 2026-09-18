@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 // 2.0 计算引擎：口径与 1.x 一致（移动平均成本、期初边界、买卖联动现金）。
 
@@ -355,6 +356,7 @@ enum Engine {
     }
 
     struct TodayResult {
+        var title: String = "今日盈亏"
         var pnl: Decimal?
         var percent: Decimal?
         var caption: String
@@ -362,6 +364,39 @@ enum Engine {
         var rows: [TodayRow] = []
         var tradedToday = 0
         var basis: Decimal?
+    }
+
+    /// Evaluate a single actual quote session, excluding trades made after that session.
+    static func displayedReturn(_ ledger: Ledger, now: Date = Date()) -> TodayResult {
+        let today = MarketClock.date(now)
+        let symbols = Set(ledger.trades.map(\.symbol))
+        let quotes = ledger.quotes.filter { symbols.contains($0.symbol) && $0.date <= today }
+        guard let date = quotes.map(\.date).max() else {
+            return TodayResult(caption: "尚无报价，请同步行情")
+        }
+        var before: [String: Decimal] = [:]
+        var dates: [String: String] = [:]
+        for quote in quotes where quote.date == date {
+            if let value = quote.previousClose, !(quote.source == "finnhub-live" && quote.date < today) {
+                before[quote.symbol] = value
+                if let day = quote.previousCloseDate { dates[quote.symbol] = day }
+            }
+        }
+        // Recover persisted daily baselines when opening an old 2.0 backup.
+        let history = Dictionary(grouping: ledger.history.closes) { $0.symbol }
+        for symbol in symbols where before[symbol] == nil {
+            if let close = history[symbol]?.filter({ $0.date < date }).max(by: { $0.date < $1.date }),
+               let start = MarketClock.utcDay(close.date), let end = MarketClock.utcDay(date),
+               end.timeIntervalSince(start) <= 10 * 86400,
+               stride(from: start.timeIntervalSince1970 + 86400, to: end.timeIntervalSince1970, by: 86400).allSatisfy({ knownClosed(MarketClock.utcDate(Date(timeIntervalSince1970: $0))) }) {
+                before[symbol] = close.price; dates[symbol] = close.date
+            }
+        }
+        var result = todayPnl(ledger, previousClose: before, previousCloseDates: dates, today: date)
+        let closed = quotes.filter { $0.date == date }.allSatisfy { $0.source == "yahoo-close" }
+        result.title = closed ? "最近收盘收益" : (date == today ? "今日盈亏" : "最近报价日收益")
+        result.caption = "美东 \(date) · " + (closed ? "已完成交易日收盘" : "最新报价") + (result.pnl == nil ? " · 待补全" : "")
+        return result
     }
 
     static func todayPnl(_ ledger: Ledger, previousClose: [String: Decimal], previousCloseDates: [String: String] = [:], today: String) -> TodayResult {
@@ -398,7 +433,7 @@ enum Engine {
             }
             if reason == nil, endQty > 0 {
                 if let quote {
-                    if quote.date < today { reason = "缺少 \(today) 当日报价（当前报价为 \(quote.date)）" }
+                    if quote.date != today { reason = "缺少 \(today) 报价（当前报价为 \(quote.date)）" }
                 } else {
                     reason = "缺少当日报价"
                 }
@@ -462,6 +497,7 @@ struct InsightsPresentation {
     var maximum: Double = 0
     var minimum: Double = 0
     var missingDays = 0
+    var curve: CGPath = CGMutablePath()
     init(days: [Engine.DayReturn] = []) {
         var running = Decimal(0)
         let grouped = Dictionary(grouping: days) { String($0.date.prefix(7)) }
@@ -496,12 +532,20 @@ struct InsightsPresentation {
         lowest = points.map(\.value).min() ?? 0
         maximum = max(values.max() ?? 0, 0)
         minimum = min(values.min() ?? 0, 0)
+        let path = CGMutablePath()
+        let span = max(maximum - minimum, 0.0001)
+        for (index, value) in values.enumerated() {
+            let point = CGPoint(x: Double(index) / Double(max(values.count - 1, 1)), y: (maximum - value) / span)
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        curve = path
         if !days.isEmpty {
             ticks = Array(Set((0..<min(6, days.count)).map { $0 * (days.count - 1) / max(min(6, days.count) - 1, 1) })).sorted()
         }
     }
 }
 struct LedgerDerived {
+    var displayReturn = Engine.TodayResult(caption: "正在计算")
     var unknownDividendTax = 0
     var summary = LedgerSummary()
     var cash = CashTotals()
@@ -513,6 +557,7 @@ struct LedgerDerived {
     static func compute(_ ledger: Ledger, cached: LedgerDerived?, historyUnchanged: Bool) -> LedgerDerived {
         var value = LedgerDerived()
         value.summary = Engine.summary(ledger)
+        value.displayReturn = Engine.displayedReturn(ledger)
         value.cash = Engine.cashTotals(ledger)
         value.unknownDividendTax = ledger.cash.filter { $0.source == "hsbc-statement-net" && $0.tax == nil }.count
         value.trades = ledger.orderedTrades

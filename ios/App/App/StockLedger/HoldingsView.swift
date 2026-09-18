@@ -105,13 +105,10 @@ struct TodayCard: View {
     @AppStorage("appearance.colors") private var colorPreference = "green-up"
 
     var body: some View {
-        let result = Engine.todayPnl(state.ledger,
-                                     previousClose: state.previousClose,
-                                     previousCloseDates: state.previousCloseDates,
-                                     today: Fmt.today)
+        let result = state.displayReturn
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("今日盈亏").font(.subheadline).foregroundStyle(.secondary)
+                Text(result.title).font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     Task { await state.refreshQuotes() }

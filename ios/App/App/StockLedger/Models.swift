@@ -37,6 +37,8 @@ struct Quote: Identifiable, Codable, Hashable {
     var date: String
     var source: String?      // manual / yahoo-close / finnhub-live / custom-live
     var fetchedAt: Date?
+    var previousClose: Decimal? = nil
+    var previousCloseDate: String? = nil
     var id: String { symbol }
 
     /// 报价来源的中文说明；手动录入没有来源标记。

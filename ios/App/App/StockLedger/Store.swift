@@ -90,6 +90,7 @@ final class AppState: ObservableObject {
     @Published private(set) var rebuilding = false
     var summary: LedgerSummary { derived.summary }
     var cashTotals: CashTotals { derived.cash }
+    var displayReturn: Engine.TodayResult { derived.displayReturn }
     var dayReturns: [Engine.DayReturn] { derived.days }
     var insights: InsightsPresentation { derived.insights }
     var openSymbols: [String] { derived.symbols }
@@ -202,11 +203,14 @@ final class AppState: ObservableObject {
 
         var incoming: [Quote] = []
         for (symbol, live) in result.quotes {
-            incoming.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date()))
+            incoming.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date(), previousClose: live.previousClose, previousCloseDate: live.previousCloseDate))
             if let previous = live.previousClose, live.previousCloseDate != live.date {
                 previousClose[symbol] = previous
                 if let date = live.previousCloseDate { previousCloseDates[symbol] = date }
                 else { previousCloseDates.removeValue(forKey: symbol) }
+            } else {
+                previousClose.removeValue(forKey: symbol)
+                previousCloseDates.removeValue(forKey: symbol)
             }
         }
         applyQuotes(incoming)
@@ -238,7 +242,8 @@ final class AppState: ObservableObject {
             for point in series.closes where symbol != "SPY" { closes[point.symbol + "|" + point.date] = point }
             for event in series.splits { splits[event.symbol + "|" + event.date] = event }
             guard symbol != "SPY", let latest = series.closes.last else { continue }
-            incoming.append(Quote(symbol: symbol, price: latest.price, date: latest.date, source: "yahoo-close", fetchedAt: Date()))
+            let previous = series.closes.dropLast().last
+            incoming.append(Quote(symbol: symbol, price: latest.price, date: latest.date, source: "yahoo-close", fetchedAt: Date(), previousClose: previous?.price, previousCloseDate: previous?.date))
             if series.closes.count > 1 {
                 let previous = series.closes[series.closes.count - 2]
                 if previous.date < latest.date {
@@ -262,7 +267,7 @@ final class AppState: ObservableObject {
         let open = Set(Engine.summary(next).open.map(\.symbol))
         for quote in incoming where open.contains(quote.symbol) {
             if let existing = next.quote(for: quote.symbol),
-               existing.date > quote.date || (existing.date == quote.date && existing.source == nil) { continue }
+               (existing.source == nil && existing.date >= quote.date) || (existing.date > quote.date && !(quote.source == "yahoo-close" && QuoteService.usesClosingPrices(quoteSettings))) { continue }
             next.quotes.removeAll { $0.symbol == quote.symbol }
             next.quotes.append(quote)
         }
@@ -277,7 +282,7 @@ final class AppState: ObservableObject {
         var changed = false
         for quote in incoming where open.contains(quote.symbol) {
             if let existing = next.quote(for: quote.symbol),
-               existing.date > quote.date || (existing.date == quote.date && existing.source == nil) { continue }
+               (existing.source == nil && existing.date >= quote.date) || (existing.date > quote.date && !(quote.source == "yahoo-close" && QuoteService.usesClosingPrices(quoteSettings))) { continue }
             next.quotes.removeAll { $0.symbol == quote.symbol }
             next.quotes.append(quote)
             changed = true

@@ -37,6 +37,7 @@ struct QuoteSettings: Codable, Equatable {
     var url: String = ""
     var key: String = ""
     var interval: Int = 60
+    var priceMode: String? = nil // nil/auto: completed close outside regular hours; close/live: explicit choice
 }
 
 struct LiveQuote {
@@ -158,6 +159,7 @@ enum QuoteService {
 
     static func validate(_ raw: QuoteSettings) throws -> QuoteSettings {
         guard [0, 60, 300].contains(raw.interval) else { throw QuoteError.message("刷新间隔无效。") }
+        guard raw.priceMode == nil || ["auto", "close", "live"].contains(raw.priceMode!) else { throw QuoteError.message("报价模式无效。") }
         var clean = raw
         clean.url = raw.url.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.key = raw.key.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -184,8 +186,20 @@ enum QuoteService {
         return clean
     }
 
+    static func usesClosingPrices(_ settings: QuoteSettings, now: Date = Date()) -> Bool {
+        if settings.priceMode == "close" || settings.provider == .yahoo { return true }
+        if settings.priceMode == "live" { return false }
+        let day = MarketClock.date(now)
+        if Engine.knownClosed(day) { return true }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = MarketClock.timeZone
+        let minutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+        return minutes < 570 || minutes >= 975
+    }
+
     static func fetch(symbol: String, settings: QuoteSettings, now: Date = Date()) async throws -> LiveQuote {
         let clean = try validate(settings)
+        if usesClosingPrices(clean, now: now) { return try await fetchYahoo(symbol: symbol, now: now) }
         switch clean.provider {
         case .yahoo:
             return try await fetchYahoo(symbol: symbol, now: now)
@@ -401,9 +415,9 @@ enum QuoteService {
         var previous: Decimal?
         var previousDate: String?
         if let close = price(body["pc"]), close > 0, close < Decimal(1_000_000_000_000) {
-            // Finnhub 不返回上一收盘价的日期，仅按工作日推算用于展示，数值直接采用 pc。
+            // The API supplies pc without its session date. Never invent a weekday date.
             previous = close
-            previousDate = MarketClock.previousWeekday(MarketClock.date(Date(timeIntervalSince1970: seconds)))
+            previousDate = nil
         }
         return LiveQuote(price: round(current, scale: 8),
                          date: MarketClock.date(Date(timeIntervalSince1970: seconds)),
