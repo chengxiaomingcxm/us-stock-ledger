@@ -1,0 +1,17 @@
+name: Debug screenshots
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render screenshots with crash dump
+        run: bash scripts/test-screenshots.sh
+      - name: Upload app screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: App-screenshots
+          path: build/screenshots/*.png
