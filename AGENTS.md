@@ -30,3 +30,57 @@ Rules:
 Not lazy about: understanding the problem (read it fully and trace the real flow before picking a rung, a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
 
 (Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
+
+## Quality Gate (mandatory, do not skip)
+
+Before an AI agent — or you — declares a task done, runs `git commit`, `git push`, or publishes a release, run the project's Quality Gate first:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1
+```
+
+It checks what this repo actually has (not a template's assumptions):
+
+- git and pnpm are available
+- no tracked build/generated artifacts (`dist/`, `build/`, `artifacts/`, `*.ipa`, …)
+- no untracked debug/temp files that would enter a commit
+- unit tests: `pnpm test` (Vitest)
+- type check + build: `pnpm build` (`tsc --noEmit && vite build`)
+- native Swift/simulator checks are macOS-only and run in CI instead
+- there is no lint script configured — do not invent one
+
+A dirty working tree is fine: normal source edits and config changes are expected before a commit. The gate only fails on the things that should never land in a commit.
+
+If the gate prints `QUALITY GATE FAILED`, the task is **not done**. Then:
+
+1. read the failing check's output,
+2. find the root cause,
+3. apply the smallest fix,
+4. re-run the gate,
+
+and keep going until it prints `QUALITY GATE PASSED`.
+
+Forbidden shortcuts — never do any of these just to make the gate pass:
+
+- deleting or skipping failing tests
+- lowering lint / type-check strictness
+- `--no-verify`, `--no-gpg-sign`, or any flag that bypasses hooks
+- editing the verification script to hide a failure
+- replacing a failing command with one that always succeeds
+
+Only change the gate itself when the task explicitly asks for it.
+
+## Pre-commit hook
+
+The tracked hook `scripts/hooks/pre-commit` runs the same gate before every commit. Enable it once per clone:
+
+```
+git config core.hooksPath scripts/hooks
+```
+
+After that, `git commit` refuses to commit when the gate fails.
+
+## Verification layers
+
+DeepSeek self-check → `scripts/verify.ps1` → `git commit` (hook re-runs the gate) → `git push` → GitHub Actions (`build-ios.yml` on `main`/`deepseek-dev`, which re-runs `pnpm test`, `pnpm build`, and the native Swift/simulator checks). All three layers must pass.
+
