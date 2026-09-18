@@ -90,7 +90,7 @@ struct HoldingsView: View {
     private func quoteLabel(_ position: Position) -> String {
         guard let quote = position.quote else { return "待报价" }
         let stale = Engine.isStaleQuote(quote) ? " · 较早" : ""
-        return "\(quote.sourceLabel) · \(quote.date)\(stale)"
+        return "\(quote.date)\(stale)"
     }
 }
 

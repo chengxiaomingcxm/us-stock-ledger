@@ -1,49 +1,82 @@
-# 持仓账本
+# Stock Ledger
 
-这是我自己用的美股记账 App，用来记录买卖、核对现金和查看收益。界面用 SwiftUI 开发，数据保存在 iPhone 本机，不用注册账号。
+A personal US-stock ledger for iPhone. Record your buys and sells, reconcile cash and dividends, and see your real returns — privately, entirely on your device. No account, no cloud, no tracking.
 
-当前版本是 **原生版 1.0.0（build 5）**，支持 iOS 16 及以上。这一版以已验收的 2.0.0 build 4 为基础重新编号，功能和计算方式不变。旧 Web 版的版本号、标签和发布记录保留，和原生版分开看。
+> **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
-## 日常使用
+## What this solves
 
-- 记录美元美股、ETF 的买卖、手续费和备注，查看持仓成本、已实现和浮动收益。
-- 设置期初现金，记录入金、出金、分红、税费与账户费用。入金和出金不计入收益。
-- 查看每日收益日历和累计曲线；缺少行情的日期会标为待补。
-- 导入券商 CSV，或汇丰投资服务综合结单 PDF；先核对预览，再确认写入。
-- 使用 Yahoo 收盘价、Finnhub 或自定义报价接口，选择自动、收盘或最新报价模式。
-- 导出和恢复账本，切换深浅色及红涨绿跌／绿涨红跌。收益始终保留正负号。
+Broker apps show you today's positions, but they rarely answer the questions that actually matter to an individual investor:
 
-目前不连接券商下单，不做多币种换算、做空、期权或自动拆股处理。汇丰投资结单不等同于银行现金账户流水，不能据此自动补出所有入金、出金和真实现金余额。
+- **What did I actually pay?** Weighted-average cost across many buys, with fees included.
+- **What have I really made?** Realized gains, open gains, dividends (net of withholding), account fees — separated so deposits and withdrawals are never mistaken for profit.
+- **What changed today, and every day since?** Today's P&L against the previous close, a daily-returns calendar, and a cumulative-return curve.
+- **Does it match the broker?** Import trade CSVs or HSBC investment-statement PDFs with a preview before anything is written, so duplicates never sneak in.
+- **Where is my cash?** Opening balance, deposits, withdrawals, dividends and fees — with buy/sell cash flow reconciled automatically.
 
-## 安装与数据
+The app never places orders, never touches multi-currency FX, shorting, options, or automatic corporate-action processing.
 
-IPA 需要自行签名后安装。应用标识仍为 `com.personal.stockledger`，现有原生账本文件和 API 设置位置不变。覆盖安装前导出备份，并保持原签名身份，不要先卸载。
+## Features
 
-此前标为 2.0 的原生测试版账本继续使用。旧 Web 版 1.26 及更早版本的账本不会自动迁移到原生版；应用版本改为 1.0 不代表存储格式也回到旧版。
+- US stocks and ETFs in USD, with fees and notes.
+- Holdings: average cost, realized and unrealized return, current value, quote source and age.
+- Today's P&L: previous close + current price + today's trades and fees; shows "waiting for data" instead of a fake zero when a quote is missing.
+- Cash ledger: opening balance, deposits, withdrawals, manual dividends (with tax) and account fees.
+- Daily-return calendar and cumulative-return curve (weekly axis marks and a zero line).
+- Quotes: Yahoo daily closes, Finnhub, or a custom HTTPS endpoint; API keys stay in the iOS Keychain.
+- Imports with preview and confirmation: broker trade/cash CSVs and HSBC investment-statement PDFs.
+- Backup and restore as a local JSON file; export reminders after 30 days.
+- Light/dark mode, "green up / red up" color schemes, Dynamic Type and VoiceOver support.
 
-[使用帮助](HELP.md) · [行情设置](API-SETTINGS.md) · [收益口径](DAILY-RETURNS.md) · [数据兼容](DATA-COMPATIBILITY.md) · [更新记录](CHANGELOG.md)
+## Try the demo
 
-## 开发
+No sign-up and no data required. After installing, open **Settings → Load demo ledger** to explore a sample portfolio (trades, dividends, fees and an opening balance). Clear it with **Exit demo and clear ledger** when you're ready to enter your own numbers.
 
-原生代码在 `ios/App/App/StockLedger/`，入口使用 SwiftUI。仓库还保留 TypeScript / Vite / Capacitor 工程，用于旧网页实现、测试和现有打包流程；`pnpm dev` 展示的是网页版本，不是原生界面。
+## Install (no coding required)
 
-Node.js 24、pnpm 11.19.0：
+1. Download `StockLedger-unsigned.ipa` from the latest [Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases) (e.g. `v1.0.0`).
+2. Install a free signing tool such as [Sideloadly](https://sideloadly.io/) or [AltStore](https://altstore.io/) on your computer.
+3. Plug in your iPhone, open the tool, drag the IPA in, and sign in with your own Apple ID.
+4. Keep the bundle identifier `com.personal.stockledger` and use an **update/overlay install** — do **not** uninstall the old version first, or you'll lose your ledger.
+5. Back up regularly from **Settings → Export ledger backup**, and keep the file outside the app.
+
+The IPA is unsigned because it is built without a paid Apple Developer account; the checksum next to each release lets you verify the file you downloaded.
+
+## Releases
+
+Releases use proper semantic versioning (`v1.0.0`, `v1.1.0`, …). See the [release page](https://github.com/chengxiaomingcxm/us-stock-ledger/releases) and [CHANGELOG.md](CHANGELOG.md).
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Native iOS app | SwiftUI, iOS 16+, Swift 5 |
+| Storage | Local JSON in Documents; API keys in the iOS Keychain |
+| Statements | PDFKit (HSBC investment statement) |
+| Legacy web engine (retained for build/test) | TypeScript, Vite, Capacitor |
+| Tests | Vitest (147) + native Swift tests + simulator calendar rendering |
+| CI | GitHub Actions on macOS |
+
+## Project layout
+
+- `ios/App/App/StockLedger/` — the native SwiftUI app.
+- `src/`, `tests/` — the legacy web engine and its test suite.
+- `scripts/` — native test, simulator render, IPA build and verification scripts.
+- `releases/` — per-version release notes.
+- `docs/archive/` — documentation from the old web version.
+
+## Development
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm test
-pnpm build
+bash scripts/test-native.sh              # macOS
+bash scripts/test-calendar-rendering.sh  # macOS
+bash scripts/build-unsigned-ios.sh       # macOS, produces the IPA
 ```
 
-macOS / Xcode 上运行原生验证和打包：
+Development happens on `deepseek-dev`; reviewed changes are merged to `main`, and official IPA builds run from `main` only.
 
-```sh
-bash scripts/test-native.sh
-bash scripts/test-calendar-rendering.sh
-pnpm exec cap sync ios
-bash scripts/build-unsigned-ios.sh
-```
+## Screenshots
 
-GitHub Actions 从 `main` 测试并构建设备包，IPA 在构建任务的 `StockLedger-unsigned-IPA` 附件里。日历截图使用合成数据，保存在 `Calendar-rendering` 附件中，需人工核对。
-
-Codex 使用 `stock-ledger-recovered` 的 `main`；DeepSeek 使用 `stock-ledger-deepseek` 的 `deepseek-dev`。开发分支先提交并推送，审核后合并到 main；正式包只从 main 构建和发布，发布后再同步开发分支。
+Coming soon (English UI).

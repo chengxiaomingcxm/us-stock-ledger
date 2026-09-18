@@ -18,14 +18,6 @@ struct SettingsView: View {
     @AppStorage("backup.lastExport") private var lastExport = 0.0
     @AppStorage("demo.loaded") private var demoLoaded = false
 
-    @State private var providerDraft: QuoteProvider = .yahoo
-    @State private var urlDraft = ""
-    @State private var keyDraft = ""
-    @State private var intervalDraft = 60
-    @State private var modeDraft = "auto"
-    @State private var quoteNotice: String?
-    @State private var quoteFailure: String?
-
     var body: some View {
         List {
             Section("显示") {
@@ -46,59 +38,18 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("价格显示", selection: $modeDraft) {
-                    Text("自动（休市用收盘）").tag("auto")
-                    Text("最近收盘价").tag("close")
-                    Text("所选接口最新报价").tag("live")
-                }
-                Text("收盘价使用 Yahoo 已完成日线；盘中报价使用下方所选接口。API Key 保存后需同步行情。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Picker("盘中行情来源", selection: $providerDraft) {
-                    ForEach(QuoteProvider.allCases) { provider in
-                        Text(provider.label).tag(provider)
+                NavigationLink {
+                    QuoteSourceView()
+                } label: {
+                    HStack {
+                        Label("行情来源", systemImage: "antenna.radiowaves.left.and.right")
+                        Spacer()
+                        Text(state.quoteSettings.provider.label)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                Text(providerDraft.detail).font(.caption).foregroundStyle(.secondary)
-
-                if providerDraft == .custom {
-                    TextField("接口地址，例如 https://api.example.com/quote/{symbol}", text: $urlDraft)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                }
-                if providerDraft != .yahoo {
-                    SecureField(providerDraft == .finnhub ? "Finnhub API Key" : "Bearer Token（可留空）", text: $keyDraft)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-                Picker("刷新间隔", selection: $intervalDraft) {
-                    Text("仅手动").tag(0)
-                    Text("60 秒").tag(60)
-                    Text("5 分钟").tag(300)
-                }
-                Button("保存行情设置") { saveQuotes() }
-                if let quoteNotice {
-                    Label(quoteNotice, systemImage: "checkmark.circle").font(.footnote).foregroundStyle(.secondary)
-                }
-                if let quoteFailure {
-                    Label(quoteFailure, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.red)
-                }
-                LabeledContent("上次同步", value: state.lastSyncedAt.map { Fmt.clock($0) } ?? "尚未同步")
-                Button {
-                    Task { await sync() }
-                } label: {
-                    if state.syncingQuotes { Label("正在同步…", systemImage: "arrow.triangle.2.circlepath") }
-                    else { Label("立即同步持仓行情", systemImage: "arrow.clockwise") }
-                }
-                .disabled(state.syncingQuotes)
-                ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
-                    Label("\(entry.key)：\(entry.value)", systemImage: "wifi.exclamationmark")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("行情来源")
             } footer: {
-                Text("API Key 保存在系统钥匙串，仅在本机发起行情请求；不上传账本，也不随备份导出。Yahoo 只提供已完成交易日的收盘价。")
+                Text("收盘价来自 Yahoo 日线；盘中报价接口与 API Key 在行情来源里设置。")
             }
 
             Section {
@@ -152,7 +103,6 @@ struct SettingsView: View {
         .navigationTitle("设置")
         .task {
             exportText = try? LedgerStore.exportText(state.ledger)
-            loadQuoteDrafts()
         }
         .onChange(of: state.ledger.trades.count) { _ in exportText = try? LedgerStore.exportText(state.ledger) }
         .onChange(of: state.ledger.cash.count) { _ in exportText = try? LedgerStore.exportText(state.ledger) }
@@ -205,38 +155,6 @@ struct SettingsView: View {
             }
         } message: {
             Text("账本会恢复为空。请确认已导出备份，清空操作无法撤销。")
-        }
-    }
-
-    private func loadQuoteDrafts() {
-        let settings = state.quoteSettings
-        providerDraft = settings.provider
-        urlDraft = settings.url
-        keyDraft = settings.key
-        intervalDraft = settings.interval
-        modeDraft = settings.priceMode ?? "auto"
-    }
-
-    private func saveQuotes() {
-        quoteNotice = nil
-        quoteFailure = nil
-        do {
-            try state.saveQuoteSettings(QuoteSettings(provider: providerDraft, url: urlDraft, key: keyDraft, interval: intervalDraft, priceMode: modeDraft))
-            loadQuoteDrafts()
-            quoteNotice = keyDraft.isEmpty ? "行情设置已保存。" : "行情设置已保存到系统钥匙串。"
-        } catch {
-            quoteFailure = error.localizedDescription
-        }
-    }
-
-    private func sync() async {
-        quoteNotice = nil
-        quoteFailure = nil
-        await state.refreshQuotes()
-        if state.quoteErrors.isEmpty {
-            quoteNotice = state.openSymbols.isEmpty ? "当前没有持仓需要同步。" : "行情同步完成。"
-        } else {
-            quoteFailure = "有 \(state.quoteErrors.count) 只股票刷新失败，已保留原有价格。"
         }
     }
 }
