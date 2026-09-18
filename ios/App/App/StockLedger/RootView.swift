@@ -42,7 +42,7 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             NavigationStack {
-                HoldingsView(onAdd: presentNewTrade)
+                HoldingsView(onAdd: presentNewTrade, onOpenSettings: { tab = 3 })
             }
             .tabItem { Label("持仓", systemImage: "wallet.bifold") }
             .tag(0)

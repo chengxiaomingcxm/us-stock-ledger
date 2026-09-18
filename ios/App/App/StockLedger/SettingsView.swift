@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
@@ -11,6 +12,8 @@ struct SettingsView: View {
     @State private var showingImporter = false
     @State private var pendingImport: Ledger?
     @State private var importError: String?
+    @State private var shareBox: ShareBox?
+    @AppStorage("backup.lastExport") private var lastExport = 0.0
 
     @State private var providerDraft: QuoteProvider = .yahoo
     @State private var urlDraft = ""
@@ -89,8 +92,10 @@ struct SettingsView: View {
 
             Section {
                 NavigationLink("券商 CSV 导入") { ImportView() }
-                if let exportText {
-                    ShareLink(item: exportText, preview: SharePreview("持仓账本备份")) {
+                if exportText != nil {
+                    Button {
+                        shareBox = ShareBox(value: exportText ?? "")
+                    } label: {
                         Label("导出账本备份", systemImage: "square.and.arrow.up")
                     }
                 } else {
@@ -102,10 +107,11 @@ struct SettingsView: View {
                     Label("从备份恢复", systemImage: "square.and.arrow.down")
                 }
                 LabeledContent("当前账本", value: "\(state.ledger.trades.count) 笔交易 · \(state.ledger.cash.count) 笔现金记录")
+                LabeledContent("上次备份", value: BackupReminder.text(lastExport))
             } header: {
                 Text("数据")
             } footer: {
-                Text("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。")
+                Text("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。")
             }
 
             Section("帮助") {
@@ -154,6 +160,11 @@ struct SettingsView: View {
         } message: {
             Text(importError ?? "")
         }
+        .sheet(item: $shareBox) { box in
+            ShareSheet(items: [box.value]) { completed in
+                if completed { lastExport = Date().timeIntervalSince1970 }
+            }
+        }
     }
 
     private func loadQuoteDrafts() {
@@ -185,6 +196,39 @@ struct SettingsView: View {
         } else {
             quoteFailure = "有 \(state.quoteErrors.count) 只股票刷新失败，已保留原有价格。"
         }
+    }
+}
+
+struct ShareBox: Identifiable {
+    let id = UUID()
+    let value: String
+}
+
+/// 系统分享面板；导出完成后记录时间，用于备份提醒。
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    var onFinish: (Bool) -> Void = { _ in }
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, completed, _, _ in onFinish(completed) }
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+enum BackupReminder {
+    static let interval: TimeInterval = 30 * 86_400
+
+    static func text(_ stamp: Double) -> String {
+        guard stamp > 0 else { return "尚未备份" }
+        return Fmt.clock(Date(timeIntervalSince1970: stamp))
+    }
+
+    static func overdue(_ stamp: Double) -> Bool {
+        guard stamp > 0 else { return true }
+        return Date().timeIntervalSince1970 - stamp > interval
     }
 }
 

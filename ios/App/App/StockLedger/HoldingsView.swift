@@ -3,14 +3,26 @@ import SwiftUI
 struct HoldingsView: View {
     @EnvironmentObject private var state: AppState
     let onAdd: () -> Void
+    var onOpenSettings: () -> Void = {}
 
     @State private var detailSymbol: String?
     @State private var quoteSymbol: String?
+    @AppStorage("backup.lastExport") private var lastExport = 0.0
 
     private var summary: LedgerSummary { state.summary }
 
     var body: some View {
         List {
+            if !state.ledger.trades.isEmpty, BackupReminder.overdue(lastExport) {
+                Section {
+                    HStack(spacing: 10) {
+                        Label(lastExport > 0 ? "距上次备份已超过 30 天" : "还没有导出过账本备份", systemImage: "clock.badge.exclamationmark")
+                            .font(.footnote)
+                        Spacer()
+                        Button("去备份", action: onOpenSettings).font(.footnote)
+                    }
+                }
+            }
             Section {
                 TodayCard()
             }
