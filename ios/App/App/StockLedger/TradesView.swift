@@ -288,7 +288,7 @@ struct TradeFormView: View {
             let parsedQuantity = try LedgerValidation.positive(Decimal(string: quantity, locale: Locale(identifier: "en_US")) ?? -1, "成交股数")
             let parsedPrice = try LedgerValidation.positive(Decimal(string: price, locale: Locale(identifier: "en_US")) ?? -1, "成交单价")
             let parsedFee = try LedgerValidation.positive(Decimal(string: fee, locale: Locale(identifier: "en_US")) ?? 0, "手续费", allowZero: true)
-            let trade = Trade(
+            var updated = Trade(
                 id: trade?.id ?? UUID(),
                 sequence: trade?.sequence ?? 0,
                 symbol: try LedgerValidation.symbol(symbol),
@@ -301,7 +301,14 @@ struct TradeFormView: View {
                 source: trade?.source ?? "manual",
                 externalId: trade?.externalId
             )
-            state.saveTrade(trade)
+            if let original = trade,
+               original.symbol == updated.symbol, original.side == updated.side,
+               original.date == updated.date, original.quantity == updated.quantity,
+               original.price == updated.price, original.fee == updated.fee {
+                updated.settlementAmount = original.settlementAmount
+                updated.settlementDate = original.settlementDate
+            }
+            guard state.saveTrade(updated) else { throw LedgerError.message(state.errorMessage ?? "保存失败") }
             dismiss()
         } catch {
             self.error = error.localizedDescription

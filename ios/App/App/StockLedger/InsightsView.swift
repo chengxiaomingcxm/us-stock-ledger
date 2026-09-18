@@ -55,7 +55,11 @@ struct InsightsView: View {
                 LabeledContent("累计入金", value: Fmt.money(cash.deposit))
                 LabeledContent("累计出金", value: Fmt.money(-cash.withdraw))
                 ProfitRow(label: "分红到账（扣税）", value: cash.dividend - cash.tax)
-                ProfitRow(label: "预扣税费", value: -cash.tax)
+                ProfitRow(label: "已知预扣税费", value: -cash.tax)
+                if state.derived.unknownDividendTax > 0 {
+                    Text("\(state.derived.unknownDividendTax) 笔分红按实际到账记账，预扣税未披露；不代表免税。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 ProfitRow(label: "账户费用", value: -cash.fee)
                 LabeledContent("买入支出（含费）", value: Fmt.money(-cash.buyOut))
                 LabeledContent("卖出收入（扣费）", value: Fmt.money(cash.sellIn))
@@ -493,7 +497,7 @@ struct DayReturnDetail: View {
 
 // MARK: - 累计收益曲线
 
-/// 按累计收益画曲线，横轴按每周标出刻度，纵轴同时显示零轴。
+/// 按累计收益画曲线，使用预计算的有限刻度与零轴。
 struct CumulativeProfitChart: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.data.revision == rhs.data.revision }
     @Environment(\.colorScheme) private var scheme

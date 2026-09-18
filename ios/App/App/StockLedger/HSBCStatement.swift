@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import PDFKit
 
 /// Only the HSBC investment composite layout is accepted. No sign/keyword guessing.
 enum HSBCStatement {
@@ -193,5 +194,47 @@ enum HSBCStatement {
         next.cash = CsvImport.mergeCash(ledger.orderedCash, selected.compactMap(\.cash))
         if let problem = CsvImport.validate(next) { throw LedgerError.message(problem) }
         return next
+    }
+}
+
+enum StatementImport {
+    static func pageText(_ page: PDFPage) -> String {
+        let fragments = (page.selection(for: page.bounds(for: .mediaBox))?.selectionsByLine() ?? [])
+            .compactMap { selection -> (CGRect, String)? in
+                guard let text = selection.string?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+                return (selection.bounds(for: page), text)
+            }.sorted { $0.0.midY > $1.0.midY }
+        var lines: [[(CGRect, String)]] = []
+        for fragment in fragments {
+            if let last = lines.last?.first, abs(last.0.midY - fragment.0.midY) <= 3 {
+                lines[lines.count - 1].append(fragment)
+            } else { lines.append([fragment]) }
+        }
+        return lines.map { $0.sorted { $0.0.minX < $1.0.minX }.map { $0.1 }.joined(separator: " ") }.joined(separator: "\n")
+    }
+
+    static func pages(from urls: [URL], password: String) throws -> [String] {
+        guard !urls.isEmpty, urls.count <= 12 else { throw LedgerError.message("一次请选择 1–12 份结单。") }
+        var pages: [String] = []
+        for url in urls {
+            try Task.checkCancellation()
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size > 0, size <= 20_000_000 else { throw LedgerError.message("每份 PDF 必须小于 20 MB，且不能为空。") }
+            guard let document = PDFDocument(url: url) else { throw LedgerError.message("无法打开 PDF。") }
+            if document.isLocked, !document.unlock(withPassword: password) { throw LedgerError.message("PDF 需要正确的打开密码。") }
+            guard document.pageCount > 0, pages.count + document.pageCount <= 100 else {
+                throw LedgerError.message("一次最多读取 100 页。")
+            }
+            for index in 0..<document.pageCount {
+                try Task.checkCancellation()
+                guard let text = document.page(at: index).map({ pageText($0) }), text.count > 20 else {
+                    throw LedgerError.message("第 \(index + 1) 页没有完整文字层，扫描件暂不支持。")
+                }
+                pages.append(text)
+            }
+        }
+        return pages
     }
 }

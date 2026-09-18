@@ -502,6 +502,7 @@ struct InsightsPresentation {
     }
 }
 struct LedgerDerived {
+    var unknownDividendTax = 0
     var summary = LedgerSummary()
     var cash = CashTotals()
     var trades: [Trade] = []
@@ -513,6 +514,7 @@ struct LedgerDerived {
         var value = LedgerDerived()
         value.summary = Engine.summary(ledger)
         value.cash = Engine.cashTotals(ledger)
+        value.unknownDividendTax = ledger.cash.filter { $0.source == "hsbc-statement-net" && $0.tax == nil }.count
         value.trades = ledger.orderedTrades
         value.cashRecords = ledger.orderedCash
         value.symbols = value.summary.open.map(\.symbol)

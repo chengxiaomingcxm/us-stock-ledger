@@ -2,33 +2,6 @@ import SwiftUI
 import PDFKit
 import UniformTypeIdentifiers
 
-enum StatementImport {
-    static func pages(from urls: [URL], password: String) throws -> [String] {
-        guard !urls.isEmpty, urls.count <= 12 else { throw LedgerError.message("一次请选择 1–12 份结单。") }
-        var pages: [String] = []
-        for url in urls {
-            try Task.checkCancellation()
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard size > 0, size <= 20_000_000 else { throw LedgerError.message("每份 PDF 必须小于 20 MB，且不能为空。") }
-            guard let document = PDFDocument(url: url) else { throw LedgerError.message("无法打开 PDF。") }
-            if document.isLocked, !document.unlock(withPassword: password) { throw LedgerError.message("PDF 需要正确的打开密码。") }
-            guard document.pageCount > 0, pages.count + document.pageCount <= 100 else {
-                throw LedgerError.message("一次最多读取 100 页。")
-            }
-            for index in 0..<document.pageCount {
-                try Task.checkCancellation()
-                guard let text = document.page(at: index)?.string, text.count > 20 else {
-                    throw LedgerError.message("第 \(index + 1) 页没有完整文字层，扫描件暂不支持。")
-                }
-                pages.append(text)
-            }
-        }
-        return pages
-    }
-}
-
 struct StatementImportView: View {
     @EnvironmentObject private var state: AppState
     @State private var showingPicker = false

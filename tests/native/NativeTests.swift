@@ -1,4 +1,6 @@
 import Foundation
+import AppKit
+import PDFKit
 
 @main
 struct NativeTests {
@@ -46,6 +48,23 @@ struct NativeTests {
     @MainActor
     static func main() async throws {
         let empty = Ledger()
+        // Draw out of content-stream order to exercise PDFKit's visual column reconstruction.
+        let pdf = NSMutableData()
+        let consumer = CGDataConsumer(data: pdf as CFMutableData)!
+        var box = CGRect(x: 0, y: 0, width: 900, height: 1000)
+        let context = CGContext(consumer: consumer, mediaBox: &box, nil)!
+        context.beginPDFPage(nil)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        for (i, line) in fixture.components(separatedBy: "\n").enumerated().reversed() {
+            (line as NSString).draw(at: CGPoint(x: 20, y: 970 - i * 20), withAttributes: [.font: NSFont.systemFont(ofSize: 12)])
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        context.endPDFPage(); context.closePDF()
+        let document = PDFDocument(data: pdf as Data)!
+        let extracted = StatementImport.pageText(document.page(at: 0)!)
+        let visualReport = try HSBCStatement.parse(pages: [extracted], ledger: empty)
+        check(visualReport.rows.count == 4, "PDFKit visual order parsing")
         let report = try HSBCStatement.parse(pages: [fixture], ledger: empty)
         check(report.rows.count == 4, "all rows previewed including excluded currency")
         check(report.rows.filter(\.selected).count == 3, "HKD excluded")

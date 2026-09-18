@@ -141,7 +141,8 @@ final class AppState: ObservableObject {
 
     // MARK: - 交易
 
-    func saveTrade(_ trade: Trade) {
+    @discardableResult
+    func saveTrade(_ trade: Trade) -> Bool {
         var next = ledger
         if let index = next.trades.firstIndex(where: { $0.id == trade.id }) {
             next.trades[index] = trade
@@ -149,9 +150,10 @@ final class AppState: ObservableObject {
             var created = trade
             created.sequence = next.nextTradeSequence
             next.trades.append(created)
-            undoTrade = created.id
         }
-        commit(next)
+        guard commit(next) else { return false }
+        undoTrade = trade.id
+        return true
     }
 
     func deleteTrade(_ id: UUID) {
@@ -214,7 +216,7 @@ final class AppState: ObservableObject {
     func syncHistory() async {
         guard !syncingHistory else { return }
         let cutoff = MarketClock.date(Date().addingTimeInterval(-100 * 86_400))
-        var symbols = Set(openSymbols).union(ledger.trades.filter { $0.date >= cutoff }.map(\.symbol))
+        var symbols = Set(Engine.summary(ledger).open.map(\.symbol)).union(ledger.trades.filter { $0.date >= cutoff }.map(\.symbol))
         symbols.insert("SPY") // 交易日历基准
         syncingHistory = true
         defer { syncingHistory = false }
