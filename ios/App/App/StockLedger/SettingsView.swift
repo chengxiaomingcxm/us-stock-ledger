@@ -116,7 +116,7 @@ struct SettingsView: View {
 
             Section("帮助") {
                 NavigationLink("使用说明") { HelpView() }
-                LabeledContent("Web 版本", value: "1.26（继续维护）")
+                LabeledContent("账本格式", value: "2（不与 1.x 共用）")
             }
 
             Section {

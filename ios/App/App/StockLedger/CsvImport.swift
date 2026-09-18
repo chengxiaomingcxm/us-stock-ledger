@@ -312,7 +312,7 @@ enum CsvImport {
                 let quantity = try number(quantityText, "数量")
                 let price = try number(priceText, "单价")
                 let fee = try field(raw, report.mapping, .fee).map { try number($0, "手续费", allowZero: true) } ?? 0
-                let note = field(raw, report.mapping, .note).map { try LedgerValidation.note($0) } ?? ""
+                let note = try field(raw, report.mapping, .note).map { try LedgerValidation.note($0) } ?? ""
                 let externalId = field(raw, report.mapping, .id)
 
                 let trade = Trade(id: UUID(), sequence: 0, symbol: symbol, side: side, date: date,
