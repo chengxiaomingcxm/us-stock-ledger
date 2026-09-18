@@ -15,16 +15,16 @@ struct Position: Identifiable {
 }
 
 struct LedgerSummary {
-    var positions: [Position]
-    var open: [Position]
-    var missing: [Position]
-    var cost: Decimal
-    var realized: Decimal
-    var value: Decimal?
-    var unrealized: Decimal?
-    var totalProfit: Decimal?
-    var gains: [UUID: Decimal]
-    var fees: Decimal
+    var positions: [Position] = []
+    var open: [Position] = []
+    var missing: [Position] = []
+    var cost: Decimal = 0
+    var realized: Decimal = 0
+    var value: Decimal? = nil
+    var unrealized: Decimal? = nil
+    var totalProfit: Decimal? = nil
+    var gains: [UUID: Decimal] = [:]
+    var fees: Decimal = 0
 }
 
 struct CashTotals {
@@ -323,11 +323,13 @@ enum Engine {
         var hasRealized = false
     }
 
-    static func range(_ ledger: Ledger, from: String, to: String, side: TradeSide?, query: String) -> RangeResult {
-        let summary = summary(ledger)
+    static func range(_ ledger: Ledger, from: String, to: String, side: TradeSide?, query: String,
+                      gains precomputed: [UUID: Decimal]? = nil,
+                      ordered: [Trade]? = nil) -> RangeResult {
         var result = RangeResult()
+        let gains = precomputed ?? summary(ledger).gains
         let keyword = query.trimmingCharacters(in: .whitespaces).lowercased()
-        for trade in ledger.trades {
+        for trade in ordered ?? ledger.trades {
             if !from.isEmpty && trade.date < from { continue }
             if !to.isEmpty && trade.date > to { continue }
             if let side, trade.side != side { continue }
@@ -338,7 +340,7 @@ enum Engine {
             result.list.append(trade)
             result.fees += trade.fee
             if trade.side == .buy { result.buyQuantity += trade.quantity } else { result.sellQuantity += trade.quantity }
-            if trade.side == .sell, let gain = summary.gains[trade.id] {
+            if trade.side == .sell, let gain = gains[trade.id] {
                 result.realized += gain
                 result.hasRealized = true
             }

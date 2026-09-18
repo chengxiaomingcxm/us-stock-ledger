@@ -11,11 +11,13 @@ struct TradesView: View {
     @State private var editing: Trade?
 
     private var result: Engine.RangeResult {
-        Engine.range(state.ledger, from: from, to: to, side: side, query: query)
+        Engine.range(state.ledger, from: from, to: to, side: side, query: query,
+                     gains: state.summary.gains, ordered: state.orderedTrades)
     }
 
     var body: some View {
-        List {
+        let result = self.result
+        return List {
             Section {
                 Picker("买卖类型", selection: $side) {
                     Text("全部").tag(TradeSide?.none)

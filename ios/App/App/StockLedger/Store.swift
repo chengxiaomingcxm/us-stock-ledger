@@ -86,17 +86,34 @@ final class AppState: ObservableObject {
     @Published private(set) var historyErrors: [String: String] = [:]
     @Published private(set) var historySyncedAt: Date?
 
+    /// 派生结果只在账本变化时计算一次。
+    /// 之前这些是计算属性，收益页每次滚动都会重算（含全部历史收盘价），导致明显卡顿。
+    @Published private(set) var summary = LedgerSummary()
+    @Published private(set) var cashTotals = CashTotals()
+    @Published private(set) var dayReturns: [Engine.DayReturn] = []
+    @Published private(set) var openSymbols: [String] = []
+    @Published private(set) var orderedTrades: [Trade] = []
+    @Published private(set) var orderedCash: [CashRecord] = []
+
     init(ledger: Ledger = LedgerStore.load(), settings: QuoteSettings = QuoteService.load()) {
         self.ledger = ledger
         self.quoteSettings = settings
+        rebuild(ledger)
     }
 
-    var summary: LedgerSummary { Engine.summary(ledger) }
-    var cashTotals: CashTotals { Engine.cashTotals(ledger) }
-    var dayReturns: [Engine.DayReturn] { Engine.dailyReturns(ledger) }
+    private func rebuild(_ value: Ledger) {
+        let computed = Engine.summary(value)
+        summary = computed
+        cashTotals = Engine.cashTotals(value)
+        dayReturns = Engine.dailyReturns(value)
+        openSymbols = computed.open.map(\.symbol)
+        orderedTrades = value.orderedTrades
+        orderedCash = value.orderedCash
+    }
 
     func commit(_ next: Ledger) {
         ledger = next
+        rebuild(next)
         do { try LedgerStore.save(next) } catch { errorMessage = error.localizedDescription }
     }
 
@@ -144,7 +161,7 @@ final class AppState: ObservableObject {
         quoteSettings = clean
     }
 
-    var openSymbols: [String] { summary.open.map(\.symbol) }
+    var openSymbolList: [String] { openSymbols }
 
     /// 同步全部持仓报价：请求失败只记录原因并保留已有价格，绝不写入零价或错误价格。
     func refreshQuotes() async {

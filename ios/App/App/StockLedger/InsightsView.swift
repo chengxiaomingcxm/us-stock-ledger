@@ -85,9 +85,9 @@ struct InsightsView: View {
                 .font(.footnote)
             }
 
-            if !state.ledger.cash.isEmpty {
+            if !state.orderedCash.isEmpty {
                 Section("现金记录") {
-                    ForEach(state.ledger.orderedCash.reversed()) { record in
+                    ForEach(state.orderedCash.reversed()) { record in
                         Button { editingRecord = record } label: { cashRow(record) }
                             .buttonStyle(.plain)
                             .swipeActions {
@@ -531,8 +531,7 @@ struct CumulativeProfitChart: View {
     var missingDays: Int = 0
 
     private var colors: ThemeColors { ThemeColors(redUp: colorPreference == "red-up") }
-
-    /// 每周一个刻度：优先取每周第一个交易日（周一），样本太短时按 7 个交易日取。
+    private var lineColor: Color { (points.last?.value ?? 0) >= 0 ? colors.gain(scheme) : colors.loss(scheme) }
     private var ticks: [Int] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = MarketClock.timeZone
@@ -566,45 +565,40 @@ struct CumulativeProfitChart: View {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
-                GeometryReader { geometry in
-                    let labelArea: CGFloat = 18
-                    let plotHeight = max(geometry.size.height - labelArea, 1)
+                Canvas { context, size in
+                    let labelArea: CGFloat = 16
+                    let plotHeight = max(size.height - labelArea, 1)
                     let values = points.map { NSDecimalNumber(decimal: $0.value).doubleValue }
                     let maximum = max(values.max() ?? 0, 0)
                     let minimum = min(values.min() ?? 0, 0)
                     let span = max(maximum - minimum, 0.0001)
-                    let step = geometry.size.width / CGFloat(max(values.count - 1, 1))
+                    let step = size.width / CGFloat(max(values.count - 1, 1))
                     let zeroY = plotHeight * CGFloat((maximum - 0) / span)
 
-                    ZStack(alignment: .topLeading) {
-                        Path { path in
-                            path.move(to: CGPoint(x: 0, y: zeroY))
-                            path.addLine(to: CGPoint(x: geometry.size.width, y: zeroY))
-                        }
-                        .stroke(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    var axis = Path()
+                    axis.move(to: CGPoint(x: 0, y: zeroY))
+                    axis.addLine(to: CGPoint(x: size.width, y: zeroY))
+                    context.stroke(axis, with: .color(.secondary.opacity(0.35)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
 
-                        Path { path in
-                            for (index, value) in values.enumerated() {
-                                let x = CGFloat(index) * step
-                                let y = plotHeight * CGFloat((maximum - value) / span)
-                                if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                                else { path.addLine(to: CGPoint(x: x, y: y)) }
-                            }
-                        }
-                        .stroke(points.last!.value >= 0 ? colors.gain(scheme) : colors.loss(scheme),
-                                style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+                    var curve = Path()
+                    for (index, value) in values.enumerated() {
+                        let x = CGFloat(index) * step
+                        let y = plotHeight * CGFloat((maximum - value) / span)
+                        if index == 0 { curve.move(to: CGPoint(x: x, y: y)) }
+                        else { curve.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                    context.stroke(curve, with: .color(lineColor), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
 
-                        ForEach(ticks, id: \.self) { index in
-                            let x = min(max(CGFloat(index) * step, 14), geometry.size.width - 14)
-                            VStack(spacing: 1) {
-                                Rectangle().fill(Color.secondary.opacity(0.4)).frame(width: 1, height: 4)
-                                Text(String(points[index].date.suffix(5)))
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
-                            .position(x: x, y: plotHeight + labelArea / 2)
-                        }
+                    for index in ticks {
+                        let x = min(max(CGFloat(index) * step, 14), size.width - 14)
+                        var tick = Path()
+                        tick.move(to: CGPoint(x: x, y: plotHeight))
+                        tick.addLine(to: CGPoint(x: x, y: plotHeight + 4))
+                        context.stroke(tick, with: .color(.secondary.opacity(0.4)), lineWidth: 1)
+                        context.draw(Text(String(points[index].date.suffix(5)))
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary),
+                                     at: CGPoint(x: x, y: plotHeight + 9))
                     }
                 }
                 .frame(height: 168)
