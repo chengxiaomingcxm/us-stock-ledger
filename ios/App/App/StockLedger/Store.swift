@@ -35,11 +35,18 @@ final class AppState: ObservableObject {
     @Published private(set) var ledger: Ledger
     @Published var undoTrade: UUID?
     @Published var errorMessage: String?
-    /// 各股票上一交易日收盘价（2.0 首版由手动报价或后续行情同步填入）。
+    /// 各股票上一交易日收盘价与日期，由行情同步填入；手动报价不参与今日盈亏基准。
     @Published var previousClose: [String: Decimal] = [:]
+    @Published var previousCloseDates: [String: String] = [:]
+    /// 行情来源设置（含 API Key），读写系统钥匙串。
+    @Published private(set) var quoteSettings: QuoteSettings
+    @Published private(set) var syncingQuotes = false
+    @Published private(set) var quoteErrors: [String: String] = [:]
+    @Published private(set) var lastSyncedAt: Date?
 
-    init(ledger: Ledger = LedgerStore.load()) {
+    init(ledger: Ledger = LedgerStore.load(), settings: QuoteSettings = QuoteService.load()) {
         self.ledger = ledger
+        self.quoteSettings = settings
     }
 
     var summary: LedgerSummary { Engine.summary(ledger) }
@@ -82,8 +89,48 @@ final class AppState: ObservableObject {
     func setQuote(symbol: String, price: Decimal, date: String) {
         var next = ledger
         next.quotes.removeAll { $0.symbol == symbol }
-        next.quotes.append(Quote(symbol: symbol, price: price, date: date))
+        next.quotes.append(Quote(symbol: symbol, price: price, date: date, source: nil, fetchedAt: Date()))
         commit(next)
+    }
+
+    // MARK: - 行情
+
+    func saveQuoteSettings(_ settings: QuoteSettings) throws {
+        let clean = try QuoteService.validate(settings)
+        try QuoteService.save(clean)
+        quoteSettings = clean
+    }
+
+    var openSymbols: [String] { summary.open.map(\.symbol) }
+
+    /// 同步全部持仓报价：请求失败只记录原因并保留已有价格，绝不写入零价或错误价格。
+    func refreshQuotes() async {
+        let symbols = openSymbols
+        guard !symbols.isEmpty, !syncingQuotes else { return }
+        let settings = quoteSettings
+        syncingQuotes = true
+        defer { syncingQuotes = false }
+
+        let result = await QuoteService.fetchAll(symbols: symbols, settings: settings)
+        quoteErrors = result.errors
+        guard !result.quotes.isEmpty else { return }
+
+        var next = ledger
+        for (symbol, live) in result.quotes {
+            if let existing = next.quote(for: symbol) {
+                // 绝不覆盖更新的报价；同日手动报价优先于自动报价。
+                if existing.date > live.date || (existing.date == live.date && existing.source == nil) { continue }
+            }
+            next.quotes.removeAll { $0.symbol == symbol }
+            next.quotes.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date()))
+            if let previous = live.previousClose, live.previousCloseDate != live.date {
+                previousClose[symbol] = previous
+                if let date = live.previousCloseDate { previousCloseDates[symbol] = date }
+                else { previousCloseDates.removeValue(forKey: symbol) }
+            }
+        }
+        commit(next)
+        lastSyncedAt = Date()
     }
 
     // MARK: - 现金

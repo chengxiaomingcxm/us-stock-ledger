@@ -172,53 +172,98 @@ enum Engine {
     }
 
     /// 今日盈亏：期末市值 − 上一收盘市值 − 当日买入含费 + 当日卖出净额。
-    /// 2.0 首版仅在有“上一收盘价”和“当日报价”时计算；否则返回 nil 表示待补全。
+    /// 任一必需行情缺失时整体返回 nil（界面显示待补全），绝不按零计算。
+    struct TodayRow: Identifiable {
+        var symbol: String
+        var pnl: Decimal?
+        var reason: String?
+        var id: String { symbol }
+    }
+
     struct TodayResult {
         var pnl: Decimal?
         var percent: Decimal?
         var caption: String
         var missing: [String] = []
+        var rows: [TodayRow] = []
         var tradedToday = 0
+        var basis: Decimal?
     }
 
-    static func todayPnl(_ ledger: Ledger, previousClose: [String: Decimal], today: String) -> TodayResult {
-        let summary = summary(ledger)
-        let startOfDay: [String: Decimal] = summary.open.reduce(into: [:]) { result, position in
-            result[position.symbol] = position.quote.map { _ in position.quantity } ?? position.quantity
-        }
-        var opened: [String: Decimal] = [:]
+    static func todayPnl(_ ledger: Ledger, previousClose: [String: Decimal], previousCloseDates: [String: String] = [:], today: String) -> TodayResult {
+        // 期初股数＝今日之前所有交易累计；当日买卖按成交金额与手续费单独计入，不重复放大市值变化。
+        var opening: [String: Decimal] = [:]
         for trade in ledger.orderedTrades where trade.date < today {
-            opened[trade.symbol, default: 0] += trade.side == .buy ? trade.quantity : -trade.quantity
+            opening[trade.symbol, default: 0] += trade.side == .buy ? trade.quantity : -trade.quantity
         }
+        let todayTrades = ledger.orderedTrades.filter { $0.date == today }
+        let symbols = Set(opening.filter { $0.value != 0 }.keys).union(todayTrades.map(\.symbol)).sorted()
+
+        var rows: [TodayRow] = []
         var missing: [String] = []
-        var endValue = Decimal(0)
-        var prevValue = Decimal(0)
-        for (symbol, quantity) in startOfDay where quantity != 0 {
-            guard let quote = ledger.quote(for: symbol), let prev = previousClose[symbol] else {
-                missing.append(symbol)
+        var total = Decimal(0)
+        var basis = Decimal(0)
+        var complete = true
+
+        for symbol in symbols {
+            let openQty = opening[symbol] ?? 0
+            let buys = todayTrades.filter { $0.symbol == symbol && $0.side == .buy }
+            let sells = todayTrades.filter { $0.symbol == symbol && $0.side == .sell }
+            let bought = buys.reduce(Decimal(0)) { $0 + $1.quantity }
+            let sold = sells.reduce(Decimal(0)) { $0 + $1.quantity }
+            let endQty = openQty + bought - sold
+            let quote = ledger.quote(for: symbol)
+            var reason: String?
+
+            if openQty > 0 {
+                if previousClose[symbol] == nil {
+                    reason = "缺少上一交易日收盘价"
+                } else if let date = previousCloseDates[symbol], date >= today {
+                    reason = "上一收盘价日期异常，请重新同步行情"
+                }
+            }
+            if reason == nil, endQty > 0 {
+                if let quote {
+                    if quote.date < today { reason = "缺少 \(today) 当日报价（当前报价为 \(quote.date)）" }
+                } else {
+                    reason = "缺少当日报价"
+                }
+            }
+
+            if let reason {
+                complete = false
+                missing.append("\(symbol)：\(reason)")
+                rows.append(TodayRow(symbol: symbol, pnl: nil, reason: reason))
                 continue
             }
-            endValue += quantity * quote.price
-            prevValue += quantity * prev
+
+            let startValue = openQty > 0 ? openQty * previousClose[symbol]! : 0
+            let endValue = endQty > 0 ? endQty * quote!.price : 0
+            let buyCost = buys.reduce(Decimal(0)) { $0 + $1.gross + $1.fee }
+            let sellNet = sells.reduce(Decimal(0)) { $0 + $1.gross - $1.fee }
+            if openQty > 0 { basis += startValue }
+            let profit = endValue - startValue - buyCost + sellNet
+            total += profit
+            rows.append(TodayRow(symbol: symbol, pnl: profit, reason: nil))
         }
-        var buys = Decimal(0)
-        var sells = Decimal(0)
-        var tradedToday = 0
-        for trade in ledger.orderedTrades where trade.date == today {
-            tradedToday += 1
-            if trade.side == .buy { buys += trade.gross + trade.fee } else { sells += trade.gross - trade.fee }
+
+        var caption = "美东 \(today)"
+        if !previousCloseDates.isEmpty, let date = previousCloseDates.values.min() {
+            caption += " · 对比 \(date) 收盘"
+        } else if !previousClose.isEmpty {
+            caption += " · 对比上一交易日收盘"
         }
-        guard missing.isEmpty else {
-            return TodayResult(pnl: nil, percent: nil, caption: missing.count > 1 ? "缺少 \(missing.count) 项行情 · 待补全" : "缺少 \(missing[0]) 行情 · 待补全", missing: missing, tradedToday: tradedToday)
-        }
-        let pnl = endValue - prevValue - buys + sells
-        let basis = prevValue + buys
+        if todayTrades.isEmpty == false { caption += " · 今日 \(todayTrades.count) 笔交易已计入" }
+        if !complete { caption = missing.count > 1 ? "缺少 \(missing.count) 项行情 · 待补全" : "缺少行情 · 待补全" }
+
         return TodayResult(
-            pnl: pnl,
-            percent: basis > 0 ? pnl / basis : nil,
-            caption: tradedToday > 0 ? "美东 \(today) · 今日 \(tradedToday) 笔交易已计入" : "美东 \(today)",
-            missing: [],
-            tradedToday: tradedToday
+            pnl: complete ? total : nil,
+            percent: complete && basis > 0 ? total / basis : nil,
+            caption: caption,
+            missing: missing,
+            rows: rows,
+            tradedToday: todayTrades.count,
+            basis: complete ? basis : nil
         )
     }
 }

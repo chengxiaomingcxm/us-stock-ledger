@@ -30,7 +30,21 @@ struct Quote: Identifiable, Codable, Hashable {
     var symbol: String
     var price: Decimal
     var date: String
+    var source: String?      // manual / yahoo-close / finnhub-live / custom-live
+    var fetchedAt: Date?
     var id: String { symbol }
+
+    /// 报价来源的中文说明；手动录入没有来源标记。
+    var sourceLabel: String {
+        switch source {
+        case "yahoo-close": return "美股收盘"
+        case "finnhub-live": return "Finnhub 报价"
+        case "custom-live": return "接口报价"
+        default: return "手动报价"
+        }
+    }
+
+    var isLive: Bool { source == "finnhub-live" || source == "custom-live" }
 }
 
 enum CashKind: String, Codable, CaseIterable, Identifiable {
@@ -192,12 +206,13 @@ enum Fmt {
         return (value > 0 ? "+" : value < 0 ? "−" : "") + (value < 0 ? text.replacingOccurrences(of: "-", with: "") : text) + "%"
     }
 
-    static var today: String {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+    static var today: String { MarketClock.date() }
+
+    /// 用于「上次同步」等时间点的简短展示。
+    static func clock(_ time: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MM-dd HH:mm"
+        return formatter.string(from: time)
     }
 }

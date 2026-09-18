@@ -61,7 +61,7 @@ struct HoldingsView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(position.quote.map { "收盘/报价 \($0.date)" } ?? "待报价")
+                Text(position.quote.map { "\($0.sourceLabel) · \($0.date)" } ?? "待报价")
                     .font(.caption2).foregroundStyle(.secondary)
                 Text(position.unrealized.map { Fmt.percent($0 / max(position.cost, 1)) } ?? "—")
                     .font(.subheadline)
@@ -85,16 +85,45 @@ struct TodayCard: View {
     @EnvironmentObject private var state: AppState
 
     var body: some View {
-        let result = Engine.todayPnl(state.ledger, previousClose: state.previousClose, today: Fmt.today)
+        let result = Engine.todayPnl(state.ledger,
+                                     previousClose: state.previousClose,
+                                     previousCloseDates: state.previousCloseDates,
+                                     today: Fmt.today)
         VStack(alignment: .leading, spacing: 8) {
-            Text("今日盈亏").font(.subheadline).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text("今日盈亏").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    Task { await state.refreshQuotes() }
+                } label: {
+                    if state.syncingQuotes {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("同步行情", systemImage: "arrow.clockwise")
+                    }
+                }
+                .font(.footnote)
+                .disabled(state.syncingQuotes || state.openSymbols.isEmpty)
+            }
             Text(result.pnl == nil ? "待补全" : Fmt.signedMoney(result.pnl))
                 .font(.largeTitle.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(result.pnl == nil ? Color.secondary : Color.primary)
             Text(result.caption).font(.footnote).foregroundStyle(.secondary)
+            if let percent = result.percent {
+                Text("较上一收盘 \(Fmt.percent(percent))")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             LabeledContent("持仓市值", value: Fmt.money(state.summary.value))
                 .font(.footnote)
+            ForEach(result.rows.filter { $0.reason != nil }) { row in
+                Label("\(row.symbol)：\(row.reason ?? "")", systemImage: "exclamationmark.triangle")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
+                Label("\(entry.key) 刷新失败：\(entry.value)", systemImage: "wifi.exclamationmark")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -120,7 +149,13 @@ struct PositionDetailView: View {
                     Section("参考股价") {
                         LabeledContent("报价", value: position.quote.map { Fmt.money($0.price) } ?? "待报价")
                         LabeledContent("报价日期", value: position.quote?.date ?? "—")
+                        LabeledContent("报价来源", value: position.quote?.sourceLabel ?? "—")
+                        if let previous = state.previousClose[position.symbol] {
+                            LabeledContent("上一收盘", value: "\(Fmt.money(previous))\(state.previousCloseDates[position.symbol].map { "（\($0)）" } ?? "")")
+                        }
                         Button("更新股价", action: onEditQuote)
+                        Button("同步行情") { Task { await state.refreshQuotes() } }
+                            .disabled(state.syncingQuotes)
                     }
                     Section("相关交易") {
                         let related = state.ledger.trades.filter { $0.symbol == symbol }

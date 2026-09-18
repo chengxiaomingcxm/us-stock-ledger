@@ -24,6 +24,7 @@
 		AA2600010000000000000016 /* TradesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2600010000000000000006 /* TradesView.swift */; };
 		AA2600010000000000000017 /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2600010000000000000007 /* InsightsView.swift */; };
 		AA2600010000000000000018 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2600010000000000000008 /* SettingsView.swift */; };
+		AA2600010000000000000019 /* QuoteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2600010000000000000009 /* QuoteService.swift */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -46,6 +47,7 @@
 		AA2600010000000000000006 /* TradesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/TradesView.swift; sourceTree = "<group>"; };
 		AA2600010000000000000007 /* InsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/InsightsView.swift; sourceTree = "<group>"; };
 		AA2600010000000000000008 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/SettingsView.swift; sourceTree = "<group>"; };
+		AA2600010000000000000009 /* QuoteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/QuoteService.swift; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -100,6 +102,7 @@
 				AA2600010000000000000006 /* TradesView.swift */,
 				AA2600010000000000000007 /* InsightsView.swift */,
 				AA2600010000000000000008 /* SettingsView.swift */,
+				AA2600010000000000000009 /* QuoteService.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -196,6 +199,7 @@
 				AA2600010000000000000016 /* TradesView.swift in Sources */,
 				AA2600010000000000000017 /* InsightsView.swift in Sources */,
 				AA2600010000000000000018 /* SettingsView.swift in Sources */,
+				AA2600010000000000000019 /* QuoteService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -129,6 +129,17 @@ struct DateField: View {
     }
 }
 
+/// 记账表单的输入快照，用于判断“有未保存的修改”。
+struct FormSnapshot: Equatable {
+    var side: TradeSide = .buy
+    var symbol = ""
+    var date = Fmt.today
+    var quantity = ""
+    var price = ""
+    var fee = "0"
+    var note = ""
+}
+
 struct TradeFormView: View {
     @EnvironmentObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
@@ -143,11 +154,31 @@ struct TradeFormView: View {
     @State private var fee = "0"
     @State private var note = ""
     @State private var error: String?
+    @State private var showingDiscard = false
+    @State private var autoFee = ""
+    @State private var snapshot = FormSnapshot()
 
     private var isEditing: Bool { trade != nil }
     private var available: Decimal {
         state.summary.open.first { $0.symbol == symbol.trimmingCharacters(in: .whitespaces).uppercased() }?.quantity ?? 0
     }
+
+    /// 最近使用过的股票代码，最新的排前面。
+    private var recentSymbols: [String] {
+        var seen = Set<String>()
+        var list: [String] = []
+        for trade in state.ledger.orderedTrades.reversed() {
+            if seen.insert(trade.symbol).inserted { list.append(trade.symbol) }
+            if list.count == 6 { break }
+        }
+        return list
+    }
+
+    private var current: FormSnapshot {
+        FormSnapshot(side: side, symbol: symbol, date: date, quantity: quantity, price: price, fee: fee, note: note)
+    }
+
+    private var dirty: Bool { current != snapshot }
 
     var body: some View {
         NavigationStack {
@@ -163,6 +194,18 @@ struct TradeFormView: View {
                     TextField("股票代码", text: $symbol)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
+                    if !isEditing, !recentSymbols.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(recentSymbols, id: \.self) { item in
+                                    Button(item) { symbol = item; applyRecentFee() }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
                     DatePicker("交易日期（美东）", selection: Binding(
                         get: { DateFormatter.ledgerDate.date(from: date) ?? Date() },
                         set: { date = DateFormatter.ledgerDate.string(from: $0) }
@@ -187,15 +230,25 @@ struct TradeFormView: View {
             }
             .navigationTitle(isEditing ? "编辑交易" : "记录交易")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { if dirty { showingDiscard = true } else { dismiss() } }
+                }
                 ToolbarItem(placement: .confirmationAction) { Button("保存") { save() }.disabled(symbol.isEmpty) }
             }
             .onAppear(perform: load)
+            .onChange(of: symbol) { _ in applyRecentFee() }
+            .alert("放弃未保存的修改？", isPresented: $showingDiscard) {
+                Button("继续编辑", role: .cancel) {}
+                Button("放弃", role: .destructive) { dismiss() }
+            }
         }
     }
 
     private func load() {
-        guard let trade else { return }
+        guard let trade else {
+            snapshot = current
+            return
+        }
         side = trade.side
         symbol = trade.symbol
         date = trade.date
@@ -203,6 +256,22 @@ struct TradeFormView: View {
         price = Fmt.moneyPlain(trade.price)
         fee = Fmt.moneyPlain(trade.fee)
         note = trade.note
+        snapshot = current
+    }
+
+    /// 沿用最近一笔手续费：优先同一股票，其次最近一笔；用户手动改过就不再覆盖。
+    private func applyRecentFee() {
+        guard !isEditing else { return }
+        let target = symbol.trimmingCharacters(in: .whitespaces).uppercased()
+        guard !target.isEmpty else { return }
+        let history = state.ledger.orderedTrades.reversed()
+        guard let match = history.first(where: { $0.symbol == target }) ?? history.first, match.fee > 0 else { return }
+        let value = Fmt.moneyPlain(match.fee)
+        if fee == "0" || fee == autoFee {
+            fee = value
+            autoFee = value
+            snapshot = current
+        }
     }
 
     private func fill(_ value: Decimal) {
