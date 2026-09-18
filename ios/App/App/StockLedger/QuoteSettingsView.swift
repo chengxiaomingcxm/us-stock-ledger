@@ -13,12 +13,12 @@ struct QuoteSourceView: View {
     var body: some View {
         List {
             Section {
-                Picker("价格显示", selection: $mode) {
-                    Text("自动（休市用收盘）").tag("auto")
-                    Text("最近收盘价").tag("close")
-                    Text("所选接口最新报价").tag("live")
+                Picker(L10n.tr("价格显示"), selection: $mode) {
+                    Text(L10n.tr("自动（休市用收盘）")).tag("auto")
+                    Text(L10n.tr("最近收盘价")).tag("close")
+                    Text(L10n.tr("所选接口最新报价")).tag("live")
                 }
-                Picker("盘中行情来源", selection: $provider) {
+                Picker(L10n.tr("盘中行情来源"), selection: $provider) {
                     ForEach(QuoteProvider.allCases) { item in
                         Text(item.label).tag(item)
                     }
@@ -29,21 +29,21 @@ struct QuoteSourceView: View {
                         .font(.footnote).foregroundStyle(.red)
                 }
             } header: {
-                Text("显示与来源")
+                Text(L10n.tr("显示与来源"))
             } footer: {
-                Text("收盘价使用 Yahoo 已完成日线；盘中报价使用所选接口。更改会立即保存。")
+                Text(L10n.tr("收盘价使用 Yahoo 已完成日线；盘中报价使用所选接口。更改会立即保存。"))
             }
 
             Section {
-                NavigationLink("API 设置") { ApiSettingsView() }
-                LabeledContent("上次同步", value: state.lastSyncedAt.map { Fmt.clock($0) } ?? "尚未同步")
+                NavigationLink(L10n.tr("API 设置")) { ApiSettingsView() }
+                LabeledContent(L10n.tr("上次同步"), value: state.lastSyncedAt.map { Fmt.clock($0) } ?? L10n.tr("尚未同步"))
                 Button {
                     Task { await state.refreshQuotes() }
                 } label: {
                     if state.syncingQuotes {
-                        Label("正在同步…", systemImage: "arrow.triangle.2.circlepath")
+                        Label(L10n.tr("正在同步…"), systemImage: "arrow.triangle.2.circlepath")
                     } else {
-                        Label("立即同步持仓行情", systemImage: "arrow.clockwise")
+                        Label(L10n.tr("立即同步持仓行情"), systemImage: "arrow.clockwise")
                     }
                 }
                 .disabled(state.syncingQuotes)
@@ -52,12 +52,12 @@ struct QuoteSourceView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             } header: {
-                Text("同步")
+                Text(L10n.tr("同步"))
             } footer: {
-                Text("API Key 保存在系统钥匙串，仅在本机发起行情请求；不上传账本，也不随备份导出。")
+                Text(L10n.tr("API Key 保存在系统钥匙串，仅在本机发起行情请求；不上传账本，也不随备份导出。"))
             }
         }
-        .navigationTitle("行情来源")
+        .navigationTitle(L10n.tr("行情来源"))
         .task { load() }
         .onChange(of: provider) { _ in save() }
         .onChange(of: mode) { _ in save() }
@@ -96,36 +96,36 @@ struct ApiSettingsView: View {
         List {
             Section {
                 if provider == .yahoo {
-                    Text("Yahoo 收盘价不需要 API Key。")
+                    Text(L10n.tr("Yahoo 收盘价不需要 API Key。"))
                 } else {
                     if provider == .custom {
-                        TextField("接口地址，例如 https://api.example.com/quote/{symbol}", text: $url)
+                        TextField(L10n.tr("接口地址，例如 https://api.example.com/quote/{symbol}"), text: $url)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.URL)
                     }
-                    SecureField(provider == .finnhub ? "Finnhub API Key" : "Bearer Token（可留空）", text: $key)
+                    SecureField(L10n.tr(provider == .finnhub ? "Finnhub API Key" : "Bearer Token（可留空）"), text: $key)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
-                Picker("刷新间隔", selection: $interval) {
-                    Text("仅手动").tag(0)
-                    Text("60 秒").tag(60)
-                    Text("5 分钟").tag(300)
+                Picker(L10n.tr("刷新间隔"), selection: $interval) {
+                    Text(L10n.tr("仅手动")).tag(0)
+                    Text(L10n.tr("60 秒")).tag(60)
+                    Text(L10n.tr("5 分钟")).tag(300)
                 }
             } header: {
-                Text("接口与密钥")
+                Text(L10n.tr("接口与密钥"))
             } footer: {
-                Text("密钥只保存在本机系统钥匙串，不写入账本，也不随备份导出。")
+                Text(L10n.tr("密钥只保存在本机系统钥匙串，不写入账本，也不随备份导出。"))
             }
 
             Section {
-                Button("保存") { save() }
-                if saved { Label("已保存", systemImage: "checkmark.circle").foregroundStyle(.secondary) }
+                Button(L10n.tr("保存")) { save() }
+                if saved { Label(L10n.tr("已保存"), systemImage: "checkmark.circle").foregroundStyle(.secondary) }
                 if let failure { Text(failure).foregroundStyle(.red) }
             }
         }
-        .navigationTitle("API 设置")
+        .navigationTitle(L10n.tr("API 设置"))
         .task { load() }
     }
 

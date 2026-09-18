@@ -13,22 +13,22 @@ struct InsightsView: View {
     var body: some View {
         let days = state.dayReturns
         return List {
-            Section("累计投资收益") {
+            Section(L10n.tr("累计投资收益")) {
                 AmountText(value: summary.totalProfit)
                     .font(.largeTitle.weight(.bold))
-                Text("已实现收益 + 当前持仓浮动收益（证券口径）")
+                Text(L10n.tr("已实现收益 + 当前持仓浮动收益（证券口径）"))
                     .font(.footnote).foregroundStyle(.secondary)
-                ProfitRow(label: "已实现收益", value: summary.realized)
-                ProfitRow(label: "浮动收益", value: summary.unrealized)
-                ProfitRow(label: "分红净额（扣税）", value: cash.dividend - cash.tax)
-                ProfitRow(label: "账户费用", value: -cash.fee)
-                ProfitRow(label: "账户总收益", value: summary.totalProfit.map { $0 + cash.investNetAll })
+                ProfitRow(label: L10n.tr("已实现收益"), value: summary.realized)
+                ProfitRow(label: L10n.tr("浮动收益"), value: summary.unrealized)
+                ProfitRow(label: L10n.tr("分红净额（扣税）"), value: cash.dividend - cash.tax)
+                ProfitRow(label: L10n.tr("账户费用"), value: -cash.fee)
+                ProfitRow(label: L10n.tr("账户总收益"), value: summary.totalProfit.map { $0 + cash.investNetAll })
                     .font(.headline)
                 Text("入金出金不计入收益；今日盈亏与收益日历只统计证券。")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("现金账本") {
+            Section(L10n.tr("现金账本")) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("当前现金余额").font(.footnote).foregroundStyle(.secondary)
                     Text(cash.balance == nil ? "待设置期初" : Fmt.money(cash.balance))
@@ -53,39 +53,39 @@ struct InsightsView: View {
                     Text("期初余额是「期初日期当天开始前」的现金；录错可点上方一行修改，或清除后重新设置。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                LabeledContent("累计入金", value: Fmt.money(cash.deposit))
-                LabeledContent("累计出金", value: Fmt.money(-cash.withdraw))
-                ProfitRow(label: "分红到账（扣税）", value: cash.dividend - cash.tax)
-                ProfitRow(label: "已知预扣税费", value: -cash.tax)
+                LabeledContent(L10n.tr("累计入金"), value: Fmt.money(cash.deposit))
+                LabeledContent(L10n.tr("累计出金"), value: Fmt.money(-cash.withdraw))
+                ProfitRow(label: L10n.tr("分红到账（扣税）"), value: cash.dividend - cash.tax)
+                ProfitRow(label: L10n.tr("已知预扣税费"), value: -cash.tax)
                 if state.derived.unknownDividendTax > 0 {
-                    Text("\(state.derived.unknownDividendTax) 笔分红按实际到账记账，预扣税未披露；不代表免税。")
+                    Text("\(state.derived.unknownDividendTax) \(L10n.tr("笔分红按实际到账记账，预扣税未披露；不代表免税。"))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                ProfitRow(label: "账户费用", value: -cash.fee)
-                LabeledContent("买入支出（含费）", value: Fmt.money(-cash.buyOut))
-                LabeledContent("卖出收入（扣费）", value: Fmt.money(cash.sellIn))
-                LabeledContent("买卖净现金流", value: Fmt.signedMoney(cash.tradeNet))
+                ProfitRow(label: L10n.tr("账户费用"), value: -cash.fee)
+                LabeledContent(L10n.tr("买入支出（含费）"), value: Fmt.money(-cash.buyOut))
+                LabeledContent(L10n.tr("卖出收入（扣费）"), value: Fmt.money(cash.sellIn))
+                LabeledContent(L10n.tr("买卖净现金流"), value: Fmt.signedMoney(cash.tradeNet))
                 if cash.excludedTrades > 0 || cash.excludedRecords > 0 {
                     Text("期初前有 \(cash.excludedTrades) 笔交易、\(cash.excludedRecords) 笔资金记录，已含在期初余额中，仅保留备查。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
                     Spacer()
-                    Button("入金") { cashForm = .new(.deposit) }
-                    Button("出金") { cashForm = .new(.withdraw) }
-                    Button("分红") { cashForm = .new(.dividend) }
-                    Button("费用") { cashForm = .new(.fee) }
+                    Button(L10n.tr("入金")) { cashForm = .new(.deposit) }
+                    Button(L10n.tr("出金")) { cashForm = .new(.withdraw) }
+                    Button(L10n.tr("分红")) { cashForm = .new(.dividend) }
+                    Button(L10n.tr("费用")) { cashForm = .new(.fee) }
                 }
                 .font(.footnote)
             }
 
             if !state.orderedCash.isEmpty {
-                Section("现金记录") {
+                Section(L10n.tr("现金记录")) {
                     ForEach(state.orderedCash.reversed()) { record in
                         Button { editingRecord = record } label: { cashRow(record) }
                             .buttonStyle(.plain)
                             .swipeActions {
-                                Button("删除", role: .destructive) { state.deleteCash(record.id) }
+                                Button(L10n.tr("删除"), role: .destructive) { state.deleteCash(record.id) }
                             }
                     }
                 }
@@ -100,7 +100,7 @@ struct InsightsView: View {
                     if state.syncingHistory {
                         ProgressView().controlSize(.small)
                     } else {
-                        Button("同步历史") { Task { await state.syncHistory() } }
+                        Button(L10n.tr("同步历史")) { Task { await state.syncHistory() } }
                             .font(.footnote)
                             .disabled(state.ledger.trades.isEmpty)
                     }
@@ -118,21 +118,21 @@ struct InsightsView: View {
             }
 
             if !days.isEmpty {
-                Section("累计收益曲线") {
+                Section(L10n.tr("累计收益曲线")) {
                     CumulativeProfitChart(data: state.insights).equatable()
                 }
             }
 
             if !summary.positions.isEmpty {
-                Section("各股票已实现收益") {
+                Section(L10n.tr("各股票已实现收益")) {
                     ForEach(summary.positions) { position in
-                        ProfitRow(label: "\(position.symbol) \(position.quantity == 0 ? "（已平仓）" : "")",
+                        ProfitRow(label: "\(position.symbol) \(position.quantity == 0 ? L10n.tr("（已平仓）") : "")",
                                   value: position.realized)
                     }
                 }
             }
         }
-        .navigationTitle("收益分析")
+        .navigationTitle(L10n.tr("收益分析"))
         .safeAreaInset(edge: .top) {
             if state.rebuilding { ProgressView("正在更新账本统计…").padding(8).frame(maxWidth: .infinity).background(.regularMaterial) }
         }
@@ -202,7 +202,7 @@ struct CashFormView: View {
                     }
                     if state.ledger.opening != nil {
                         Section {
-                            Button("清除期初余额", role: .destructive) {
+                            Button(L10n.tr("清除期初余额"), role: .destructive) {
                                 state.clearOpening()
                                 dismiss()
                             }
@@ -236,8 +236,8 @@ struct CashFormView: View {
             }
             .navigationTitle(title)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("保存") { save() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("取消")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(L10n.tr("保存")) { save() } }
             }
             .onAppear(perform: load)
         }
@@ -375,11 +375,11 @@ struct ReturnCalendar: View, Equatable {
                     .disabled(monthIndex >= months.count - 1)
                     .accessibilityLabel("下一个月")
                 }
-                ProfitRow(label: "本月收益", value: stats.profit)
+                ProfitRow(label: L10n.tr("本月收益"), value: stats.profit)
                     .font(.headline)
-                LabeledContent("交易日", value: "\(stats.rows.count) 天")
+                LabeledContent(L10n.tr("交易日"), value: "\(stats.rows.count) \(L10n.tr("天"))")
                 if stats.missing > 0 {
-                    Text("\(stats.missing) 天收盘价不完整，未计入月度合计。")
+                    Text("\(stats.missing) \(L10n.tr("天收盘价不完整，未计入月度合计。"))")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
@@ -403,9 +403,9 @@ struct ReturnCalendar: View, Equatable {
                 .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 12) {
-                    legend(color: colors.gain(scheme), text: "盈利")
-                    legend(color: colors.loss(scheme), text: "亏损")
-                    Label("待补全", systemImage: "circle.dotted").font(.caption2).foregroundStyle(.secondary)
+                    legend(color: colors.gain(scheme), text: L10n.tr("盈利"))
+                    legend(color: colors.loss(scheme), text: L10n.tr("亏损"))
+                    Label(L10n.tr("待补全"), systemImage: "circle.dotted").font(.caption2).foregroundStyle(.secondary)
                 }
                 Text("每天格子里显示当日收益金额，点按查看按股票的明细。")
                     .font(.caption2).foregroundStyle(.secondary)
@@ -493,13 +493,13 @@ struct DayReturnDetail: View {
         NavigationStack {
             List {
                 Section {
-                    LabeledContent("日期", value: row.date)
-                    LabeledContent("上一交易日", value: row.previous ?? "—")
-                    ProfitRow(label: "当日收益", value: row.profit)
-                    LabeledContent("累计资产", value: Fmt.money(row.cumulative))
+                    LabeledContent(L10n.tr("日期"), value: row.date)
+                    LabeledContent(L10n.tr("上一交易日"), value: row.previous ?? "—")
+                    ProfitRow(label: L10n.tr("当日收益"), value: row.profit)
+                    LabeledContent(L10n.tr("累计资产"), value: Fmt.money(row.cumulative))
                 }
                 if !row.contributions.isEmpty {
-                    Section("按股票") {
+                    Section(L10n.tr("按股票")) {
                         ForEach(row.contributions) { item in
                             if let profit = item.profit {
                                 ProfitRow(label: item.symbol, value: profit)
@@ -510,7 +510,7 @@ struct DayReturnDetail: View {
                     }
                 }
                 if !row.missing.isEmpty {
-                    Section("缺失行情") {
+                    Section(L10n.tr("缺失行情")) {
                         ForEach(row.missing, id: \.self) { text in
                             Text(text).font(.footnote).foregroundStyle(.secondary)
                         }
@@ -518,7 +518,7 @@ struct DayReturnDetail: View {
                 }
             }
             .navigationTitle(row.date)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.tr("完成")) { dismiss() } } }
         }
     }
 }

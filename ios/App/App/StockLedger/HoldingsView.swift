@@ -16,33 +16,33 @@ struct HoldingsView: View {
             if !state.ledger.trades.isEmpty, BackupReminder.overdue(lastExport) {
                 Section {
                     HStack(spacing: 10) {
-                        Label(lastExport > 0 ? "距上次备份已超过 30 天" : "还没有导出过账本备份", systemImage: "clock.badge.exclamationmark")
+                        Label(L10n.tr(lastExport > 0 ? "距上次备份已超过 30 天" : "还没有导出过账本备份"), systemImage: "clock.badge.exclamationmark")
                             .font(.footnote)
                         Spacer()
-                        Button("去备份", action: onOpenSettings).font(.footnote)
+                        Button(L10n.tr("去备份"), action: onOpenSettings).font(.footnote)
                     }
                 }
             }
             Section {
                 TodayCard()
             }
-            Section("持有收益") {
-                ProfitRow(label: "浮动收益", value: summary.unrealized)
-                LabeledContent("持仓成本", value: Fmt.money(summary.cost))
-                ProfitRow(label: "已实现收益", value: summary.realized)
-                ProfitRow(label: "累计投资收益", value: summary.totalProfit)
+            Section(L10n.tr("持有收益")) {
+                ProfitRow(label: L10n.tr("浮动收益"), value: summary.unrealized)
+                LabeledContent(L10n.tr("持仓成本"), value: Fmt.money(summary.cost))
+                ProfitRow(label: L10n.tr("已实现收益"), value: summary.realized)
+                ProfitRow(label: L10n.tr("累计投资收益"), value: summary.totalProfit)
                 if !summary.missing.isEmpty {
-                    Label("\(summary.missing.count) 只持仓待报价", systemImage: "questionmark.circle")
+                    Label("\(summary.missing.count) \(L10n.tr("只持仓待报价"))", systemImage: "questionmark.circle")
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("我的持仓") {
+            Section(L10n.tr("我的持仓")) {
                 if summary.open.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("从第一笔投资开始").font(.headline)
-                        Text(state.ledger.trades.isEmpty ? "记录第一笔买入，自动计算成本与收益。" : "当前没有持仓。")
+                        Text(L10n.tr("从第一笔投资开始")).font(.headline)
+                        Text(L10n.tr(state.ledger.trades.isEmpty ? "记录第一笔买入，自动计算成本与收益。" : "当前没有持仓。"))
                             .font(.footnote).foregroundStyle(.secondary)
-                        Button("记录第一笔交易", action: onAdd)
+                        Button(L10n.tr("记录第一笔交易"), action: onAdd)
                     }
                     .padding(.vertical, 6)
                 } else {
@@ -53,7 +53,7 @@ struct HoldingsView: View {
                 }
             }
         }
-        .navigationTitle("持仓账本")
+        .navigationTitle(L10n.tr("持仓账本"))
         .sheet(item: Binding(get: { detailSymbol.map(SymbolBox.init) }, set: { detailSymbol = $0?.value })) { box in
             PositionDetailView(symbol: box.value, onEditQuote: { quoteSymbol = box.value })
                 .environmentObject(state)
@@ -68,7 +68,7 @@ struct HoldingsView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(position.symbol).font(.headline)
-                Text("\(Fmt.quantity(position.quantity)) 股 · 市值 \(Fmt.money(position.value))")
+                Text("\(Fmt.quantity(position.quantity)) \(L10n.tr("股")) · \(L10n.tr("市值")) \(Fmt.money(position.value))")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -88,8 +88,8 @@ struct HoldingsView: View {
     }
 
     private func quoteLabel(_ position: Position) -> String {
-        guard let quote = position.quote else { return "待报价" }
-        let stale = Engine.isStaleQuote(quote) ? " · 较早" : ""
+        guard let quote = position.quote else { return L10n.tr("待报价") }
+        let stale = Engine.isStaleQuote(quote) ? " · \(L10n.tr("较早"))" : ""
         return "\(quote.date)\(stale)"
     }
 }
@@ -108,7 +108,7 @@ struct TodayCard: View {
         let result = state.displayReturn
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(result.title).font(.subheadline).foregroundStyle(.secondary)
+                Text(L10n.tr(result.title)).font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     Task { await state.refreshQuotes() }
@@ -116,25 +116,25 @@ struct TodayCard: View {
                     if state.syncingQuotes {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label("同步行情", systemImage: "arrow.clockwise")
+                        Label(L10n.tr("同步行情"), systemImage: "arrow.clockwise")
                     }
                 }
                 .font(.footnote)
                 .disabled(state.syncingQuotes || state.ledger.trades.isEmpty)
             }
-            Text(result.pnl == nil ? "待补全" : Fmt.signedMoney(result.pnl))
+            Text(result.pnl == nil ? L10n.tr("待补全") : Fmt.signedMoney(result.pnl))
                 .font(.largeTitle.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(profitColor(result.pnl))
-            Text(result.caption).font(.footnote).foregroundStyle(.secondary)
+            Text(L10n.tr(result.caption)).font(.footnote).foregroundStyle(.secondary)
             if let percent = result.percent {
-                Text("较上一收盘 \(Fmt.percent(percent))")
+                Text("\(L10n.tr("较上一收盘")) \(Fmt.percent(percent))")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            LabeledContent("持仓市值", value: Fmt.money(state.summary.value))
+            LabeledContent(L10n.tr("持仓市值"), value: Fmt.money(state.summary.value))
                 .font(.footnote)
             ForEach(result.rows.filter { $0.reason != nil }) { row in
-                Label("\(row.symbol)：\(row.reason ?? "")", systemImage: "exclamationmark.triangle")
+                Label("\(row.symbol)：\(L10n.tr(row.reason ?? ""))", systemImage: "exclamationmark.triangle")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
@@ -166,48 +166,48 @@ struct PositionDetailView: View {
             List {
                 if let position = state.summary.open.first(where: { $0.symbol == symbol }) {
                     Section {
-                        ProfitRow(label: "浮动收益", value: position.unrealized)
-                        LabeledContent("持有股数", value: Fmt.quantity(position.quantity))
-                        LabeledContent("持仓市值", value: Fmt.money(position.value))
-                        LabeledContent("平均成本", value: Fmt.money(position.average))
-                        LabeledContent("持仓成本", value: Fmt.money(position.cost))
+                        ProfitRow(label: L10n.tr("浮动收益"), value: position.unrealized)
+                        LabeledContent(L10n.tr("持有股数"), value: Fmt.quantity(position.quantity))
+                        LabeledContent(L10n.tr("持仓市值"), value: Fmt.money(position.value))
+                        LabeledContent(L10n.tr("平均成本"), value: Fmt.money(position.average))
+                        LabeledContent(L10n.tr("持仓成本"), value: Fmt.money(position.cost))
                     }
-                    Section("参考股价") {
-                        LabeledContent("报价", value: position.quote.map { Fmt.money($0.price) } ?? "待报价")
-                        LabeledContent("报价日期", value: position.quote?.date ?? "—")
-                        LabeledContent("报价来源", value: position.quote?.sourceLabel ?? "—")
+                    Section(L10n.tr("参考股价")) {
+                        LabeledContent(L10n.tr("报价"), value: position.quote.map { Fmt.money($0.price) } ?? L10n.tr("待报价"))
+                        LabeledContent(L10n.tr("报价日期"), value: position.quote?.date ?? "—")
+                        LabeledContent(L10n.tr("报价来源"), value: position.quote?.sourceLabel ?? "—")
                         if let quote = position.quote, Engine.isStaleQuote(quote) {
-                            Label("报价较早（\(quote.date)），可用下方按钮同步最新行情。", systemImage: "clock")
+                            Label(L10n.tr("报价较早（\(quote.date)），可用下方按钮同步最新行情。"), systemImage: "clock")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                         if let previous = state.previousClose[position.symbol] {
-                            LabeledContent("上一收盘", value: "\(Fmt.money(previous))\(state.previousCloseDates[position.symbol].map { "（\($0)）" } ?? "")")
+                            LabeledContent(L10n.tr("上一收盘"), value: "\(Fmt.money(previous))\(state.previousCloseDates[position.symbol].map { "（\($0)）" } ?? "")")
                         }
-                        Button("更新股价", action: onEditQuote)
-                        Button("同步行情") { Task { await state.refreshQuotes() } }
+                        Button(L10n.tr("更新股价"), action: onEditQuote)
+                        Button(L10n.tr("同步行情")) { Task { await state.refreshQuotes() } }
                             .disabled(state.syncingQuotes)
                     }
-                    Section("相关交易") {
+                    Section(L10n.tr("相关交易")) {
                         let related = state.ledger.trades.filter { $0.symbol == symbol }
                             .sorted { $0.date == $1.date ? $0.sequence > $1.sequence : $0.date > $1.date }
                         if related.isEmpty {
-                            Text("暂无该股票的交易记录。").foregroundStyle(.secondary)
+                            Text(L10n.tr("暂无该股票的交易记录。")).foregroundStyle(.secondary)
                         } else {
                             ForEach(related) { trade in
-                                LabeledContent("\(trade.date) · \(trade.side.label) \(Fmt.quantity(trade.quantity)) 股",
+                                LabeledContent("\(trade.date) · \(trade.side.label) \(Fmt.quantity(trade.quantity)) \(L10n.tr("股"))",
                                                value: Fmt.money(trade.gross))
                             }
                         }
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("已无持仓").font(.headline)
-                        Text("该股票已全部卖出。").font(.footnote).foregroundStyle(.secondary)
+                        Text(L10n.tr("已无持仓")).font(.headline)
+                        Text(L10n.tr("该股票已全部卖出。")).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
             }
             .navigationTitle(symbol)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.tr("完成")) { dismiss() } } }
         }
     }
 }
@@ -225,18 +225,18 @@ struct QuoteFormView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("股价（美元）", text: $price).keyboardType(.decimalPad)
-                    DatePicker("报价日期（美东）", selection: Binding(
+                    TextField(L10n.tr("股价（美元）"), text: $price).keyboardType(.decimalPad)
+                    DatePicker(L10n.tr("报价日期（美东）"), selection: Binding(
                         get: { DateFormatter.ledgerDate.date(from: date) ?? Date() },
                         set: { date = DateFormatter.ledgerDate.string(from: $0) }
                     ), in: ...Date(), displayedComponents: .date)
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
-            .navigationTitle("更新 \(symbol) 股价")
+            .navigationTitle("\(L10n.tr("更新")) \(symbol) \(L10n.tr("股价"))")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("保存") { save() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("取消")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(L10n.tr("保存")) { save() } }
             }
         }
     }

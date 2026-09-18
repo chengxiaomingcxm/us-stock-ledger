@@ -19,60 +19,60 @@ struct TradesView: View {
         let result = self.result
         return List {
             Section {
-                Picker("买卖类型", selection: $side) {
-                    Text("全部").tag(TradeSide?.none)
-                    Text("买入").tag(TradeSide?.some(.buy))
-                    Text("卖出").tag(TradeSide?.some(.sell))
+                Picker(L10n.tr("买卖类型"), selection: $side) {
+                    Text(L10n.tr("全部")).tag(TradeSide?.none)
+                    Text(L10n.tr("买入")).tag(TradeSide?.some(.buy))
+                    Text(L10n.tr("卖出")).tag(TradeSide?.some(.sell))
                 }
                 .pickerStyle(.segmented)
             }
 
-            Section("日期区间（美东）") {
-                DateField(title: "起始日期", value: $from)
-                DateField(title: "结束日期", value: $to)
+            Section(L10n.tr("日期区间（美东）")) {
+                DateField(title: L10n.tr("起始日期"), value: $from)
+                DateField(title: L10n.tr("结束日期"), value: $to)
                 if !from.isEmpty || !to.isEmpty || side != nil || !query.isEmpty {
-                    Button("清除筛选") { side = nil; from = ""; to = ""; query = "" }
+                    Button(L10n.tr("清除筛选")) { side = nil; from = ""; to = ""; query = "" }
                 }
             }
 
             Section {
                 let summary = result
-                LabeledContent("范围内", value: "\(summary.list.count) 笔")
-                LabeledContent("买入", value: "\(Fmt.quantity(summary.buyQuantity)) 股")
-                LabeledContent("卖出", value: "\(Fmt.quantity(summary.sellQuantity)) 股")
-                LabeledContent("手续费", value: Fmt.money(summary.fees))
-                ProfitRow(label: "已实现收益", value: summary.hasRealized ? summary.realized : nil)
+                LabeledContent(L10n.tr("范围内"), value: "\(summary.list.count) \(L10n.tr("笔"))")
+                LabeledContent(L10n.tr("买入"), value: "\(Fmt.quantity(summary.buyQuantity)) \(L10n.tr("股"))")
+                LabeledContent(L10n.tr("卖出"), value: "\(Fmt.quantity(summary.sellQuantity)) \(L10n.tr("股"))")
+                LabeledContent(L10n.tr("手续费"), value: Fmt.money(summary.fees))
+                ProfitRow(label: L10n.tr("已实现收益"), value: summary.hasRealized ? summary.realized : nil)
             } header: {
-                Text("汇总")
+                Text(L10n.tr("汇总"))
             }
 
-            Section("全部交易 \(state.ledger.trades.count)") {
+            Section("\(L10n.tr("全部交易")) \(state.ledger.trades.count)") {
                 if result.list.isEmpty {
                     if state.ledger.trades.isEmpty {
-                        Button("记录第一笔交易", action: onAdd)
+                        Button(L10n.tr("记录第一笔交易"), action: onAdd)
                     } else {
-                        Text("没有找到交易，试试其他条件。").foregroundStyle(.secondary)
+                        Text(L10n.tr("没有找到交易，试试其他条件。")).foregroundStyle(.secondary)
                     }
                 }
                 ForEach(result.list) { trade in
                     Button { editing = trade } label: { row(trade) }
                         .buttonStyle(.plain)
                         .swipeActions {
-                            Button("删除", role: .destructive) { state.deleteTrade(trade.id) }
+                            Button(L10n.tr("删除"), role: .destructive) { state.deleteTrade(trade.id) }
                         }
                 }
             }
         }
-        .searchable(text: $query, prompt: "搜索代码或备注")
-        .navigationTitle("交易记录")
+        .searchable(text: $query, prompt: L10n.tr("搜索代码或备注"))
+        .navigationTitle(L10n.tr("交易记录"))
         .sheet(item: $editing) { trade in
             TradeFormView(trade: trade).environmentObject(state)
         }
         .overlay(alignment: .bottom) {
             if state.undoTrade != nil {
                 HStack {
-                    Text("交易已保存")
-                    Button("撤销新增") { state.undoLastTrade() }
+                    Text(L10n.tr("交易已保存"))
+                    Button(L10n.tr("撤销新增")) { state.undoLastTrade() }
                 }
                 .font(.footnote)
                 .padding(10)
@@ -98,9 +98,9 @@ struct TradesView: View {
                 Text(Fmt.money(trade.gross)).monospacedDigit()
             }
             HStack {
-                Text("\(trade.date) · \(Fmt.quantity(trade.quantity)) 股 × \(Fmt.money(trade.price))")
+                Text("\(trade.date) · \(Fmt.quantity(trade.quantity)) \(L10n.tr("股")) × \(Fmt.money(trade.price))")
                 Spacer()
-                Text("手续费 \(Fmt.money(trade.fee))")
+                Text("\(L10n.tr("手续费")) \(Fmt.money(trade.fee))")
             }
             .font(.caption).foregroundStyle(.secondary)
             if !trade.note.isEmpty {
@@ -189,14 +189,14 @@ struct TradeFormView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("方向", selection: $side) {
-                        Text("买入").tag(TradeSide.buy)
-                        Text("卖出").tag(TradeSide.sell)
+                    Picker(L10n.tr("方向"), selection: $side) {
+                        Text(L10n.tr("买入")).tag(TradeSide.buy)
+                        Text(L10n.tr("卖出")).tag(TradeSide.sell)
                     }
                     .pickerStyle(.segmented)
                 }
                 Section {
-                    TextField("股票代码", text: $symbol)
+                    TextField(L10n.tr("股票代码"), text: $symbol)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                     if !isEditing, !recentSymbols.isEmpty {
@@ -211,40 +211,40 @@ struct TradeFormView: View {
                             .padding(.vertical, 2)
                         }
                     }
-                    DatePicker("交易日期（美东）", selection: Binding(
+                    DatePicker(L10n.tr("交易日期（美东）"), selection: Binding(
                         get: { DateFormatter.ledgerDate.date(from: date) ?? Date() },
                         set: { date = DateFormatter.ledgerDate.string(from: $0) }
                     ), in: ...Date(), displayedComponents: .date)
-                    TextField("成交股数", text: $quantity).keyboardType(.decimalPad)
-                    TextField("成交单价（美元）", text: $price).keyboardType(.decimalPad)
-                    TextField("手续费（美元）", text: $fee).keyboardType(.decimalPad)
+                    TextField(L10n.tr("成交股数"), text: $quantity).keyboardType(.decimalPad)
+                    TextField(L10n.tr("成交单价（美元）"), text: $price).keyboardType(.decimalPad)
+                    TextField(L10n.tr("手续费（美元）"), text: $fee).keyboardType(.decimalPad)
                 } footer: {
                     if side == .sell {
                         HStack {
-                            Text("当前可卖 \(Fmt.quantity(available)) 股")
+                            Text("\(L10n.tr("当前可卖")) \(Fmt.quantity(available)) \(L10n.tr("股"))")
                             Spacer()
-                            Button("一半") { fill(available / 2) }
-                            Button("全部") { fill(available) }
+                            Button(L10n.tr("一半")) { fill(available / 2) }
+                            Button(L10n.tr("全部")) { fill(available) }
                         }
                     }
                 }
-                Section("备注") {
-                    TextField("选填", text: $note, axis: .vertical).lineLimit(2...4)
+                Section(L10n.tr("备注")) {
+                    TextField(L10n.tr("选填"), text: $note, axis: .vertical).lineLimit(2...4)
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(L10n.tr(error)).foregroundStyle(.red) }
             }
-            .navigationTitle(isEditing ? "编辑交易" : "记录交易")
+            .navigationTitle(L10n.tr(isEditing ? "编辑交易" : "记录交易"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { if dirty { showingDiscard = true } else { dismiss() } }
+                    Button(L10n.tr("取消")) { if dirty { showingDiscard = true } else { dismiss() } }
                 }
-                ToolbarItem(placement: .confirmationAction) { Button("保存") { save() }.disabled(symbol.isEmpty) }
+                ToolbarItem(placement: .confirmationAction) { Button(L10n.tr("保存")) { save() }.disabled(symbol.isEmpty) }
             }
             .onAppear(perform: load)
             .onChange(of: symbol) { _ in applyRecentFee() }
-            .alert("放弃未保存的修改？", isPresented: $showingDiscard) {
-                Button("继续编辑", role: .cancel) {}
-                Button("放弃", role: .destructive) { dismiss() }
+            .alert(L10n.tr("放弃未保存的修改？"), isPresented: $showingDiscard) {
+                Button(L10n.tr("继续编辑"), role: .cancel) {}
+                Button(L10n.tr("放弃"), role: .destructive) { dismiss() }
             }
         }
     }

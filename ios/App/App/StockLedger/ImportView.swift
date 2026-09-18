@@ -40,7 +40,7 @@ struct ImportView: View {
     var body: some View {
         List {
             Section {
-                Picker("导入类型", selection: $mode) {
+                Picker(L10n.tr("导入类型"), selection: $mode) {
                     ForEach(ImportMode.allCases) { item in
                         Text(item.label).tag(item)
                     }
@@ -52,69 +52,69 @@ struct ImportView: View {
                 Button {
                     showingPicker = true
                 } label: {
-                    Label(fileName.isEmpty ? "选择 CSV 文件" : "重新选择文件", systemImage: "doc.badge.plus")
+                    Label(L10n.tr(fileName.isEmpty ? "选择 CSV 文件" : "重新选择文件"), systemImage: "doc.badge.plus")
                 }
-                if !fileName.isEmpty { LabeledContent("文件", value: fileName) }
-                if !header.isEmpty { LabeledContent("识别到", value: "\(header.count) 列 · \(rows.count) 行记录") }
+                if !fileName.isEmpty { LabeledContent(L10n.tr("文件"), value: fileName) }
+                if !header.isEmpty { LabeledContent(L10n.tr("识别到"), value: "\(header.count) \(L10n.tr("列")) · \(rows.count) \(L10n.tr("行记录"))")
             } header: {
-                Text("第一步：文件与类型")
+                Text(L10n.tr("第一步：文件与类型"))
             } footer: {
-                Text("支持逗号、分号或制表符分隔；UTF-8 / UTF-16 / GBK 编码。文件只在本机读取，不上传。")
+                Text(L10n.tr("支持逗号、分号或制表符分隔；UTF-8 / UTF-16 / GBK 编码。文件只在本机读取，不上传。"))
             }
 
             if !header.isEmpty {
                 Section {
                     if mode == .trade {
                         ForEach(TradeField.allCases) { field in
-                            Picker(field.label + (field.required ? "（必需）" : ""), selection: tradeBinding(for: field)) {
-                                Text("未映射").tag(Int?.none)
+                            Picker(field.label + (field.required ? L10n.tr("（必需）") : ""), selection: tradeBinding(for: field)) {
+                                Text(L10n.tr("未映射")).tag(Int?.none)
                                 ForEach(header.indices, id: \.self) { index in
-                                    Text("第 \(index + 1) 列 · \(header[index])").tag(Int?.some(index))
+                                    Text("\(L10n.tr("第")) \(index + 1) \(L10n.tr("列")) · \(header[index])").tag(Int?.some(index))
                                 }
                             }
                         }
                     } else {
                         ForEach(CashField.allCases) { field in
-                            Picker(field.label + (field.required ? "（必需）" : ""), selection: cashBinding(for: field)) {
-                                Text("未映射").tag(Int?.none)
+                            Picker(field.label + (field.required ? L10n.tr("（必需）") : ""), selection: cashBinding(for: field)) {
+                                Text(L10n.tr("未映射")).tag(Int?.none)
                                 ForEach(header.indices, id: \.self) { index in
-                                    Text("第 \(index + 1) 列 · \(header[index])").tag(Int?.some(index))
+                                    Text("\(L10n.tr("第")) \(index + 1) \(L10n.tr("列")) · \(header[index])").tag(Int?.some(index))
                                 }
                             }
                         }
                         if cashMapping[.type] == nil {
-                            Picker("统一类型（缺少类型列时必选）", selection: $unifiedKind) {
+                            Picker(L10n.tr("统一类型（缺少类型列时必选）"), selection: $unifiedKind) {
                                 ForEach(CashKind.allCases) { Text($0.label).tag($0) }
                             }
                             .onChange(of: unifiedKind) { _ in remap(auto: false) }
                         }
                     }
-                    Button("按表头重新识别") { remap(auto: true) }
-                    Button("重新校验") { remap(auto: false) }
+                    Button(L10n.tr("按表头重新识别")) { remap(auto: true) }
+                    Button(L10n.tr("重新校验")) { remap(auto: false) }
                 } header: {
-                    Text("第二步：字段映射")
+                    Text(L10n.tr("第二步：字段映射"))
                 } footer: {
-                    Text(requiredMissing ? "必需列尚未全部指定。" : "修改映射并重新校验后，预览与统计会同步更新。")
+                    Text(L10n.tr(requiredMissing ? "必需列尚未全部指定。" : "修改映射并重新校验后，预览与统计会同步更新。"))
                 }
 
                 Section {
-                    LabeledContent("可导入", value: "\(readyCount) 行")
-                    LabeledContent("疑似重复", value: "\(suspectedCount) 行（默认不勾选）")
-                    LabeledContent("已导入", value: "\(duplicateCount) 行（按编号跳过）")
-                    LabeledContent("无法导入", value: "\(errorCount) 行")
+                    LabeledContent(L10n.tr("可导入"), value: "\(readyCount) \(L10n.tr("行"))")
+                    LabeledContent(L10n.tr("疑似重复"), value: "\(suspectedCount) \(L10n.tr("行"))（\(L10n.tr("默认不勾选"))）")
+                    LabeledContent(L10n.tr("已导入"), value: "\(duplicateCount) \(L10n.tr("行"))（\(L10n.tr("按编号跳过"))）")
+                    LabeledContent(L10n.tr("无法导入"), value: "\(errorCount) \(L10n.tr("行"))")
                     if mode == .trade {
-                        Toggle("插入到同日已有交易之前", isOn: $insertBefore)
+                        Toggle(L10n.tr("插入到同日已有交易之前"), isOn: $insertBefore)
                             .onChange(of: insertBefore) { _ in revalidate() }
                     }
                 } header: {
-                    Text("第三步：确认")
+                    Text(L10n.tr("第三步：确认"))
                 } footer: {
                     Text(mode == .trade
                          ? "同日买卖的相对顺序会影响已实现收益。账本同一天已有该股票交易时，请先确认顺序再导入。"
                          : "资金记录按日期顺序写入；重复导入不会重复记账，期初余额仍需按券商账单手动设置。")
                 }
 
-                Section("预览") {
+                Section(L10n.tr("预览")) {
                     ForEach(rows) { row in
                         rowView(row)
                     }
@@ -128,13 +128,13 @@ struct ImportView: View {
                 Section { Label(notice, systemImage: "checkmark.circle").foregroundStyle(.secondary) }
             }
         }
-        .navigationTitle("券商 CSV 导入")
+        .navigationTitle(L10n.tr("券商 CSV 导入"))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                if notice != nil { Button("完成") { dismiss() } }
+                if notice != nil { Button(L10n.tr("完成")) { dismiss() } }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("导入 \(selectedCount) 行") { commit() }
+                Button("\(L10n.tr("导入")) \(selectedCount) \(L10n.tr("行"))") { commit() }
                     .disabled(selectedCount == 0 || batchError != nil)
             }
         }

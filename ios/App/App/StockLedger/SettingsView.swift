@@ -20,18 +20,18 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Section("显示") {
-                Picker("语言", selection: Binding(get: { state.language }, set: { state.setLanguage($0) })) {
+            Section(L10n.tr("显示")) {
+                Picker(L10n.tr("语言"), selection: Binding(get: { state.language }, set: { state.setLanguage($0) })) {
                     ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
                 }
-                Picker("外观", selection: $theme) {
-                    Text("跟随系统").tag("system")
-                    Text("浅色").tag("light")
-                    Text("深色").tag("dark")
+                Picker(L10n.tr("外观"), selection: $theme) {
+                    Text(L10n.tr("跟随系统")).tag("system")
+                    Text(L10n.tr("浅色")).tag("light")
+                    Text(L10n.tr("深色")).tag("dark")
                 }
-                Picker("涨跌颜色", selection: $colors) {
-                    Text("绿涨红跌").tag("green-up")
-                    Text("红涨绿跌").tag("red-up")
+                Picker(L10n.tr("涨跌颜色"), selection: $colors) {
+                    Text(L10n.tr("绿涨红跌")).tag("green-up")
+                    Text(L10n.tr("红涨绿跌")).tag("red-up")
                 }
                 HStack(spacing: 16) {
                     AmountText(value: 12.34)
@@ -45,65 +45,65 @@ struct SettingsView: View {
                     QuoteSourceView()
                 } label: {
                     HStack {
-                        Label("行情来源", systemImage: "antenna.radiowaves.left.and.right")
+                        Label(L10n.tr("行情来源"), systemImage: "antenna.radiowaves.left.and.right")
                         Spacer()
                         Text(state.quoteSettings.provider.label)
                             .foregroundStyle(.secondary)
                     }
                 }
             } footer: {
-                Text("收盘价来自 Yahoo 日线；盘中报价接口与 API Key 在行情来源里设置。")
+                Text(L10n.tr("收盘价来自 Yahoo 日线；盘中报价接口与 API Key 在行情来源里设置。"))
             }
 
             Section {
-                NavigationLink("券商 CSV 导入") { ImportView() }
-                NavigationLink("银行月结单 PDF 导入") { StatementImportView() }
+                NavigationLink(L10n.tr("券商 CSV 导入")) { ImportView() }
+                NavigationLink(L10n.tr("银行月结单 PDF 导入")) { StatementImportView() }
                 if exportText != nil {
                     Button {
                         shareBox = ShareBox(value: exportText ?? "")
                     } label: {
-                        Label("导出账本备份", systemImage: "square.and.arrow.up")
+                        Label(L10n.tr("导出账本备份"), systemImage: "square.and.arrow.up")
                     }
                 } else {
-                    Label("导出账本备份", systemImage: "square.and.arrow.up").foregroundStyle(.secondary)
+                    Label(L10n.tr("导出账本备份"), systemImage: "square.and.arrow.up").foregroundStyle(.secondary)
                 }
                 Button {
                     showingImporter = true
                 } label: {
-                    Label("从备份恢复", systemImage: "square.and.arrow.down")
+                    Label(L10n.tr("从备份恢复"), systemImage: "square.and.arrow.down")
                 }
-                LabeledContent("当前账本", value: "\(state.ledger.trades.count) 笔交易 · \(state.ledger.cash.count) 笔现金记录")
-                LabeledContent("上次备份", value: BackupReminder.text(lastExport))
+                LabeledContent(L10n.tr("当前账本"), value: "\(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))")
+                LabeledContent(L10n.tr("上次备份"), value: BackupReminder.text(lastExport))
             } header: {
-                Text("数据")
+                Text(L10n.tr("数据"))
             } footer: {
-                Text("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。")
+                Text(L10n.tr("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。"))
             }
 
             Section {
-                Button("载入示例账本") { showingDemoConfirm = true }
+                Button(L10n.tr("载入示例账本")) { showingDemoConfirm = true }
                 if demoLoaded {
-                    Button("退出示例并清空账本", role: .destructive) { showingClearConfirm = true }
+                    Button(L10n.tr("退出示例并清空账本"), role: .destructive) { showingClearConfirm = true }
                 }
             } header: {
-                Text("示例")
+                Text(L10n.tr("示例"))
             } footer: {
-                Text("示例账本包含几笔买卖、分红和费用，只用于体验界面与计算；载入会替换当前账本，建议先导出备份。")
+                Text(L10n.tr("示例账本包含几笔买卖、分红和费用，只用于体验界面与计算；载入会替换当前账本，建议先导出备份。"))
             }
 
-            Section("帮助") {
-                NavigationLink("使用说明") { HelpView() }
-                LabeledContent("账本格式", value: "2（原生版格式）")
+            Section(L10n.tr("帮助")) {
+                NavigationLink(L10n.tr("使用说明")) { HelpView() }
+                LabeledContent(L10n.tr("账本格式"), value: "2")
             }
 
             Section {
-                LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
-                LabeledContent("应用标识", value: "com.personal.stockledger")
+                LabeledContent(L10n.tr("版本"), value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
+                LabeledContent(L10n.tr("应用标识"), value: "com.personal.stockledger")
             } footer: {
-                Text("原生版 1.0 使用 SwiftUI 界面，账本保存在本机。沿用此前原生 2.0 测试版的数据。")
+                Text(L10n.tr("原生版 1.0 使用 SwiftUI 界面，账本保存在本机。沿用此前原生 2.0 测试版的数据。"))
             }
         }
-        .navigationTitle("设置")
+        .navigationTitle(L10n.tr("设置"))
         .task {
             exportText = try? LedgerStore.exportText(state.ledger)
         }
@@ -116,23 +116,23 @@ struct SettingsView: View {
                     let data = try Data(contentsOf: url)
                     pendingImport = try JSONDecoder().decode(Ledger.self, from: data)
                 } catch {
-                    importError = "备份文件无法读取：\(error.localizedDescription)"
+                    importError = L10n.tr("备份文件无法读取：") + error.localizedDescription
                 }
             case .failure(let error):
                 importError = error.localizedDescription
             }
         }
-        .alert("恢复这份备份？", isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
-            Button("取消", role: .cancel) { pendingImport = nil }
-            Button("替换并恢复", role: .destructive) {
+        .alert(L10n.tr("恢复这份备份？"), isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
+            Button(L10n.tr("取消"), role: .cancel) { pendingImport = nil }
+            Button(L10n.tr("替换并恢复"), role: .destructive) {
                 if let ledger = pendingImport { state.replace(with: ledger) }
                 pendingImport = nil
             }
         } message: {
-            Text("将替换当前的 \(state.ledger.trades.count) 笔交易与 \(state.ledger.cash.count) 笔现金记录。建议先导出当前账本。")
+            Text(L10n.tr("将替换当前的") + " \(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))。")
         }
-        .alert("导入失败", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
-            Button("好", role: .cancel) { importError = nil }
+        .alert(L10n.tr("导入失败"), isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+            Button(L10n.tr("好"), role: .cancel) { importError = nil }
         } message: {
             Text(importError ?? "")
         }
@@ -141,23 +141,23 @@ struct SettingsView: View {
                 if completed { lastExport = Date().timeIntervalSince1970 }
             }
         }
-        .alert("载入示例账本？", isPresented: $showingDemoConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("载入示例", role: .destructive) {
+        .alert(L10n.tr("载入示例账本？"), isPresented: $showingDemoConfirm) {
+            Button(L10n.tr("取消"), role: .cancel) {}
+            Button(L10n.tr("载入示例"), role: .destructive) {
                 state.loadDemo()
                 demoLoaded = true
             }
         } message: {
-            Text("将替换当前的 \(state.ledger.trades.count) 笔交易与 \(state.ledger.cash.count) 笔现金记录。")
+            Text(L10n.tr("将替换当前的") + " \(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))。")
         }
-        .alert("清空当前账本？", isPresented: $showingClearConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("清空", role: .destructive) {
+        .alert(L10n.tr("清空当前账本？"), isPresented: $showingClearConfirm) {
+            Button(L10n.tr("取消"), role: .cancel) {}
+            Button(L10n.tr("清空"), role: .destructive) {
                 state.clearAll()
                 demoLoaded = false
             }
         } message: {
-            Text("账本会恢复为空。请确认已导出备份，清空操作无法撤销。")
+            Text(L10n.tr("账本会恢复为空。请确认已导出备份，清空操作无法撤销。"))
         }
     }
 }
@@ -185,7 +185,7 @@ enum BackupReminder {
     static let interval: TimeInterval = 30 * 86_400
 
     static func text(_ stamp: Double) -> String {
-        guard stamp > 0 else { return "尚未备份" }
+        guard stamp > 0 else { return L10n.tr("尚未备份") }
         return Fmt.clock(Date(timeIntervalSince1970: stamp))
     }
 
@@ -198,34 +198,34 @@ enum BackupReminder {
 struct HelpView: View {
     var body: some View {
         List {
-            Section("持仓与今日盈亏") {
-                Text("首页「今日盈亏」结合上一交易日收盘、当前价格和当天买卖及手续费计算；缺少必要行情时显示待补全，不以零代替。「持有收益」是当前持仓的浮动收益，与今日涨跌不同。")
+            Section(L10n.tr("持仓与今日盈亏")) {
+                Text(L10n.tr("首页「今日盈亏」结合上一交易日收盘、当前价格和当天买卖及手续费计算；缺少必要行情时显示待补全，不以零代替。「持有收益」是当前持仓的浮动收益，与今日涨跌不同。"))
             }
-            Section("交易与成本") {
-                Text("买入金额和手续费加入持仓成本；卖出按卖出前的移动平均成本扣减。已实现收益 = 卖出金额 − 手续费 − 卖出部分成本。交易页可按日期区间、买卖类型和关键字筛选并汇总。")
+            Section(L10n.tr("交易与成本")) {
+                Text(L10n.tr("买入金额和手续费加入持仓成本；卖出按卖出前的移动平均成本扣减。已实现收益 = 卖出金额 − 手续费 − 卖出部分成本。交易页可按日期区间、买卖类型和关键字筛选并汇总。"))
             }
-            Section("现金账本") {
-                Text("期初余额是期初日当天开始前的现金，允许为零，不支持负数。期初日及之后的入金、出金、分红、费用和买卖会联动余额；余额 = 期初 + 入金 − 出金 + 分红（扣税）− 费用 + 卖出收入 − 买入支出。买卖是资产转换，不计入盈亏。")
+            Section(L10n.tr("现金账本")) {
+                Text(L10n.tr("期初余额是期初日当天开始前的现金，允许为零，不支持负数。期初日及之后的入金、出金、分红、费用和买卖会联动余额；余额 = 期初 + 入金 − 出金 + 分红（扣税）− 费用 + 卖出收入 − 买入支出。买卖是资产转换，不计入盈亏。"))
             }
-            Section("版本与备份") {
-                Text("原生版从 1.0 重新编号，继续使用此前 2.0 测试版账本和备份，不清空数据。旧 Web 版 1.26 及更早版本不自动迁移。恢复备份会替换当前账本，操作前请另存当前备份。")
+            Section(L10n.tr("版本与备份")) {
+                Text(L10n.tr("原生版从 1.0 重新编号，继续使用此前 2.0 测试版账本和备份，不清空数据。旧 Web 版 1.26 及更早版本不自动迁移。恢复备份会替换当前账本，操作前请另存当前备份。"))
             }
-            Section("离线与隐私") {
-                Text("账本和银行文件在本机处理。手动同步或开启前台自动刷新时，会向行情服务发送股票代码；不会发送交易股数、金额或银行文件。API Key 存在系统钥匙串，不包含在账本备份中。")
+            Section(L10n.tr("离线与隐私")) {
+                Text(L10n.tr("账本和银行文件在本机处理。手动同步或开启前台自动刷新时，会向行情服务发送股票代码；不会发送交易股数、金额或银行文件。API Key 存在系统钥匙串，不包含在账本备份中。"))
             }
-            Section("行情与报价") {
-                Text("价格模式可选自动、最近收盘或所选接口最新报价。自动模式在休市时段使用 Yahoo 已完成日线，盘中使用所选接口；固定收盘模式不使用 Finnhub Key。刷新失败保留旧价，同日手动报价优先。页面按实际美东报价日期显示收益。")
+            Section(L10n.tr("行情与报价")) {
+                Text(L10n.tr("价格模式可选自动、最近收盘或所选接口最新报价。自动模式在休市时段使用 Yahoo 已完成日线，盘中使用所选接口；固定收盘模式不使用 Finnhub Key。刷新失败保留旧价，同日手动报价优先。页面按实际美东报价日期显示收益。"))
             }
-            Section("收益日历") {
-                Text("收益日历按每个交易日重放账本：当日收益 = 当日收盘市值 − 上一交易日收盘市值 + 当日卖出净额 − 当日买入含费支出。月份用左右箭头切换，格子里直接显示当日收益金额，点按查看按股票的明细；缺少收盘价的交易日显示“待补”且不计入月度合计。累计收益曲线把每日收益逐日累加，横轴最多显示六个日期刻度，虚线是零轴。日历与曲线需要先「同步历史」获取收盘价与交易日历（来自 Yahoo 日线）。")
+            Section(L10n.tr("收益日历")) {
+                Text(L10n.tr("收益日历按每个交易日重放账本：当日收益 = 当日收盘市值 − 上一交易日收盘市值 + 当日卖出净额 − 当日买入含费支出。月份用左右箭头切换，格子里直接显示当日收益金额，点按查看按股票的明细；缺少收盘价的交易日显示“待补”且不计入月度合计。累计收益曲线把每日收益逐日累加，横轴最多显示六个日期刻度，虚线是零轴。日历与曲线需要先「同步历史」获取收盘价与交易日历（来自 Yahoo 日线）。"))
             }
-            Section("银行月结单 PDF") {
-                Text("支持汇丰带文字层的投资服务综合结单 PDF，可多选文件并在本机解锁。在文件列表里先点一下结单让它出现勾选，再点右上角「打开」；选择器会以副本方式交付，读取完成后副本会在离开页面时删除。预览美元股票买卖、关联费用和派付分红，核对后确认；已识别银行编号重复的记录不重复添加，疑似手工重复默认不选。港币基金、扫描件及银行往来账户流水暂不支持。只有分红到账额时不猜测税费；投资结单里没有的入金、出金和期初现金需要另行填写。")
+            Section(L10n.tr("银行月结单 PDF")) {
+                Text(L10n.tr("支持汇丰带文字层的投资服务综合结单 PDF，可多选文件并在本机解锁。在文件列表里先点一下结单让它出现勾选，再点右上角「打开」；选择器会以副本方式交付，读取完成后副本会在离开页面时删除。预览美元股票买卖、关联费用和派付分红，核对后确认；已识别银行编号重复的记录不重复添加，疑似手工重复默认不选。港币基金、扫描件及银行往来账户流水暂不支持。只有分红到账额时不猜测税费；投资结单里没有的入金、出金和期初现金需要另行填写。"))
             }
-            Section("券商 CSV 导入") {
-                Text("分两种类型：成交明细用于补全持仓与已实现收益，资金流水用于补全入金、出金、分红与账户费用。支持逗号、分号或制表符分隔，自动识别中英文列名，也可手动指定列；表头缺少类型列时可指定统一类型。导入前会显示可导入、疑似重复、已导入与无法导入的行数：按编号判定为已导入的行不会重复记账；与账本中关键字段完全相同的行标记为疑似重复，默认不勾选。成交明细在同一天已有该股票交易时，需要选择追加到同日之后或插入到同日之前，因为顺序会影响已实现收益；若出现超卖会整体拒绝，账本保持不变。")
+            Section(L10n.tr("券商 CSV 导入")) {
+                Text(L10n.tr("分两种类型：成交明细用于补全持仓与已实现收益，资金流水用于补全入金、出金、分红与账户费用。支持逗号、分号或制表符分隔，自动识别中英文列名，也可手动指定列；表头缺少类型列时可指定统一类型。导入前会显示可导入、疑似重复、已导入与无法导入的行数：按编号判定为已导入的行不会重复记账；与账本中关键字段完全相同的行标记为疑似重复，默认不勾选。成交明细在同一天已有该股票交易时，需要选择追加到同日之后或插入到同日之前，因为顺序会影响已实现收益；若出现超卖会整体拒绝，账本保持不变。"))
             }
         }
-        .navigationTitle("使用说明")
+        .navigationTitle(L10n.tr("使用说明"))
     }
 }
