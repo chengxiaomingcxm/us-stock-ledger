@@ -88,6 +88,7 @@ struct SettingsView: View {
             }
 
             Section {
+                NavigationLink("券商 CSV 导入") { ImportView() }
                 if let exportText {
                     ShareLink(item: exportText, preview: SharePreview("持仓账本备份")) {
                         Label("导出账本备份", systemImage: "square.and.arrow.up")
@@ -102,9 +103,9 @@ struct SettingsView: View {
                 }
                 LabeledContent("当前账本", value: "\(state.ledger.trades.count) 笔交易 · \(state.ledger.cash.count) 笔现金记录")
             } header: {
-                Text("备份与恢复")
+                Text("数据")
             } footer: {
-                Text("备份为 JSON 文本，不含任何密钥；恢复前会先确认。")
+                Text("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。")
             }
 
             Section("帮助") {
@@ -207,6 +208,9 @@ struct HelpView: View {
             }
             Section("收益日历") {
                 Text("收益日历按每个交易日重放账本：当日收益 = 当日收盘市值 − 上一交易日收盘市值 + 当日卖出净额 − 当日买入含费支出。需要先「同步历史」获取收盘价与交易日历（来自 Yahoo 日线），缺少收盘价的交易日显示为待补全，不计入月度合计。累计资产曲线使用同一份收盘价数据，不含现金。")
+            }
+            Section("券商 CSV 导入") {
+                Text("支持逗号、分号或制表符分隔的成交明细，自动识别中英文列名，也可手动指定列。导入前会显示可导入、疑似重复、已导入与无法导入的行数：按成交编号判定为已导入的行不会重复记账；与账本中日期、代码、方向、数量、单价和手续费完全相同的行标记为疑似重复，默认不勾选。同一天已有该股票交易时，需要选择追加到同日之后或插入到同日之前，因为顺序会影响已实现收益；若出现超卖会整体拒绝，账本保持不变。")
             }
         }
         .navigationTitle("使用说明")
