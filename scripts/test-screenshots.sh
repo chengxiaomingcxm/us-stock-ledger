@@ -57,7 +57,7 @@ echo '--- recent crash reports ---'
 for f in "$HOME"/Library/Logs/DiagnosticReports/Screens-*.ips; do
   [ -e "$f" ] || continue
   echo "=== $(basename "$f") ==="
-  python3 "$f" <<'PYEOF' || true
+  python3 - "$f" <<'PYEOF' || true
 import json, sys
 raw = open(sys.argv[1], 'rb').read()
 idx = raw.find(b'\n')
@@ -70,12 +70,14 @@ except Exception as e:
 print("exception:", json.dumps(body.get("exception", {}), ensure_ascii=False))
 print("termination:", json.dumps(body.get("termination", {}), ensure_ascii=False))
 print("asi:", json.dumps(body.get("asi", {}), ensure_ascii=False))
-print("faultingThread:", body.get("faultingThread"))
-for t in body.get("threads", []) or []:
-    if t.get("triggered"):
-        print("faulting thread frames:")
-        for fr in t.get("frames", [])[:30]:
-            print("  ", fr.get("imageIndex"), fr.get("symbol", ""), fr.get("sourceFile",""), fr.get("sourceLine",""))
+ft = body.get("faultingThread", 0)
+threads = body.get("threads", []) or []
+if isinstance(ft, int) and ft < len(threads):
+    t = threads[ft]
+    print("faulting thread name:", t.get("name", ""))
+    print("faulting thread frames:")
+    for fr in t.get("frames", [])[:40]:
+        print("  ", fr.get("imageIndex"), fr.get("symbol", ""), fr.get("sourceFile", ""), fr.get("sourceLine", ""))
 PYEOF
 done
 
