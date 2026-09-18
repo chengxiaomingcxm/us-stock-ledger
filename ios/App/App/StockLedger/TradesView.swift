@@ -39,14 +39,18 @@ struct TradesView: View {
                 LabeledContent("买入", value: "\(Fmt.quantity(summary.buyQuantity)) 股")
                 LabeledContent("卖出", value: "\(Fmt.quantity(summary.sellQuantity)) 股")
                 LabeledContent("手续费", value: Fmt.money(summary.fees))
-                LabeledContent("已实现收益", value: summary.hasRealized ? Fmt.signedMoney(summary.realized) : "—")
+                ProfitRow(label: "已实现收益", value: summary.hasRealized ? summary.realized : nil)
             } header: {
                 Text("汇总")
             }
 
             Section("全部交易 \(state.ledger.trades.count)") {
                 if result.list.isEmpty {
-                    Text("没有找到交易，试试其他条件。").foregroundStyle(.secondary)
+                    if state.ledger.trades.isEmpty {
+                        Button("记录第一笔交易", action: onAdd)
+                    } else {
+                        Text("没有找到交易，试试其他条件。").foregroundStyle(.secondary)
+                    }
                 }
                 ForEach(result.list) { trade in
                     Button { editing = trade } label: { row(trade) }
@@ -59,7 +63,6 @@ struct TradesView: View {
         }
         .searchable(text: $query, prompt: "搜索代码或备注")
         .navigationTitle("交易记录")
-        .toolbar { ToolbarItem(placement: .primaryAction) { Button("记一笔", action: onAdd) } }
         .sheet(item: $editing) { trade in
             TradeFormView(trade: trade).environmentObject(state)
         }

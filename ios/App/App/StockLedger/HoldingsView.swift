@@ -27,10 +27,10 @@ struct HoldingsView: View {
                 TodayCard()
             }
             Section("持有收益") {
-                LabeledContent("浮动收益", value: Fmt.signedMoney(summary.unrealized))
+                ProfitRow(label: "浮动收益", value: summary.unrealized)
                 LabeledContent("持仓成本", value: Fmt.money(summary.cost))
-                LabeledContent("已实现收益", value: Fmt.signedMoney(summary.realized))
-                LabeledContent("累计投资收益", value: Fmt.signedMoney(summary.totalProfit))
+                ProfitRow(label: "已实现收益", value: summary.realized)
+                ProfitRow(label: "累计投资收益", value: summary.totalProfit)
                 if !summary.missing.isEmpty {
                     Label("\(summary.missing.count) 只持仓待报价", systemImage: "questionmark.circle")
                         .foregroundStyle(.secondary)
@@ -101,6 +101,8 @@ struct SymbolBox: Identifiable {
 
 struct TodayCard: View {
     @EnvironmentObject private var state: AppState
+    @Environment(\.colorScheme) private var scheme
+    @AppStorage("appearance.colors") private var colorPreference = "green-up"
 
     var body: some View {
         let result = Engine.todayPnl(state.ledger,
@@ -126,7 +128,7 @@ struct TodayCard: View {
             Text(result.pnl == nil ? "待补全" : Fmt.signedMoney(result.pnl))
                 .font(.largeTitle.weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(result.pnl == nil ? Color.secondary : Color.primary)
+                .foregroundStyle(result.pnl == nil ? Color.secondary : profitColor(result.pnl))
             Text(result.caption).font(.footnote).foregroundStyle(.secondary)
             if let percent = result.percent {
                 Text("较上一收盘 \(Fmt.percent(percent))")
@@ -145,6 +147,14 @@ struct TodayCard: View {
         }
         .padding(.vertical, 4)
     }
+
+    /// 今日盈亏同样跟随涨跌配色设置，不用系统默认颜色。
+    private func profitColor(_ value: Decimal) -> Color {
+        let colors = ThemeColors(redUp: colorPreference == "red-up")
+        if value > 0 { return colors.gain(scheme) }
+        if value < 0 { return colors.loss(scheme) }
+        return .primary
+    }
 }
 
 struct PositionDetailView: View {
@@ -158,7 +168,7 @@ struct PositionDetailView: View {
             List {
                 if let position = state.summary.open.first(where: { $0.symbol == symbol }) {
                     Section {
-                        LabeledContent("浮动收益", value: Fmt.signedMoney(position.unrealized))
+                        ProfitRow(label: "浮动收益", value: position.unrealized)
                         LabeledContent("持有股数", value: Fmt.quantity(position.quantity))
                         LabeledContent("持仓市值", value: Fmt.money(position.value))
                         LabeledContent("平均成本", value: Fmt.money(position.average))

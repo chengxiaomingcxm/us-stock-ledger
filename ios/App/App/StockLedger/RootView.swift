@@ -90,6 +90,22 @@ struct RootView: View {
     }
 }
 
+/// 收益类数值行：标签 + 金额，金额统一按涨跌配色设置显示。
+/// 所有涉及盈亏的界面都应使用它，避免出现固定颜色的收益数字。
+struct ProfitRow: View {
+    let label: String
+    let value: Decimal?
+    var signed = true
+
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            AmountText(value: value, signed: signed)
+        }
+    }
+}
+
 /// 统一的金额着色：正负号之外还有颜色与语义标签，不只靠颜色传达盈亏。
 struct AmountText: View {
     let value: Decimal?

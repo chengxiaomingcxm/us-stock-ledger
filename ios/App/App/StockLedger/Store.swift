@@ -265,6 +265,13 @@ final class AppState: ObservableObject {
         commit(next)
     }
 
+    /// 清除期初余额：现金余额回到“待设置期初”，已记录的入金出金与分红保留。
+    func clearOpening() {
+        var next = ledger
+        next.opening = nil
+        commit(next)
+    }
+
     // MARK: - 备份
 
     func replace(with ledger: Ledger) {

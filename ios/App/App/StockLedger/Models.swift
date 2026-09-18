@@ -235,4 +235,18 @@ enum Fmt {
         formatter.dateFormat = "MM-dd HH:mm"
         return formatter.string(from: time)
     }
+
+    /// 日历格子里的紧凑金额：小数额保留两位小数，大数额用 k 表示。
+    static func compactSigned(_ value: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: value).doubleValue
+        let sign = number > 0 ? "+" : number < 0 ? "−" : ""
+        let magnitude = abs(number)
+        let text: String
+        if magnitude >= 100_000 { text = String(format: "%.0fk", magnitude / 1000) }
+        else if magnitude >= 10_000 { text = String(format: "%.1fk", magnitude / 1000) }
+        else if magnitude >= 1_000 { text = String(format: "%.2fk", magnitude / 1000) }
+        else if magnitude >= 100 { text = String(format: "%.0f", magnitude) }
+        else { text = String(format: "%.2f", magnitude) }
+        return sign + text
+    }
 }
