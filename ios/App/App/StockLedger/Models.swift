@@ -1,7 +1,7 @@
 import Foundation
 
-// 2.0：原生 SwiftUI 账本。1.x 数据不要求兼容，使用全新的 JSON 存储格式。
-// 计算口径与 1.x 保持一致：移动平均成本、已实现/浮动收益、现金期初边界与买卖联动。
+// 原生版账本：沿用原生 2.0 测试版的格式 2，与旧 Web 版分开存储。
+// 计算口径与旧 Web 版保持一致：移动平均成本、已实现/浮动收益、现金期初边界与买卖联动。
 
 enum TradeSide: String, Codable, CaseIterable, Identifiable {
     case buy, sell

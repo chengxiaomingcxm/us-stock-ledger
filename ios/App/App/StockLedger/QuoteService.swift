@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-// 2.0 行情：来源设置与 API Key 存入系统钥匙串，报价按来源解析后写入账本。
+// 原生版行情：来源设置与 API Key 存入系统钥匙串，报价按来源解析后写入账本。
 // 口径与 1.x 一致：Yahoo 只提供“已完成交易日”的收盘价，Finnhub / 自定义接口提供最新报价。
 // 任何解析失败都抛出明确原因，绝不用 0 或旧价格替代。
 
@@ -291,7 +291,7 @@ enum QuoteService {
 
     static func fetchSeries(symbol: String, now: Date = Date()) async throws -> DailySeries {
         guard let url = seriesURL(symbol) else { throw QuoteError.message("接口地址无效。") }
-        let body = try await get(url, headers: ["User-Agent": "StockLedger/2.0 (personal portfolio)"])
+        let body = try await get(url, headers: ["User-Agent": "StockLedger/1.0 (personal portfolio)"])
         return try parseSeries(body, symbol: symbol, provider: providerSymbol(symbol), now: now)
     }
 

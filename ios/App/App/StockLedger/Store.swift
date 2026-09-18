@@ -1,8 +1,8 @@
 import Foundation
 import Combine
 
-// 2.0 本地存储：全新的 JSON 账本（Documents/ledger-v2.json）。
-// 不读取 1.x 的 Capacitor Preferences 数据；升级安装时 2.0 从空白账本开始。
+// 原生版 1.0 沿用原生 2.0 测试版的 Documents/ledger-v2.json。
+// 不读取旧 Web 版的 Capacitor Preferences；产品重新编号不更改存储位置。
 
 enum LedgerStore {
     private static var fileURL: URL {
