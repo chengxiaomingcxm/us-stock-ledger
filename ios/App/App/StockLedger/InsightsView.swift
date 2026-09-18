@@ -348,7 +348,7 @@ struct ReturnCalendar: View, Equatable {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if months.isEmpty {
-                Text("尚未同步历史行情。同步后可查看每日与月度收益。")
+                Text(L10n.tr("尚未同步历史行情。同步后可查看每日与月度收益。"))
                     .font(.footnote).foregroundStyle(.secondary)
             } else {
                 HStack {
@@ -359,7 +359,7 @@ struct ReturnCalendar: View, Equatable {
                     }
                     .buttonStyle(.plain)
                     .disabled(monthIndex <= 0)
-                    .accessibilityLabel("上一个月")
+                    .accessibilityLabel(L10n.tr("上一个月"))
 
                     Spacer()
                     Text(month.isEmpty ? "—" : month)
@@ -373,7 +373,7 @@ struct ReturnCalendar: View, Equatable {
                     }
                     .buttonStyle(.plain)
                     .disabled(monthIndex >= months.count - 1)
-                    .accessibilityLabel("下一个月")
+                    .accessibilityLabel(L10n.tr("下一个月"))
                 }
                 ProfitRow(label: L10n.tr("本月收益"), value: stats.profit)
                     .font(.headline)
@@ -387,7 +387,7 @@ struct ReturnCalendar: View, Equatable {
                 // weeks and date identities rather than six nested range containers.
                 Grid(horizontalSpacing: 3, verticalSpacing: 3) {
                     GridRow {
-                        ForEach(["日", "一", "二", "三", "四", "五", "六"], id: \.self) { label in
+                        ForEach(L10n.weekdays, id: \.self) { label in
                             Text(label).font(.caption2).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
                         }
@@ -407,7 +407,7 @@ struct ReturnCalendar: View, Equatable {
                     legend(color: colors.loss(scheme), text: L10n.tr("亏损"))
                     Label(L10n.tr("待补全"), systemImage: "circle.dotted").font(.caption2).foregroundStyle(.secondary)
                 }
-                Text("每天格子里显示当日收益金额，点按查看按股票的明细。")
+                Text(L10n.tr("每天格子里显示当日收益金额，点按查看按股票的明细。"))
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -455,7 +455,7 @@ struct ReturnCalendar: View, Equatable {
 
     private func amountText(_ row: Engine.DayReturn?) -> String {
         guard let row else { return "" }
-        guard let profit = row.profit else { return "待补" }
+        guard let profit = row.profit else { return L10n.tr("待补") }
         return Fmt.compactSigned(profit)
     }
 

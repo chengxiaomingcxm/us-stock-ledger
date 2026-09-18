@@ -335,5 +335,18 @@ enum L10n {
         "疑似已有记录默认不选；确认是不同交易才勾选。已导入的银行编号禁止重复添加。": "Possible duplicates are unchecked by default; only check rows you know are different. Already-imported bank IDs cannot be added again.",
         "疑似已有记录：请核对金额、手续费和分红净额": "Possible duplicate: check amount, fee and net dividend.",
         "买卖联动现金，关联手续费只计一次；不会新增推算的入金、出金或期初余额。": "Buys and sells update cash and linked fees count once; no deposits, withdrawals or opening balance are inferred.",
+        "尚未同步历史行情。同步后可查看每日与月度收益。": "No history synced yet. Sync to see daily and monthly returns.",
+        "每天格子里显示当日收益金额，点按查看按股票的明细。": "Each cell shows that day's return; tap for per-symbol detail.",
+        "上一个月": "Previous month",
+        "下一个月": "Next month",
+        "待补": "—",
     ]
+}
+
+extension L10n {
+    /// 星期表头，随语言切换。
+    static var weekdays: [String] {
+        current == .en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                       : ["日", "一", "二", "三", "四", "五", "六"]
+    }
 }
