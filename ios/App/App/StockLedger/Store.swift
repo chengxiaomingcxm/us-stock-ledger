@@ -144,6 +144,7 @@ final class AppState: ObservableObject {
     @discardableResult
     func saveTrade(_ trade: Trade) -> Bool {
         var next = ledger
+        let isNew = !next.trades.contains { $0.id == trade.id }
         if let index = next.trades.firstIndex(where: { $0.id == trade.id }) {
             next.trades[index] = trade
         } else {
@@ -152,7 +153,7 @@ final class AppState: ObservableObject {
             next.trades.append(created)
         }
         guard commit(next) else { return false }
-        undoTrade = trade.id
+        if isNew { undoTrade = trade.id }
         return true
     }
 

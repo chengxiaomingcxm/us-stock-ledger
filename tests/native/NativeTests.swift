@@ -114,6 +114,9 @@ struct NativeTests {
 
         let failing = AppState(ledger: empty, settings: QuoteSettings(), persist: { _ in throw LedgerError.message("disk full") })
         check(!failing.commit(imported) && failing.ledger.trades.isEmpty, "save failure preserves in-memory ledger")
+        let editing = AppState(ledger: imported, settings: QuoteSettings(), persist: { _ in })
+        var edited = imported.trades[0]; edited.note = "changed note"
+        check(editing.saveTrade(edited) && editing.undoTrade == nil, "editing does not turn undo into deletion")
 
         var large = empty
         let start = MarketClock.utcDay("2010-01-01")!
