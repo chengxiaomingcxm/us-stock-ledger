@@ -81,6 +81,13 @@ final class AppState: ObservableObject {
     @Published private(set) var ledger: Ledger
     @Published var undoTrade: UUID?
     @Published var errorMessage: String?
+    /// 界面语言：中文 / English，跟随设置并持久化。
+    @Published var language: AppLanguage {
+        didSet {
+            L10n.current = language
+            UserDefaults.standard.set(language.rawValue, forKey: "app.language")
+        }
+    }
     /// 各股票上一交易日收盘价与日期，由行情同步填入；手动报价不参与今日盈亏基准。
     @Published var previousClose: [String: Decimal] = [:]
     @Published var previousCloseDates: [String: String] = [:]
@@ -113,8 +120,13 @@ final class AppState: ObservableObject {
         self.ledger = ledger
         self.quoteSettings = settings
         self.persist = persist
+        let saved = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "app.language") ?? "") ?? .zhHans
+        self.language = saved
+        L10n.current = saved
         rebuild(ledger)
     }
+
+    func setLanguage(_ value: AppLanguage) { language = value }
     private func rebuild(_ value: Ledger) {
         calculation?.cancel()
         generation += 1

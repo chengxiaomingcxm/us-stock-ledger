@@ -21,6 +21,9 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section("显示") {
+                Picker("语言", selection: Binding(get: { state.language }, set: { state.setLanguage($0) })) {
+                    ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
+                }
                 Picker("外观", selection: $theme) {
                     Text("跟随系统").tag("system")
                     Text("浅色").tag("light")

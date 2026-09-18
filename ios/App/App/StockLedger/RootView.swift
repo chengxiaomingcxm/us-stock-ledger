@@ -49,30 +49,31 @@ struct RootView: View {
             NavigationStack {
                 HoldingsView(onAdd: presentNewTrade, onOpenSettings: { tab = 3 })
             }
-            .tabItem { Label("持仓", systemImage: "wallet.bifold") }
+            .tabItem { Label(L10n.tr("持仓"), systemImage: "wallet.bifold") }
             .tag(0)
 
             NavigationStack {
                 TradesView(onAdd: presentNewTrade)
             }
-            .tabItem { Label("交易", systemImage: "list.bullet.rectangle") }
+            .tabItem { Label(L10n.tr("交易"), systemImage: "list.bullet.rectangle") }
             .tag(1)
 
             NavigationStack {
                 InsightsView()
             }
-            .tabItem { Label("收益", systemImage: "chart.line.uptrend.xyaxis") }
+            .tabItem { Label(L10n.tr("收益"), systemImage: "chart.line.uptrend.xyaxis") }
             .tag(2)
 
             NavigationStack {
                 SettingsView()
             }
-            .tabItem { Label("设置", systemImage: "gearshape") }
+            .tabItem { Label(L10n.tr("设置"), systemImage: "gearshape") }
             .tag(3)
         }
+        .id(state.language)
         .overlay(alignment: .bottom) {
             Button(action: presentNewTrade) {
-                Label("记一笔", systemImage: "plus")
+                Label(L10n.tr("记一笔"), systemImage: "plus")
                     .font(.headline)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 14)
@@ -80,7 +81,7 @@ struct RootView: View {
                     .foregroundStyle(.white)
             }
             .padding(.bottom, 68)
-            .accessibilityLabel("记一笔")
+            .accessibilityLabel(L10n.tr("记一笔"))
         }
         .sheet(isPresented: $showingTradeForm) {
             TradeFormView(trade: editingTrade)

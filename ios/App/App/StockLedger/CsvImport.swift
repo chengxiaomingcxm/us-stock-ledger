@@ -11,15 +11,15 @@ enum TradeField: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .date: return "日期"
-        case .symbol: return "代码"
-        case .side: return "方向"
-        case .quantity: return "数量"
-        case .price: return "单价"
-        case .fee: return "手续费"
-        case .note: return "备注"
-        case .currency: return "币种"
-        case .id: return "成交编号"
+        case .date: return L10n.tr("日期")
+        case .symbol: return L10n.tr("代码")
+        case .side: return L10n.tr("方向")
+        case .quantity: return L10n.tr("数量")
+        case .price: return L10n.tr("单价")
+        case .fee: return L10n.tr("手续费")
+        case .note: return L10n.tr("备注")
+        case .currency: return L10n.tr("币种")
+        case .id: return L10n.tr("成交编号")
         }
     }
 
@@ -50,10 +50,10 @@ enum RowStatus: String {
 
     var label: String {
         switch self {
-        case .ready: return "可导入"
-        case .suspected: return "疑似重复"
-        case .duplicate: return "已导入"
-        case .error: return "无法导入"
+        case .ready: return L10n.tr("可导入")
+        case .suspected: return L10n.tr("疑似重复")
+        case .duplicate: return L10n.tr("已导入")
+        case .error: return L10n.tr("无法导入")
         }
     }
 }
@@ -63,12 +63,12 @@ enum ImportMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var label: String { self == .trade ? "成交明细" : "资金流水" }
+    var label: String { L10n.tr(self == .trade ? "成交明细" : "资金流水") }
 
     var detail: String {
         self == .trade
-            ? "券商的买卖成交记录，用于补全持仓与已实现收益。"
-            : "入金、出金、分红与账户费用，用于补全现金余额。"
+            ? L10n.tr("券商的买卖成交记录，用于补全持仓与已实现收益。")
+            : L10n.tr("入金、出金、分红与账户费用，用于补全现金余额。")
     }
 }
 
@@ -79,14 +79,14 @@ enum CashField: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .date: return "日期"
-        case .type: return "类型"
-        case .symbol: return "代码"
-        case .amount: return "金额"
-        case .tax: return "税费"
-        case .note: return "备注"
-        case .currency: return "币种"
-        case .id: return "流水编号"
+        case .date: return L10n.tr("日期")
+        case .type: return L10n.tr("类型")
+        case .symbol: return L10n.tr("代码")
+        case .amount: return L10n.tr("金额")
+        case .tax: return L10n.tr("税费")
+        case .note: return L10n.tr("备注")
+        case .currency: return L10n.tr("币种")
+        case .id: return L10n.tr("流水编号")
         }
     }
 
@@ -138,7 +138,7 @@ struct ImportReport {
 
 enum CsvImportError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case let .message(text) = self { return text }; return nil }
+    var errorDescription: String? { if case let .message(text) = self { return L10n.tr(text) }; return nil }
 }
 
 enum CsvImport {

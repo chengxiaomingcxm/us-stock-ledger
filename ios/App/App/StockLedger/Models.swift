@@ -6,7 +6,7 @@ import Foundation
 enum TradeSide: String, Codable, CaseIterable, Identifiable {
     case buy, sell
     var id: String { rawValue }
-    var label: String { self == .buy ? "买入" : "卖出" }
+    var label: String { L10n.tr(self == .buy ? "买入" : "卖出") }
 }
 
 struct Trade: Identifiable, Codable, Hashable {
@@ -44,10 +44,10 @@ struct Quote: Identifiable, Codable, Hashable {
     /// 报价来源的中文说明；手动录入没有来源标记。
     var sourceLabel: String {
         switch source {
-        case "yahoo-close": return "美股收盘"
-        case "finnhub-live": return "Finnhub 报价"
-        case "custom-live": return "接口报价"
-        default: return "手动报价"
+        case "yahoo-close": return L10n.tr("美股收盘")
+        case "finnhub-live": return L10n.tr("Finnhub 报价")
+        case "custom-live": return L10n.tr("接口报价")
+        default: return L10n.tr("手动报价")
         }
     }
 
@@ -59,10 +59,10 @@ enum CashKind: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .deposit: return "入金"
-        case .withdraw: return "出金"
-        case .dividend: return "分红"
-        case .fee: return "账户费用"
+        case .deposit: return L10n.tr("入金")
+        case .withdraw: return L10n.tr("出金")
+        case .dividend: return L10n.tr("分红")
+        case .fee: return L10n.tr("账户费用")
         }
     }
 }
@@ -177,7 +177,7 @@ enum LedgerValidation {
 
 enum LedgerError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case let .message(text) = self { return text }; return nil }
+    var errorDescription: String? { if case let .message(text) = self { return L10n.tr(text) }; return nil }
 }
 
 // MARK: - 格式化
