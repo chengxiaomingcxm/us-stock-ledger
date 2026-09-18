@@ -17,9 +17,16 @@ enum LedgerStore {
     }
 
     static func save(_ ledger: Ledger) throws {
+        try write(encoded(ledger))
+    }
+
+    static func encoded(_ ledger: Ledger) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(ledger)
+        return try encoder.encode(ledger)
+    }
+
+    static func write(_ data: Data) throws {
         try data.write(to: fileURL, options: .atomic)
     }
 
@@ -140,6 +147,26 @@ final class AppState: ObservableObject {
         return true
     }
 
+    /// Automatic refresh must not JSON-encode the entire history on the scrolling thread.
+    private func commitRefresh(_ next: Ledger) async -> Bool {
+        let token = generation
+        do {
+            let data = try await Task.detached(priority: .utility) { try LedgerStore.encoded(next) }.value
+            guard !Task.isCancelled else { return false }
+            guard token == generation else {
+                errorMessage = "同步期间账本已修改，已保留最新账本，请重新同步行情。"
+                return false
+            }
+            try LedgerStore.write(data)
+            ledger = next
+            rebuild(next)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: - 交易
 
     @discardableResult
@@ -217,8 +244,8 @@ final class AppState: ObservableObject {
                 previousCloseDates.removeValue(forKey: symbol)
             }
         }
-        applyQuotes(incoming)
-        lastSyncedAt = Date()
+        if await applyQuotes(incoming) { lastSyncedAt = Date() }
+        else if let errorMessage, !Task.isCancelled { quoteErrors["账本"] = errorMessage }
     }
 
     /// 同步历史收盘价与交易日历：收益日历、月度统计和上一收盘价都基于这些数据。
@@ -275,12 +302,13 @@ final class AppState: ObservableObject {
             next.quotes.removeAll { $0.symbol == quote.symbol }
             next.quotes.append(quote)
         }
-        if commit(next) { historySyncedAt = Date() }
+        if await commitRefresh(next) { historySyncedAt = Date() }
+        else if let errorMessage, !Task.isCancelled { historyErrors["账本"] = errorMessage }
     }
 
     /// 合并报价：绝不覆盖更新的报价；同日手动报价优先于自动报价。
     @discardableResult
-    private func applyQuotes(_ incoming: [Quote]) -> Bool {
+    private func applyQuotes(_ incoming: [Quote]) async -> Bool {
         let open = Set(ledger.trades.map(\.symbol))
         var next = ledger
         var changed = false
@@ -291,8 +319,8 @@ final class AppState: ObservableObject {
             next.quotes.append(quote)
             changed = true
         }
-        if changed { commit(next) }
-        return changed
+        if changed { return await commitRefresh(next) }
+        return true
     }
 
     // MARK: - 现金
