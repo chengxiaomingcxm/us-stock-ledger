@@ -20,3 +20,6 @@ ios/App/App/capacitor-cordova-ios-plugins/
 ios/App/CapApp-SPM/.build/
 watch.txt
 log.txt
+log2.txt
+jobs.json
+jobs2.json
