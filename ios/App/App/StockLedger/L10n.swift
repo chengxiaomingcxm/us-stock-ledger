@@ -340,6 +340,7 @@ enum L10n {
         "上一个月": "Previous month",
         "下一个月": "Next month",
         "待补": "—",
+        "最近报价日收益": "Latest quote day return",
     ]
 }
 
