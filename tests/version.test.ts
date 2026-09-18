@@ -10,7 +10,7 @@ describe('版本一致性', () => {
     const marketing = [...pbx.matchAll(/MARKETING_VERSION = ([0-9.]+);/g)].map(m => m[1]);
     const current = [...pbx.matchAll(/CURRENT_PROJECT_VERSION = (\d+);/g)].map(m => m[1]);
     expect([...new Set(marketing)]).toEqual([pkg.version]);
-    expect([...new Set(current)]).toEqual(['9']);
-    expect(pkg.version).toBe('1.26.0');
+    expect([...new Set(current)]).toEqual(['2']);
+    expect(pkg.version).toBe('2.0.0');
   });
 });

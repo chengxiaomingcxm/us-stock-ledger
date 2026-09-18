@@ -18,3 +18,5 @@ ios/App/App/public/
 ios/App/App/capacitor.config.json
 ios/App/App/capacitor-cordova-ios-plugins/
 ios/App/CapApp-SPM/.build/
+watch.txt
+log.txt

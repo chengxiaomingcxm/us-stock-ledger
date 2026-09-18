@@ -29,6 +29,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Test ledger calculations and recovery
         run: pnpm test
+      - name: Test native ledger, HSBC import and large history
+        run: bash scripts/test-native.sh
       - name: Build application
         run: pnpm build
       - name: Sync native iOS project
