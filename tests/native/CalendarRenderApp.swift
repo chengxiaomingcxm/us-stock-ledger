@@ -12,11 +12,14 @@ final class CalendarRenderApp: UIResponder, UIApplicationDelegate {
         let args = ProcessInfo.processInfo.arguments
         let month = args.dropFirst().first ?? "2026-09"
         let count = month == "2026-02" ? 28 : month == "2026-09" ? 30 : 31
-        let days = (1...count).map { day in
-            Engine.DayReturn(date: String(format: "%@-%02d", month, day), previous: nil,
-                             profit: day == 10 ? nil : Decimal(day % 2 == 0 ? day : -day),
-                             cumulative: Decimal(day), contributions: [],
-                             missing: day == 10 ? ["TEST: missing close"] : [])
+        var days: [Engine.DayReturn] = []
+        for day in 1...count {
+            let amount: Decimal = Decimal(day % 2 == 0 ? day : -day)
+            let profit: Decimal? = day == 10 ? nil : amount
+            let date = String(format: "%@-%02d", month, day)
+            let missing: [String] = day == 10 ? ["TEST: missing close"] : []
+            days.append(Engine.DayReturn(date: date, previous: nil, profit: profit,
+                                        cumulative: Decimal(day), contributions: [], missing: missing))
         }
         let presentation = InsightsPresentation(days: month == "empty" ? [] : days)
         let content = NavigationStack {
