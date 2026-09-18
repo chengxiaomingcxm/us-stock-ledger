@@ -172,10 +172,12 @@ enum HSBCStatement {
     }
     static func similar(_ row: Row, _ ledger: Ledger) -> Bool {
         if let t = row.trade {
-            return ledger.trades.contains { $0.date == t.date && $0.symbol == t.symbol && $0.side == t.side && $0.quantity == t.quantity && $0.price == t.price }
+            // Old manual entries may have rounded prices or different fee attribution.
+            // Treat same day/symbol/side/quantity as suspicious, never silently add again.
+            return ledger.trades.contains { $0.date == t.date && $0.symbol == t.symbol && $0.side == t.side && $0.quantity == t.quantity }
         }
         if let c = row.cash {
-            return ledger.cash.contains { $0.date == c.date && $0.symbol == c.symbol && $0.kind == c.kind && $0.net == c.net }
+            return ledger.cash.contains { $0.date == c.date && ($0.symbol == c.symbol || $0.symbol == nil || $0.symbol == "") && $0.kind == c.kind && $0.net == c.net }
         }
         return false
     }

@@ -103,6 +103,17 @@ struct NativeTests {
         var first = imported.trades[0]; first.externalId = nil; manual.trades = [first]
         let suspicious = try HSBCStatement.parse(pages: [fixture], ledger: manual)
         check(suspicious.rows.contains { $0.duplicate && !$0.selected }, "manual trade duplicate warning")
+        manual.trades[0].price = Decimal(string: "10.13")!
+        let rounded = try HSBCStatement.parse(pages: [fixture], ledger: manual)
+        check(rounded.rows.contains { $0.duplicate && !$0.selected }, "rounded manual price still warns about duplication")
+        var historical = imported
+        historical.history.sessions = ["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07"]
+        historical.history.closes = [PricePoint(symbol: "TEST", date: "2026-01-01", price: 10),
+                                     PricePoint(symbol: "TEST", date: "2026-01-02", price: 10),
+                                     PricePoint(symbol: "TEST", date: "2026-01-05", price: 11)]
+        let history = Engine.dailyReturns(historical)
+        check(history.allSatisfy { $0.profit != nil }, "settled trades keep complete daily returns")
+        check(history.reduce(Decimal(0)) { $0 + ($1.profit ?? 0) } == Decimal(string: "2.21"), "daily returns reconcile to realized profit after closing")
         let decoded = try JSONDecoder().decode(Ledger.self, from: JSONEncoder().encode(imported))
         check(decoded.trades[0].settlementAmount == imported.trades[0].settlementAmount, "backup retains settlement")
         var oldObject = try JSONSerialization.jsonObject(with: JSONEncoder().encode(imported)) as! [String: Any]
