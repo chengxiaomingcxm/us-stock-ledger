@@ -10,16 +10,20 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         let screen = ProcessInfo.processInfo.arguments.dropFirst().first ?? "holdings"
-        let state = AppState(ledger: LedgerStore.demo())
-        // AppState 初始化会把语言重置为持久化的默认值，必须在它之后再切英文。
-        state.setLanguage(.en)
-        // 给示例账本补上「当日报价 + 上一收盘」，让今日盈亏与持仓显示真实数字而不是待补全。
+        // AppState 初始化从 UserDefaults 读取语言，因此在创建前先持久化英文。
+        UserDefaults.standard.set("en", forKey: "app.language")
+        // 给示例账本补上「当日报价」，让今日盈亏与持仓显示真实数字而不是待补全。
         let today = MarketClock.date()
-        let yesterday = MarketClock.previousWeekday(today) ?? "2026-09-17"
         var demo = LedgerStore.demo()
         for index in demo.quotes.indices { demo.quotes[index].date = today }
-        state.replace(with: demo)
-        state.previousClose = ["AAPL": 216.40, "MSFT": 498.75, "VOO": 569.30]
+        // 用 no-op persist 创建，避免裸 harness 向沙盒写盘（这也是上一版崩溃的原因）。
+        let state = AppState(ledger: demo, persist: { _ in })
+        let yesterday = MarketClock.previousWeekday(today) ?? "2026-09-17"
+        state.previousClose = [
+            "AAPL": Decimal(string: "216.40") ?? 0,
+            "MSFT": Decimal(string: "498.75") ?? 0,
+            "VOO": Decimal(string: "569.30") ?? 0,
+        ]
         state.previousCloseDates = ["AAPL": yesterday, "MSFT": yesterday, "VOO": yesterday]
 
         let window = UIWindow(frame: UIScreen.main.bounds)
