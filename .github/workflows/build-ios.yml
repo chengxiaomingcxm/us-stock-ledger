@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -31,6 +33,15 @@ jobs:
         run: pnpm test
       - name: Test native ledger, HSBC import and large history
         run: bash scripts/test-native.sh
+      - name: Render production calendar on iPhone simulator
+        run: bash scripts/test-calendar-rendering.sh
+      - name: Upload calendar rendering evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calendar-rendering
+          path: build/calendar-render/*.png
+          if-no-files-found: warn
       - name: Build application
         run: pnpm build
       - name: Sync native iOS project

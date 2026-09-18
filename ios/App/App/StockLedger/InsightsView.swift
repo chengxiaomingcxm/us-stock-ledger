@@ -329,6 +329,22 @@ struct ReturnCalendar: View, Equatable {
     private typealias Cell = InsightsPresentation.Cell
     private var cells: [Cell] { data.calendar[month]?.cells ?? [] }
 
+    private struct Week: Identifiable {
+        let id: String
+        let cells: [Cell]
+    }
+
+    private var weeks: [Week] {
+        guard !cells.isEmpty else { return [] }
+        var padded = cells
+        while padded.count % 7 != 0 {
+            padded.append(Cell(key: "trailing-\(padded.count)", day: nil, row: nil))
+        }
+        return stride(from: 0, to: padded.count, by: 7).map {
+            Week(id: padded[$0].key, cells: Array(padded[$0..<($0 + 7)]))
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if months.isEmpty {
@@ -367,22 +383,24 @@ struct ReturnCalendar: View, Equatable {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
-                VStack(spacing: 3) {
-                    HStack(spacing: 3) {
+                // A non-lazy Grid is measured as one complete List row. Use actual
+                // weeks and date identities rather than six nested range containers.
+                Grid(horizontalSpacing: 3, verticalSpacing: 3) {
+                    GridRow {
                         ForEach(["日", "一", "二", "三", "四", "五", "六"], id: \.self) { label in
-                            Text(label).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                            Text(label).font(.caption2).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity)
                         }
                     }
-                    ForEach(0..<6, id: \.self) { week in
-                        HStack(spacing: 3) {
-                            ForEach(0..<7, id: \.self) { weekday in
-                                let index = week * 7 + weekday
-                                if cells.indices.contains(index) { dayCell(cells[index]).frame(maxWidth: .infinity) }
-                                else { Color.clear.frame(maxWidth: .infinity).frame(height: 40) }
+                    ForEach(weeks) { week in
+                        GridRow {
+                            ForEach(week.cells) { cell in
+                                dayCell(cell)
                             }
-                        }.frame(height: 40)
+                        }
                     }
                 }
+                .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 12) {
                     legend(color: colors.gain(scheme), text: "盈利")
@@ -423,14 +441,15 @@ struct ReturnCalendar: View, Equatable {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                .frame(maxWidth: .infinity, minHeight: 40)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
                 .background(background(for: cell.row), in: RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
             .disabled(cell.row == nil)
             .accessibilityLabel(accessibilityLabel(cell))
         } else {
-            Color.clear.frame(height: 40)
+            Color.clear.frame(maxWidth: .infinity).frame(height: 44)
         }
     }
 
