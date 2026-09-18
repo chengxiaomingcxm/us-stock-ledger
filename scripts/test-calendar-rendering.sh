@@ -24,7 +24,8 @@ build_app() {
       sources+=("$source")
     fi
   done
-  xcrun swiftc -swift-version 5 -O -parse-as-library -sdk "$SDK" \
+  echo "Compiling $variant calendar harness"
+  xcrun swiftc -swift-version 5 -O -whole-module-optimization -parse-as-library -sdk "$SDK" \
     -target "$ARCH-apple-ios16.0-simulator" "${sources[@]}" \
     tests/native/CalendarRenderApp.swift -o "$app/CalendarRender"
   cat > "$app/Info.plist" <<EOF
