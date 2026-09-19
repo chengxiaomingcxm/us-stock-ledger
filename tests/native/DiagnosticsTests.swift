@@ -49,9 +49,13 @@ enum DiagnosticsTests {
         for index in 0..<400 {
             Diagnostics.record("FILL", String(repeating: "x", count: 100) + "\(index)")
         }
-        let trimmed = Diagnostics.text().split(separator: "\n")
-        NativeTests.check(trimmed.count <= 200, "超过上限后裁剪到 200 行以内")
-        NativeTests.check(trimmed.last?.contains("399") == true, "裁剪保留最后写入的内容")
-        NativeTests.check(trimmed.allSatisfy { $0.contains("  ") }, "裁剪后每行仍可读")
+        // 上限是「文件体积」：超过 32 KB 才裁回最后 200 行，所以两次裁剪之间行数会略多于 200。
+        // 真正的不变量是：体积有界 + 最新内容保留 + 旧内容被丢弃。
+        let log = Diagnostics.text()
+        NativeTests.check(log.utf8.count <= 32 * 1024, "日志体积不超过 32 KB")
+        let lines = log.split(separator: "\n")
+        NativeTests.check(lines.count < 400, "旧内容已被裁剪掉")
+        NativeTests.check(lines.last?.contains("399") == true, "裁剪保留最后写入的内容")
+        NativeTests.check(lines.allSatisfy { $0.contains("  ") }, "裁剪后每行仍可读")
     }
 }
