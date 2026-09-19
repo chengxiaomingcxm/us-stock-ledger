@@ -230,7 +230,8 @@ struct ImportView: View {
         notice = nil
         switch result {
         case .failure(let failure):
-            error = failure.localizedDescription
+            Diagnostics.record("IMPORT", "\(type(of: failure))：\(failure.localizedDescription)")
+            error = L10n.tr("无法读取所选文件，未导入任何记录。")
         case .success(let url):
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -243,9 +244,17 @@ struct ImportView: View {
                 }
                 remap(auto: true)
             } catch {
-                self.error = (error as? CsvImportError)?.errorDescription ?? error.localizedDescription
+                self.error = readable(error)
             }
         }
+    }
+
+    /// 本模块自己抛的错误是写给用户看的；系统错误（文件不可读、内容不是文本等）
+    /// 只在日志里留原文，界面上给一句可读的话。
+    private func readable(_ error: Error) -> String {
+        if let csv = error as? CsvImportError, let text = csv.errorDescription { return text }
+        Diagnostics.record("IMPORT", "\(type(of: error))：\(error.localizedDescription)")
+        return L10n.tr("无法读取所选文件，未导入任何记录。")
     }
 
     private func remap(auto: Bool) {
@@ -284,9 +293,7 @@ struct ImportView: View {
             }
         } catch {
             rows = []
-            let message = (error as? CsvImportError)?.errorDescription ?? error.localizedDescription
-            self.error = message
-            Diagnostics.record("IMPORT", message)
+            self.error = readable(error)
         }
     }
 

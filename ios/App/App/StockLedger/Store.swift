@@ -171,7 +171,12 @@ final class AppState: ObservableObject {
             return false
         }
         do { try persist(next) }
-        catch { errorMessage = error.localizedDescription; return false }
+        catch {
+            // 系统异常的原文只进日志；界面给一句可读、可行动的话。
+            Diagnostics.record("SAVE", "\(type(of: error))：\(error.localizedDescription)")
+            errorMessage = L10n.tr("账本保存失败，磁盘上的原文件没有被改动；请重试。")
+            return false
+        }
         ledger = next
         rebuild(next)
         return true
@@ -194,7 +199,8 @@ final class AppState: ObservableObject {
             rebuild(next)
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            Diagnostics.record("SAVE", "\(type(of: error))：\(error.localizedDescription)")
+            errorMessage = L10n.tr("账本保存失败，磁盘上的原文件没有被改动；请重试。")
             return false
         }
     }

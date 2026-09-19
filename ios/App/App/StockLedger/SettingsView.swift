@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("appearance.colors") private var colors = "green-up"
 
     @State private var exportText: String?
+    @State private var exportError: String?
     @State private var diagnosticsText: String?
     @State private var showingImporter = false
     @State private var pendingImport: Ledger?
@@ -82,7 +83,13 @@ struct SettingsView: View {
             } header: {
                 Text(L10n.tr("数据"))
             } footer: {
-                Text(L10n.tr("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。"))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.tr("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。"))
+                    // 导出失败以前是静默的：按钮变灰，既没有说明也没有日志。
+                    if let exportError {
+                        Text(exportError).foregroundStyle(.red)
+                    }
+                }
             }
 
             Section {
@@ -111,12 +118,12 @@ struct SettingsView: View {
         }
         .navigationTitle(L10n.tr("设置"))
         .task {
-            exportText = try? LedgerStore.exportText(state.ledger)
+            refreshExport()
             refreshDiagnostics()
         }
         .onChange(of: state.errorMessage) { _ in refreshDiagnostics() }
-        .onChange(of: state.ledger.trades.count) { _ in exportText = try? LedgerStore.exportText(state.ledger) }
-        .onChange(of: state.ledger.cash.count) { _ in exportText = try? LedgerStore.exportText(state.ledger) }
+        .onChange(of: state.ledger.trades.count) { _ in refreshExport() }
+        .onChange(of: state.ledger.cash.count) { _ in refreshExport() }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
             switch result {
             case .success(let url):
@@ -124,10 +131,12 @@ struct SettingsView: View {
                     let data = try Data(contentsOf: url)
                     pendingImport = try JSONDecoder().decode(Ledger.self, from: data)
                 } catch {
-                    importError = L10n.tr("备份文件无法读取：") + error.localizedDescription
+                    Diagnostics.record("RESTORE", "\(type(of: error))：\(error.localizedDescription)")
+                    importError = L10n.tr("这不是本应用的账本备份文件，未做任何改动。请选择由「导出账本备份」生成的文件。")
                 }
             case .failure(let error):
-                importError = error.localizedDescription
+                Diagnostics.record("RESTORE", "\(type(of: error))：\(error.localizedDescription)")
+                importError = L10n.tr("无法读取所选文件，未做任何改动。")
             }
         }
         .alert(L10n.tr("恢复这份备份？"), isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
@@ -157,6 +166,18 @@ struct SettingsView: View {
     private func refreshDiagnostics() {
         let text = Diagnostics.text()
         diagnosticsText = text.isEmpty ? nil : text
+    }
+
+    /// 导出失败要能看见：以前 `try?` 把失败吞掉，只表现为按钮变灰。
+    private func refreshExport() {
+        do {
+            exportText = try LedgerStore.exportText(state.ledger)
+            exportError = nil
+        } catch {
+            exportText = nil
+            Diagnostics.record("EXPORT", "\(type(of: error))：\(error.localizedDescription)")
+            exportError = L10n.tr("导出失败，账本数据仍在本机；请稍后重试。")
+        }
     }
 }
 

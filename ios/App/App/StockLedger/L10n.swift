@@ -216,6 +216,14 @@ enum L10n {
         "上次备份": "Last backup",
         "尚未备份": "Never",
         "CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。": "CSV imports preview before writing and never duplicate; backups are JSON and contain no keys. Export at least every 30 days.",
+
+        // 错误文案（用户可见）。系统异常的原文只进诊断日志，不进界面。
+        "账本保存失败，磁盘上的原文件没有被改动；请重试。": "Could not save the ledger. The file on disk is unchanged; please try again.",
+        "这不是本应用的账本备份文件，未做任何改动。请选择由「导出账本备份」生成的文件。": "This file is not a Stock Ledger backup. Nothing was changed. Pick a file created by Export ledger backup.",
+        "无法读取所选文件，未做任何改动。": "The selected file could not be read. Nothing was changed.",
+        "无法读取所选文件，未导入任何记录。": "The selected file could not be read. Nothing was imported.",
+        "无法读取所选结单，未导入任何记录。": "The selected statement could not be read. Nothing was imported.",
+        "导出失败，账本数据仍在本机；请稍后重试。": "Export failed. Your ledger is still on this device; please try again.",
         "示例": "Demo",
         "试用示例账本": "Try demo ledger",
         "退出示例模式": "Exit demo mode",
