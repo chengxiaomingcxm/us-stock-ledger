@@ -54,6 +54,8 @@ struct NativeTests {
         try SafetyTests.run()
         try DiagnosticsTests.run()
         try await DemoModeTests.run()
+        try CsvImportTests.run()
+        try ErrorPathTests.run()
         let empty = Ledger()
         // Draw out of content-stream order to exercise PDFKit's visual column reconstruction.
         let pdf = NSMutableData()
