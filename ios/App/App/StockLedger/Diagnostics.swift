@@ -31,7 +31,7 @@ enum Diagnostics {
         if let previous = lastLine(), !previous.hasSuffix(marker("EXIT")) {
             record("UNCLOSED", L10n.tr("上次运行没有正常结束（闪退或被强制退出）。"))
         }
-        record("START", "\(version) · \(ProcessInfo.processInfo.operatingSystemVersionString) · \(L10n.current.rawValue)")
+        record("START", "\(version()) · \(ProcessInfo.processInfo.operatingSystemVersionString) · \(L10n.current.rawValue)")
     }
 
     /// 记一条日志。`message` 为空时只写标记（例如进入后台的 `EXIT`）。
