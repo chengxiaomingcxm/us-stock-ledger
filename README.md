@@ -79,4 +79,6 @@ Development happens on `deepseek-dev`; reviewed changes are merged to `main`, an
 
 ## Screenshots
 
-Coming soon (English UI).
+| Holdings | Trades | Returns | Settings | Calendar |
+| --- | --- | --- | --- | --- |
+| ![Holdings](docs/screenshots/holdings.png) | ![Trades](docs/screenshots/trades.png) | ![Returns](docs/screenshots/returns.png) | ![Settings](docs/screenshots/settings.png) | ![Calendar](docs/screenshots/calendar.png) |

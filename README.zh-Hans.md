@@ -79,4 +79,6 @@ bash scripts/build-unsigned-ios.sh       # macOS，产出 IPA
 
 ## 截图
 
-即将补充（英文界面）。
+| 持仓 | 交易 | 收益 | 设置 | 日历 |
+| --- | --- | --- | --- | --- |
+| ![持仓](docs/screenshots/holdings.png) | ![交易](docs/screenshots/trades.png) | ![收益](docs/screenshots/returns.png) | ![设置](docs/screenshots/settings.png) | ![日历](docs/screenshots/calendar.png) |
