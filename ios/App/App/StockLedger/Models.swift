@@ -164,13 +164,13 @@ enum LedgerValidation {
 
     static func positive(_ value: Decimal, _ label: String, allowZero: Bool = false) throws -> Decimal {
         if value < 0 || (!allowZero && value == 0) {
-            throw LedgerError.message("\(label)必须\(allowZero ? "不小于 0" : "大于 0")。")
+            throw LedgerError.message(L10n.tr("{}必须{}。", label, allowZero ? L10n.tr("不小于 0") : L10n.tr("大于 0")))
         }
         return value
     }
 
     static func note(_ value: String, _ label: String = "备注") throws -> String {
-        guard value.count <= 500 else { throw LedgerError.message("\(label)最多 500 字。") }
+        guard value.count <= 500 else { throw LedgerError.message(L10n.tr("{}最多 500 字。", label)) }
         return value
     }
 }

@@ -13,8 +13,10 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
         // `log show`; print output is block-buffered and lost on terminate.
         NSLog("HARNESS-START")
         let screen = ProcessInfo.processInfo.arguments.dropFirst().first ?? "holdings"
+        // Set English before building the demo ledger so its sample notes are English too.
+        L10n.current = .en
         let state = AppState(ledger: LedgerStore.demo(), persist: { _ in })
-        // Proper language switch, so state.language and L10n.current agree and the
+        // Proper switch afterwards, so state.language and L10n.current agree and the
         // Settings picker shows English too.
         state.setLanguage(.en)
         NSLog("HARNESS state-ready lang=\(L10n.current.rawValue) screen=\(screen)")

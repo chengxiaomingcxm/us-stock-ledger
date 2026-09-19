@@ -243,7 +243,7 @@ struct QuoteFormView: View {
 
     private func save() {
         guard let value = Decimal(string: price.replacingOccurrences(of: ",", with: ""), locale: Locale(identifier: "en_US")), value > 0 else {
-            error = "请填写大于 0 的股价。"
+            error = L10n.tr("请填写大于 0 的股价。")
             return
         }
         state.setQuote(symbol: symbol, price: value, date: date)
