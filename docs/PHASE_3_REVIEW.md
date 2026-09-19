@@ -70,7 +70,7 @@ throw CsvImportError.message("\(label)无效")
 
 | run | commit | 结果 |
 | --- | --- | --- |
-| 见下方「提交记录」 | `5dad3d8` | 被同分支下一次 push 按 `concurrency` 取消（同 ref 只保留最后一次） |
-| 待填 | `portfolio/error-handling` tip | 待 CI |
+| `35441309443` | `5dad3d8` | 被同分支下一次 push 按 `concurrency` 取消（同 ref 只保留最后一次，取消不算失败） |
+| `35441570618` | `6b59991` | **success** |
 
-> 分支 `portfolio/error-handling` 的 push 会**自动**触发 `build-ios.yml`（本阶段起 `portfolio/**` 已加入触发条件）。
+> 分支 `portfolio/error-handling` 的 push 会**自动**触发 `build-ios.yml`（本阶段起 `portfolio/**` 已加入触发条件），不需要手动 dispatch。
