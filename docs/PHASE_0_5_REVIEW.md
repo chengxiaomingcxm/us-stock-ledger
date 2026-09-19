@@ -3,6 +3,8 @@
 > 基线：`portfolio/audit` @ `5e2b306`（含 Phase 0 审计报告）。
 > 本阶段分支：`portfolio/core-safety`。**未触碰 `main`**。
 > 只处理 Phase 0 发现的 P0-1、P0-2，以及为 `Engine` 建立最小测试护栏。
+>
+> 本文描述的是**当前最终实现**。第一轮实现（`5a436b6`）在 Codex 审查后被修正，见「修复历史」。
 
 ## Files Changed
 
@@ -40,6 +42,31 @@
 
 **未包含**：README、LICENSE、Demo Mode、UI Polish、依赖升级、CI 工作流、重构、格式化整文件、生成物、密钥、调试数据。
 
+### 修复历史
+
+| 提交 | 内容 |
+| --- | --- |
+| `5a436b6` | 第一轮实现（P0-1 + P0-2）。Codex 审查后发现有 5 处缺陷，见下。 |
+| `7420ca3` | 第二轮：修复审查发现的 5 个问题（恢复失败错误解除保护、既有超卖绕过守卫、删除失败无反馈、CSV 假报成功、同日 sequence 排序不确定） |
+| `b2e693e` | `deleteTrade` 写盘失败时不再提前清掉 `undoTrade` |
+| `8ffa75d` | 测试基础设施修正：注入的 persist 在成功分支必须真的写盘；两处解码改 `try?` + 断言，失败报 `FAIL:` 而不是把进程抛崩 |
+| 本轮（第三轮） | 消除重复排序（`HoldingsView` 的相关交易列表也改用统一规则）、保存路径短路、失败路径必须留下 `errorMessage` 的契约断言 |
+
+第二轮相对第一轮的差异：
+
+```
+ ios/App/App/StockLedger/CsvImport.swift    |   6 +-
+ ios/App/App/StockLedger/Engine.swift       |  26 +++--
+ ios/App/App/StockLedger/ImportView.swift   |   9 +-
+ ios/App/App/StockLedger/L10n.swift         |   2 +
+ ios/App/App/StockLedger/Models.swift       |  21 +++-
+ ios/App/App/StockLedger/SettingsView.swift |   4 +-
+ ios/App/App/StockLedger/Store.swift        |  42 +++++---
+ ios/App/App/StockLedger/TradesView.swift   |  14 ++-
+ tests/native/SafetyTests.swift             | 164 ++++++++++++++++++++++++++++-
+ 9 files changed, 252 insertions(+), 36 deletions(-)
+```
+
 ## P0-1 Fix
 
 **问题**：`LedgerStore.load()` 用两处 `try?` 把「文件不存在」「读取失败」「解码失败」全部折叠成空账本；而 `save` 使用 `.atomic` 整体替换原文件 → 一次静默的空账本加载之后，任何一次保存都会永久覆盖仍可抢救的原文件。
@@ -54,8 +81,8 @@
 | `Store.swift` `AppState.init` | `ledger` 参数改为 `Ledger? = nil`；nil 时走 `loadResult()` 并按结果分支初始化 |
 | `Store.swift` `commit(_:)` | `loadFailure != nil` 时直接拒绝，不调用 `persist` |
 | `Store.swift` `commitRefresh(_:)` | 同上（自动行情同步也不会写入） |
-| `Store.swift` `replaceFromBackup(_:)` | 新增：用户明确选择备份恢复时解除保护并整体替换 |
-| `SettingsView.swift` | 「替换并恢复」按钮改调 `replaceFromBackup` |
+| `Store.swift` `replaceFromBackup(_:)` | 新增：用户明确选择备份恢复时，**只有在备份真正写盘成功后才**解除保护并整体替换；失败时保护状态、内存账本与原文件都不变 |
+| `SettingsView.swift` | 「替换并恢复」按钮改调 `replaceFromBackup` 并**检查返回值**，失败时弹错而不是静默关闭 |
 | `RootView.swift` | 顶部横幅显示读取失败与「写入已暂停」 |
 | `L10n.swift` | 新增中英词条 |
 
@@ -66,6 +93,8 @@
 | 首次启动无文件 | 空账本，可写入 | 空账本，可写入（`.missing`） |
 | 有效文件 | 正常读取 | 正常读取（`.loaded`） |
 | 文件损坏 | 静默变空账本；下一次保存即覆盖原文件 | 显式失败 + 顶部横幅；`commit` / `commitRefresh` 全部拒绝；**原文件字节不变** |
+| 损坏后想恢复，但写盘失败 | —— | `replaceFromBackup` 返回 `false`，`loadFailure` **原样恢复**，之后交易/现金/报价/导入/清空/示例全部仍被拒，原文件字节不变 |
+| 损坏后想恢复，写盘成功 | —— | 解除保护、内存账本更新、备份落盘，普通保存恢复 |
 | 损坏后想恢复 | 只能卸载重装 | 设置 → 从备份恢复（唯一放行的写入路径） |
 
 **实现方式**：`load()` 被整体替换而非保留（唯一调用点是 `AppState.init` 的默认参数），避免留下仍会静默返回空账本的旧入口。
@@ -80,15 +109,30 @@
 
 | 位置 | 变化 |
 | --- | --- |
-| `Engine.swift` `oversoldTrade(_ trades: [Trade]) -> Trade?` | 新增纯函数：按 `(date, sequence)` 重放，返回第一笔「卖出 > 当时可用股数」的交易；全部合法返回 `nil` |
-| `Store.swift` `AppState.introducesOversell(_:)` | 私有守卫：`next` 违反不变量且 `ledger` 原本合法时，写入 `errorMessage` 并拒绝 |
+| `Engine.swift` `Engine.Oversell` + `oversells(_ ledger:)` | 新增纯函数：按时间顺序重放，返回**每个**「卖出 > 当时可用股数」的时点，键为 `symbol|date|sequence`，值为超额股数（负持仓向后续时点累计） |
+| `Store.swift` `AppState.introducesOversell(_:)` | 私有守卫：把旧账本的违规建成 `[键: 超额]` 字典；`next` 的每个违规键都能找到且超额未扩大才放行，否则写 `errorMessage` 并拒绝 |
 | `Store.swift` `saveTrade(_:)` | 在 `commit` 之前调用守卫 |
-| `Store.swift` `deleteTrade(_:)` | 改为 `@discardableResult -> Bool`，在 `commit` 之前调用守卫 |
-| `L10n.swift` | 新增超卖说明的中英词条（带 `{}` 占位符：代码 + 日期） |
+| `Store.swift` `deleteTrade(_:)` | 改为 `@discardableResult -> Bool`，在 `commit` 之前调用守卫；写盘成功后才清 `undoTrade` |
+| `Store.swift` `undoLastTrade()` | 改为 `@discardableResult -> Bool`，失败不再静默 |
+| `TradesView.swift` | 滑动删除与「撤销新增」检查返回值，失败弹出「操作未完成」alert |
+| `Engine.swift` / `Models.swift` | 排序规则收敛成一处：`Ledger.sortedTrades/sortedCash`，显式用数组下标做最终判据 |
+| `CsvImport.swift` | `merge` / `mergeCash` 复用同一排序规则（`mergeCash` 顺带从两次排序减为一次） |
+| `L10n.swift` | 新增超卖、操作失败的中英词条（带 `{}` 占位符：代码 + 日期） |
 
 **为什么必须逐笔重放**：`Jan1 买 100 / Jan2 卖 100 / Jan3 买 100` 的最终持仓是 100，看起来合法；删掉 Jan1 的买入后 Jan2 就已超卖。只比较最终数量会漏掉这个洞，因此守卫按时间顺序重放（与 Web 版 `src/ledger.ts` `calculate` 的逐笔检查口径一致）。
 
-**历史脏数据不被锁死**：若账本在本次改动前就已经不合法（修复前写入的负持仓），守卫放行，用户可以继续修正账本，而不是被永久拒之门外。
+**为什么不能「旧账本不合法就一律放行」**（第一轮的缺陷）：只要账本里已经有任何一笔超卖，之后所有仍然非法的写入都会被放行——包括新增另一只股票的超卖。现在的规则是**逐违规时点比较**：
+
+| 情况 | 判定 | 原因 |
+| --- | --- | --- |
+| 删掉违规卖出 / 补更早买入缩小超额 | 允许 | 违规键不变、超额变小或消失——这是在**修复** |
+| 与违规无关的合法操作（如新增 MSFT 买入） | 允许 | `next` 的违规集合与旧账本完全一致 |
+| 新增另一只股票的超卖（NVDA Buy 10 / Sell 20） | 拒绝 | 出现旧账本里不存在的违规键 |
+| 把已有超卖从 10 股扩大到 50 股 | 拒绝 | 同一违规键，超额变大 |
+| 把违规提前到更早的历史时点 | 拒绝 | 违规键的 `date` 变了，视为新违规 |
+| 删掉买入导致中间时点悬空 | 拒绝 | 产生旧账本里不存在的新违规键 |
+
+**性能**：正常账本（无违规）只跑一遍重放就返回；只有确实存在违规时才再跑一遍旧账本，用于比对。
 
 **双层保护**：`TradeFormView` 的「当前可卖 / 一半 / 全部」（`TradesView.swift:224-227`）仍然保留为 UI 层提示；本次新增的是不可绕过的状态层守卫。
 
@@ -128,6 +172,8 @@
 | 损坏账本 | `.failed`；`loadFailure != nil`；界面回退空账本（只读） |
 | 损坏账本 + 保存 | `saveTrade`、`setQuote`、`commit` 全部被拒绝，且**原文件字节逐一比对未变** |
 | 恢复 | `replaceFromBackup` 放行、`loadFailure` 解除、备份内容落盘 |
+| 恢复写盘失败（第二轮） | `replaceFromBackup` 返回 `false`；`loadFailure` 仍在；`errorMessage` 非空；内存账本为空；原文件字节不变；随后 `commit` / `saveTrade` / `setQuote` / `saveCash` / `setOpening` / `replace(with:)` / `clearAll` / `loadDemo` 全部被拒且原文件字节仍不变 |
+| 恢复写盘成功后（第二轮） | `loadFailure` 解除、内存账本更新、磁盘内容可解码、普通 `saveTrade` 恢复成功 |
 
 **P0-2**
 
@@ -143,20 +189,48 @@
 | 买 100 / 卖 80 → 改小买入为 50 | 拒绝，数量仍为 100 |
 | 修复前的脏账本（先有卖出） | 不阻塞后续修正买入 |
 
+**P0-2/既有超卖（第二轮新增，`legacyOversellStillGuardsNewDamage`）**
+
+脏账本违规键 = `AAPL|2026-01-02|0`，超额 10 股。
+
+| 用例 | 断言 |
+| --- | --- |
+| S1 删掉违规卖出完全修复 | 允许，账本剩 1 笔 |
+| S2 新增 NVDA Buy 10 / Sell 20 | 买入允许；卖出被拒，账本笔数不变，`errorMessage` 非空 |
+| S3 超卖从 10 扩大到 50 | 被拒，数量仍为 10，`errorMessage` 非空 |
+| S4 新增 MSFT Buy 10 | 允许；`Engine.oversells` 仍只有 1 条（MSFT 未引入新违规，AAPL/MSFT 互不串联） |
+| 违规提前到更早时点 | 被拒 |
+| 补更早买入把超额从 10 降到 6 | 允许，且同一时点超额确为 6 |
+
+其它：
+
+| 用例 | 断言 |
+| --- | --- |
+| 同日/买后卖 | 买入与同日卖出都允许 |
+| 同日/卖后买 | 被识别为历史超卖，账本为空 |
+| 删除关键买入 | 被拒、账本不变、**`errorMessage` 非空**（界面只能靠它告知用户） |
+| 排序/同日 sequence 重复 | 平手时保持数组顺序；交换数组顺序语义随之确定；**30 笔完全平手仍严格保持数组顺序** |
+| 排序/sequence 不同 | 由 sequence 决定，与数组顺序无关 |
+
 ## Test Results
 
 | 套件 | 命令 | 结果 |
 | --- | --- | --- |
-| Native（Swift） | `bash scripts/test-native.sh`（macOS / CI） | **PASS: 243 assertions**（基线 110 → **新增 133**）；25,000 closes / 4,000 sessions / 1,000 trades 耗时 0.398s；主线程心跳 74 次 |
+| Native（Swift） | `bash scripts/test-native.sh`（macOS / CI） | **PASS: 252 assertions**（基线 110）；25,000 closes / 4,000 sessions / 1,000 trades 耗时 0.24s；主线程心跳 46 |
 | Unit/Integration（Vitest） | `pnpm test` | **148 passed / 148**（13 files），与基线一致 |
 | 质量门禁 | `scripts/verify.ps1` | `QUALITY GATE PASSED` |
 
-断言数对比证据：
+断言数轨迹：
 
 ```
-基线   run 35414879383 (deepseek-dev @ ae079d5): PASS: 110 assertions
-本阶段 run 35418185280 (portfolio/core-safety @ 5a436b6): PASS: 243 assertions
+基线        run 35414879383 (deepseek-dev @ ae079d5):          PASS: 110 assertions
+第一轮      run 35418185280 (portfolio/core-safety @ 5a436b6): PASS: 243 assertions
+第二轮      run 35420223985 (portfolio/core-safety @ 7420ca3): FAILURE —— 测试自身缺陷，见下
+本轮        run 35422399163 (portfolio/core-safety @ 8ffa75d): PASS: 252 assertions
 ```
+
+**失败 run 的根因（自我记录，不是业务代码问题）**：第二轮新增的 `restoreFailureKeepsTheProtection` 注入的 persist 闭包在**非失败分支里既不抛错也不写盘**，于是恢复「成功」后磁盘上仍是那份损坏文件，紧接着的 `try JSONDecoder().decode(...)` 抛出 `DecodingError`，把测试进程打崩（`Trace/BPT trap: 5`）——所以日志里只有崩溃、没有任何 `FAIL:` 输出。
+现已修正：注入的 persist 在正常分支真正调用 `LedgerStore.save`；两处解码改为 `try?` + 断言，同类问题以后会报 `FAIL:` 而不是崩溃。
 
 ### Native 测试基线
 
@@ -165,9 +239,9 @@
 | 项 | 值 |
 | --- | --- |
 | 工作流 | `build-ios.yml`（workflow_dispatch，ref `portfolio/core-safety`） |
-| run_id | `35418185280` |
-| head_sha | `5a436b6f19e8fa485f339ad88fe094477dd580fa` |
-| 结论 | **success**（全部步骤通过：pnpm test → native → 日历渲染 → 截图 → build → cap sync → IPA） |
+| run_id | `35422399163` |
+| head_sha | `8ffa75d8120641bd772f0324b1e76688885666f6` |
+| 结论 | **success**，19/19 步（pnpm test → native → 日历渲染 → 截图 → build → cap sync → IPA） |
 
 > 未发现既有 Engine Bug：金标准期望值与 Swift 实现完全一致。若不一致，按任务书要求应停止并上报。
 
@@ -177,17 +251,23 @@
 | --- | --- |
 | `tsc --noEmit && vite build` | 通过（1749 modules transformed，vite 7.3.6） |
 | Native 编译（`swiftc -swift-version 5 -O`，含两个新测试文件） | 通过 |
-| IPA 构建（`scripts/build-unsigned-ios.sh`） | 通过（run 35418185280 的 `StockLedger-unsigned-IPA` artifact） |
+| IPA 构建（`scripts/build-unsigned-ios.sh`） | 通过（run 35422399163 的 `StockLedger-unsigned-IPA` artifact） |
 | 日历渲染 / 英文截图 harness | 通过（未因 `RootView` 新增横幅或 `AppState` 构造签名变化而回归） |
+
+## Known Limitations（刻意保留的行为）
+
+1. **违规键是 `symbol|date|sequence`**：如果某个未来路径在手动录入时重排同日 sequence，已有的违规会被当成「新违规」而保守拒绝（fail-closed，不会造成数据损坏）。当前 `saveTrade` 编辑既有交易保留 sequence、`deleteTrade` 只做删除、导入路径（`replace(with:)`）不走该守卫，所以实际不可达。
+2. **守卫是「拒绝并提示」，不是「自动修正」**：用户改小一笔买导致历史超卖时只能得到一句提示；提示已包含代码与日期，但不会指出应改哪一笔。
+3. **原生 UI 层没有自动化断言**：本轮新增的 alert、预览保留、恢复失败提示只靠编译 + 人工核对。状态层已用「失败必须留下 `errorMessage`」的契约把界面唯一依赖的失败通道固定下来。
 
 ## Remaining Risks
 
-1. **Swift 引擎仍只被「单点」覆盖。** 新增的 14 组金标准只覆盖 `summary` / `cashTotals` / `dailyReturns` / `todayPnl` 的主干与主要异常分支；`SplitEvent` 拆股路径、`InsightsPresentation` 预计算、`LedgerDerived` 缓存复用仍无断言。
+1. **Swift 引擎仍只被「单点」覆盖。** 14 组金标准只覆盖 `summary` / `cashTotals` / `dailyReturns` / `todayPnl` 的主干与主要异常分支；`SplitEvent` 拆股路径、`InsightsPresentation` 预计算、`LedgerDerived` 缓存复用仍无断言。
 2. **`Ledger.format` 仍未校验**（Phase 0 P2-1）。当前 `.failed` 只在解码失败时触发；若未来格式真的变化，旧 App 会尝试按格式 2 解码并可能「成功解码出错误内容」，而不是进入保护状态。
 3. **`fileURLOverride` 是一个可变的全局测试接缝**（`Store.swift`）。它是 `internal`，仅在测试中非 nil；若将来有人误用会在生产代码里造成路径重定向。已用注释标注用途。
-4. **守卫是「拒绝并提示」，不是「自动修正」。** 用户改小一笔买导致历史超卖时只能得到一句提示；提示已包含代码与日期，但不会指出应改哪一笔。
-5. **`ledger-v2.json` 仍无版本化快照/轮转备份。** P0-1 修复保证了「损坏时不被覆盖」，但没有提供「损坏后的自动回滚点」；恢复仍依赖用户提前导出的备份。
-6. **原生 UI 层无自动化断言。** 顶部横幅、`replaceFromBackup` 的交互仍靠人工核对；`SettingsView` 的恢复路径缺少 `startAccessingSecurityScopedResource()`（Phase 0 P2-4）未处理。
+4. **`ledger-v2.json` 仍无版本化快照/轮转备份。** P0-1 修复保证了「损坏时不被覆盖」，但没有提供「损坏后的自动回滚点」；恢复仍依赖用户提前导出的备份。
+5. **`SettingsView` 的恢复路径缺少 `startAccessingSecurityScopedResource()`**（Phase 0 P2-4）未处理，某些文件提供方上可能读取失败。
+6. **`Engine.oversells` 的性能路径没有测试覆盖** —— 现有性能测试走的是 `commit` 而不是 `saveTrade`；按量级（≤5000 笔）可忽略，且正常账本已短路为单次重放。
 7. **CI 仍不在 PR 上运行**（Phase 0 P1-5），因此本阶段的 native 验证依赖手动 `workflow_dispatch`。
 
 ## Intentionally Not Fixed
@@ -196,3 +276,5 @@
 - P1-1 Hero 截图降级状态、P1-2 无 LICENSE、P1-3 README 章节、P1-4 E2E 未接入、P1-5 PR 不触发 CI、P1-6 原生引擎覆盖、P1-7 门禁平台绑定、P1-8 文档数字过期、P1-9 英文残留、P1-10 Import 截图、P1-11 合成日历数据、P1-12 `AGENTS.md` 描述不符。
 - 全部 P2 / P3。
 - 未修改任何依赖（`package.json` / `pnpm-lock.yaml` 未变）、未改数据格式、未改 CI 工作流、未重构 `Engine` 与 `Store` 的既有 API（只新增）。
+- 未改 `Ledger.format = 2`、`ledger-v2.json`、Bundle ID 或任何持久化结构 —— 不需要迁移。
+- 未合并 `main`、未发布正式包、未改版本号与标签、未使用真实 PDF / CSV / API Key / 交易数据作为 fixture、未删除或弱化任何已有测试、未改 Quality Gate。

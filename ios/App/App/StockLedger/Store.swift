@@ -252,9 +252,11 @@ final class AppState: ObservableObject {
     /// （同一股票、同一日期、同一 sequence）且超额股数没有扩大，才认为这次改动是在**修复**历史脏数据。
     /// 新增另一只股票的超卖、扩大已有超卖、把违规提前到更早的时点、或删掉买入导致中间时点悬空，全部拒绝。
     private func introducesOversell(_ next: Ledger) -> Bool {
+        let violations = Engine.oversells(next)
+        guard !violations.isEmpty else { return false }  // 正常账本（绝大多数保存）只重放一次
         var existing: [Engine.Oversell.ID: Decimal] = [:]
         for item in Engine.oversells(ledger) { existing[item.id, default: 0] += item.quantity }
-        for item in Engine.oversells(next) {
+        for item in violations {
             guard let allowed = existing[item.id], item.quantity <= allowed else {
                 errorMessage = L10n.tr("{} 在 {} 的卖出超过当时持仓，账本未改动。", item.symbol, item.date)
                 return true

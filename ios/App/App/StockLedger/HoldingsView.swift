@@ -188,8 +188,7 @@ struct PositionDetailView: View {
                             .disabled(state.syncingQuotes)
                     }
                     Section(L10n.tr("相关交易")) {
-                        let related = state.ledger.trades.filter { $0.symbol == symbol }
-                            .sorted { $0.date == $1.date ? $0.sequence > $1.sequence : $0.date > $1.date }
+                        let related = Array(Ledger.sortedTrades(state.ledger.trades.filter { $0.symbol == symbol }).reversed())
                         if related.isEmpty {
                             Text(L10n.tr("暂无该股票的交易记录。")).foregroundStyle(.secondary)
                         } else {

@@ -126,6 +126,7 @@ enum SafetyTests {
                                    tax: nil, symbol: nil, note: ""))
         broken.setOpening(CashOpening(amount: decimal("1"), date: "2026-01-01", note: ""))
         NativeTests.check(!broken.replace(with: backup), "P0-1/恢复失败 — CSV 导入路径仍被拒绝")
+        NativeTests.check(broken.errorMessage != nil, "P0-1/恢复失败 — 导入失败也留下可展示的原因")
         broken.clearAll()
         broken.loadDemo()
         let stillIntact = try Data(contentsOf: file)
@@ -173,6 +174,7 @@ enum SafetyTests {
         let beforeS2 = another.ledger.trades.count
         NativeTests.check(!another.saveTrade(trade(3, .sell, "20", "2026-01-05", symbol: "NVDA")),
                           "已有超卖/S2 — 新增另一只股票的超卖被拒绝")
+        NativeTests.check(another.errorMessage != nil, "已有超卖/S2 — 留下可展示的失败原因")
         NativeTests.check(another.ledger.trades.count == beforeS2, "已有超卖/S2 — 账本未改变")
 
         // Scenario 3：把已有超卖从 10 股扩大到 50 股 → 拒绝。
@@ -180,6 +182,7 @@ enum SafetyTests {
         var worse = dirty().trades[0]
         worse.quantity = decimal("50")
         NativeTests.check(!growing.saveTrade(worse), "已有超卖/S3 — 扩大已有超卖被拒绝")
+        NativeTests.check(growing.errorMessage != nil, "已有超卖/S3 — 留下可展示的失败原因")
         NativeTests.check(growing.ledger.trades[0].quantity == decimal("10"), "已有超卖/S3 — 账本未改变")
 
         // 把违规提前到更早的历史时点 → 拒绝。
@@ -273,6 +276,9 @@ enum SafetyTests {
         let deletion = state([buy, trade(1, .sell, "80", "2026-01-06")])
         NativeTests.check(!deletion.deleteTrade(buyID), "P0-2/删除关键买入 — 被拒绝")
         NativeTests.check(deletion.ledger.trades.count == 2, "P0-2/删除关键买入 — 账本未改变")
+        // 原生界面没有自动化视图测试，因此把「失败必须留下可展示的原因」当成状态层契约来固定：
+        // 界面只能靠 errorMessage 告知用户，它一旦为空就是静默失败。
+        NativeTests.check(deletion.errorMessage != nil, "P0-2/删除关键买入 — 留下可展示的失败原因")
 
         // 时序陷阱：最终数量看起来合法，但中间时点会变成负持仓。
         let firstID = UUID()
