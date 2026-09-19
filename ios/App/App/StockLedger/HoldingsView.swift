@@ -13,7 +13,7 @@ struct HoldingsView: View {
 
     var body: some View {
         List {
-            if !state.ledger.trades.isEmpty, BackupReminder.overdue(lastExport) {
+            if !state.ledger.trades.isEmpty, !state.demo, BackupReminder.overdue(lastExport) {
                 Section {
                     HStack(spacing: 10) {
                         Label(L10n.tr(lastExport > 0 ? "距上次备份已超过 30 天" : "还没有导出过账本备份"), systemImage: "clock.badge.exclamationmark")
@@ -38,11 +38,20 @@ struct HoldingsView: View {
             }
             Section(L10n.tr("我的持仓")) {
                 if summary.open.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.tr("从第一笔投资开始")).font(.headline)
-                        Text(L10n.tr(state.ledger.trades.isEmpty ? "记录第一笔买入，自动计算成本与收益。" : "当前没有持仓。"))
-                            .font(.footnote).foregroundStyle(.secondary)
-                        Button(L10n.tr("记录第一笔交易"), action: onAdd)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if state.ledger.trades.isEmpty {
+                            Text(L10n.tr("还没有任何记录")).font(.headline)
+                            Text(L10n.tr("可以记一笔自己的交易，也可以先载入示例看看完整效果。导入入口在「设置」里。"))
+                                .font(.footnote).foregroundStyle(.secondary)
+                            Button(L10n.tr("记录第一笔交易"), action: onAdd)
+                            Button(L10n.tr("试用示例账本")) { state.enterDemo() }
+                            Button(L10n.tr("导入数据"), action: onOpenSettings)
+                        } else {
+                            Text(L10n.tr("从第一笔投资开始")).font(.headline)
+                            Text(L10n.tr("当前没有持仓。"))
+                                .font(.footnote).foregroundStyle(.secondary)
+                            Button(L10n.tr("记录第一笔交易"), action: onAdd)
+                        }
                     }
                     .padding(.vertical, 6)
                 } else {
@@ -120,7 +129,7 @@ struct TodayCard: View {
                     }
                 }
                 .font(.footnote)
-                .disabled(state.syncingQuotes || state.ledger.trades.isEmpty)
+                .disabled(state.syncingQuotes || state.ledger.trades.isEmpty || state.demo)
             }
             Text(result.pnl == nil ? L10n.tr("待补全") : Fmt.signedMoney(result.pnl))
                 .font(.largeTitle.weight(.bold))
@@ -185,7 +194,7 @@ struct PositionDetailView: View {
                         }
                         Button(L10n.tr("更新股价"), action: onEditQuote)
                         Button(L10n.tr("同步行情")) { Task { await state.refreshQuotes() } }
-                            .disabled(state.syncingQuotes)
+                            .disabled(state.syncingQuotes || state.demo)
                     }
                     Section(L10n.tr("相关交易")) {
                         let related = Array(Ledger.sortedTrades(state.ledger.trades.filter { $0.symbol == symbol }).reversed())

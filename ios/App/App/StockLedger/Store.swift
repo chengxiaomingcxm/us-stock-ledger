@@ -56,44 +56,8 @@ enum LedgerStore {
         return String(decoding: try encoder.encode(ledger), as: UTF8.self)
     }
 
-    /// 示例账本：仅用于体验界面与计算，不包含任何真实数据。
-    static func demo() -> Ledger {
-        func amount(_ text: String) -> Decimal {
-            Decimal(string: text, locale: Locale(identifier: "en_US")) ?? 0
-        }
-        var ledger = Ledger()
-        var sequence = 0
-        func trade(_ symbol: String, _ side: TradeSide, _ date: String,
-                   _ quantity: String, _ price: String, _ fee: String, _ note: String = "") -> Trade {
-            let record = Trade(id: UUID(), sequence: sequence, symbol: symbol, side: side,
-                               date: date, quantity: amount(quantity), price: amount(price),
-                               fee: amount(fee), note: note, source: "manual", externalId: nil)
-            sequence += 1
-            return record
-        }
-        ledger.trades = [
-            trade("VOO", .buy, "2026-04-02", "15", "512.30", "1", L10n.tr("示例：买入 ETF")),
-            trade("AAPL", .buy, "2026-06-15", "20", "198.40", "1"),
-            trade("AAPL", .buy, "2026-07-06", "10", "212.75", "1"),
-            trade("AAPL", .sell, "2026-08-12", "12", "231.20", "1.05", L10n.tr("示例：部分止盈")),
-            trade("MSFT", .buy, "2026-05-20", "8", "428.90", "1"),
-        ]
-        ledger.quotes = [
-            Quote(symbol: "AAPL", price: amount("229.15"), date: "2026-09-17", source: nil, fetchedAt: nil),
-            Quote(symbol: "MSFT", price: amount("512.40"), date: "2026-09-17", source: nil, fetchedAt: nil),
-            Quote(symbol: "VOO", price: amount("578.05"), date: "2026-09-17", source: nil, fetchedAt: nil),
-        ]
-        ledger.opening = CashOpening(amount: amount("5000"), date: "2026-04-01", note: L10n.tr("示例期初余额"))
-        ledger.cash = [
-            CashRecord(id: UUID(), sequence: 0, date: "2026-04-01", kind: .deposit, amount: amount("20000"),
-                       tax: nil, symbol: nil, note: L10n.tr("示例入金"), source: "manual", externalId: nil),
-            CashRecord(id: UUID(), sequence: 1, date: "2026-08-15", kind: .dividend, amount: amount("6.24"),
-                       tax: amount("0.94"), symbol: "AAPL", note: L10n.tr("示例分红"), source: "manual", externalId: nil),
-            CashRecord(id: UUID(), sequence: 2, date: "2026-09-01", kind: .fee, amount: amount("1.25"),
-                       tax: nil, symbol: nil, note: L10n.tr("示例账户费用"), source: "manual", externalId: nil),
-        ]
-        return ledger
-    }
+    /// 示例账本：全部为虚构数据，仅用于体验界面与计算。生成逻辑见 `DemoData`。
+    static func demo(now: Date = Date()) -> Ledger { DemoData.ledger(now: now) }
 }
 
 @MainActor
@@ -106,6 +70,8 @@ final class AppState: ObservableObject {
     }
     /// 非 nil 表示磁盘上的账本存在但读不出来：此时暂停一切写入以保护原文件。
     @Published private(set) var loadFailure: String?
+    /// 示例模式：界面显示的是虚构数据，且所有写入都停在内存里，真实账本文件不受影响。
+    @Published private(set) var demo = false
     /// 界面语言：中文 / English，跟随设置并持久化。
     @Published var language: AppLanguage {
         didSet {
@@ -143,20 +109,21 @@ final class AppState: ObservableObject {
     private var lastHistoryFailure = ""
     private let persist: (Ledger) throws -> Void
 
+    /// 「磁盘读取结果 → 初始状态」只在这里定义一次：启动与退出示例模式共用。
+    private static func restore(_ result: LedgerStore.LoadResult) -> (ledger: Ledger, failure: String?) {
+        switch result {
+        case .loaded(let value): return (value, nil)
+        case .missing: return (Ledger(), nil)
+        case .failed(let reason): return (Ledger(), reason)
+        }
+    }
+
     /// `ledger` 为 nil 时从磁盘读取；显式传入账本（测试 / 示例 / 截图工具）时完全不碰磁盘。
     init(ledger: Ledger? = nil, settings: QuoteSettings = QuoteService.load(),
          persist: @escaping (Ledger) throws -> Void = LedgerStore.save) {
-        switch ledger.map(LedgerStore.LoadResult.loaded) ?? LedgerStore.loadResult() {
-        case .loaded(let value):
-            self.ledger = value
-            self.loadFailure = nil
-        case .missing:
-            self.ledger = Ledger()
-            self.loadFailure = nil
-        case .failed(let reason):
-            self.ledger = Ledger()
-            self.loadFailure = reason
-        }
+        let restored = Self.restore(ledger.map(LedgerStore.LoadResult.loaded) ?? LedgerStore.loadResult())
+        self.ledger = restored.ledger
+        self.loadFailure = restored.failure
         self.quoteSettings = settings
         self.persist = persist
         let saved = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "app.language") ?? "") ?? .zhHans
@@ -191,9 +158,14 @@ final class AppState: ObservableObject {
         }
     }
     /// Save first; failed persistence leaves both the in-memory and disk ledger intact.
-    /// 账本读取失败期间拒绝一切写入，避免用空账本覆盖原文件。
+    /// 示例模式是只读沙盒：写入一律明确拒绝，既不落盘也不假装成功；
+    /// 账本读取失败期间也会拒绝一切写入，避免用空账本覆盖原文件。
     @discardableResult
     func commit(_ next: Ledger) -> Bool {
+        if demo {
+            errorMessage = L10n.tr("示例模式是只读的，不会修改账本；请先退出示例模式。")
+            return false
+        }
         guard loadFailure == nil else {
             errorMessage = L10n.tr(LedgerStore.unreadableMessage)
             return false
@@ -207,7 +179,8 @@ final class AppState: ObservableObject {
 
     /// Automatic refresh must not JSON-encode the entire history on the scrolling thread.
     private func commitRefresh(_ next: Ledger) async -> Bool {
-        guard loadFailure == nil else { return false }
+        // 示例模式不发行情请求；即使走到了这里也绝不落盘。
+        guard !demo, loadFailure == nil else { return false }
         let token = generation
         do {
             let data = try await Task.detached(priority: .utility) { try LedgerStore.encoded(next) }.value
@@ -475,8 +448,28 @@ final class AppState: ObservableObject {
 
     // MARK: - 示例与清空
 
-    func loadDemo() {
-        replace(with: LedgerStore.demo())
+    /// 进入示例模式：只读沙盒，真实账本文件从头到尾不被触碰。
+    /// 已知边界（`ponytail:`）：示例模式不跨启动保留——重启就回到用户自己的数据。
+    /// 这是刻意选择，让示例数据永远不可能变成用户的账本。升级路径：用 `@AppStorage` 记住状态。
+    func enterDemo() {
+        demo = true
+        undoTrade = nil
+        errorMessage = nil
+        let sample = LedgerStore.demo()
+        ledger = sample
+        rebuild(sample)
+    }
+
+    /// 退出示例模式：重新从磁盘读取，连「账本读不出来」的保护状态一起恢复。
+    func exitDemo() {
+        demo = false
+        undoTrade = nil
+        errorMessage = nil
+        let restored = Self.restore(LedgerStore.loadResult())
+        ledger = restored.ledger
+        loadFailure = restored.failure
+        rebuild(restored.ledger)
+        if let failure = restored.failure { Diagnostics.record("LOAD", failure) }
     }
 
     func clearAll() {

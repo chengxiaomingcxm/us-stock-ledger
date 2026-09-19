@@ -46,7 +46,7 @@ struct QuoteSourceView: View {
                         Label(L10n.tr("立即同步持仓行情"), systemImage: "arrow.clockwise")
                     }
                 }
-                .disabled(state.syncingQuotes)
+                .disabled(state.syncingQuotes || state.demo)
                 ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
                     Label("\(entry.key)：\(entry.value)", systemImage: "wifi.exclamationmark")
                         .font(.footnote).foregroundStyle(.secondary)

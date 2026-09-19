@@ -14,10 +14,7 @@ struct SettingsView: View {
     @State private var pendingImport: Ledger?
     @State private var importError: String?
     @State private var shareBox: ShareBox?
-    @State private var showingDemoConfirm = false
-    @State private var showingClearConfirm = false
     @AppStorage("backup.lastExport") private var lastExport = 0.0
-    @AppStorage("demo.loaded") private var demoLoaded = false
 
     var body: some View {
         List {
@@ -89,14 +86,15 @@ struct SettingsView: View {
             }
 
             Section {
-                Button(L10n.tr("载入示例账本")) { showingDemoConfirm = true }
-                if demoLoaded {
-                    Button(L10n.tr("退出示例并清空账本"), role: .destructive) { showingClearConfirm = true }
+                if state.demo {
+                    Button(L10n.tr("退出示例模式")) { state.exitDemo() }
+                } else {
+                    Button(L10n.tr("试用示例账本")) { state.enterDemo() }
                 }
             } header: {
                 Text(L10n.tr("示例"))
             } footer: {
-                Text(L10n.tr("示例账本包含几笔买卖、分红和费用，只用于体验界面与计算；载入会替换当前账本，建议先导出备份。"))
+                Text(L10n.tr("示例包含 5 只持仓、30 多笔历史交易、分红与出入金，全部为虚构数据；只存在于内存中，不会写入或覆盖你的账本，退出后立即回到你自己的数据。"))
             }
 
             Section(L10n.tr("帮助")) {
@@ -152,24 +150,6 @@ struct SettingsView: View {
             ShareSheet(items: [box.value]) { completed in
                 if completed { lastExport = Date().timeIntervalSince1970 }
             }
-        }
-        .alert(L10n.tr("载入示例账本？"), isPresented: $showingDemoConfirm) {
-            Button(L10n.tr("取消"), role: .cancel) {}
-            Button(L10n.tr("载入示例"), role: .destructive) {
-                state.loadDemo()
-                demoLoaded = true
-            }
-        } message: {
-            Text(L10n.tr("将替换当前的") + " \(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))。")
-        }
-        .alert(L10n.tr("清空当前账本？"), isPresented: $showingClearConfirm) {
-            Button(L10n.tr("取消"), role: .cancel) {}
-            Button(L10n.tr("清空"), role: .destructive) {
-                state.clearAll()
-                demoLoaded = false
-            }
-        } message: {
-            Text(L10n.tr("账本会恢复为空。请确认已导出备份，清空操作无法撤销。"))
         }
     }
 

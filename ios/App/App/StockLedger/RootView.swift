@@ -42,6 +42,7 @@ struct RootView: View {
     private struct RefreshTrigger: Equatable {
         var settings: QuoteSettings
         var active: Bool
+        var demo: Bool
     }
 
     var body: some View {
@@ -72,7 +73,26 @@ struct RootView: View {
         }
         .id(state.language)
         .safeAreaInset(edge: .top) {
-            if state.loadFailure != nil {
+            if state.demo {
+                HStack(spacing: 8) {
+                    Text("DEMO")
+                        .font(.caption2.weight(.black))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(.orange, in: Capsule())
+                        .foregroundStyle(.white)
+                    Text(L10n.tr("示例数据，不会保存；你的账本未被修改。"))
+                        .font(.footnote)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(L10n.tr("示例模式：界面显示的是虚构示例数据，你的账本未被修改。"))
+                    Spacer(minLength: 0)
+                    Button(L10n.tr("退出")) { state.exitDemo() }
+                        .font(.footnote.weight(.semibold))
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(.orange.opacity(0.22))
+            } else if state.loadFailure != nil {
                 Text(L10n.tr(LedgerStore.unreadableMessage))
                     .font(.footnote)
                     .frame(maxWidth: .infinity)
@@ -82,16 +102,19 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            Button(action: presentNewTrade) {
-                Label(L10n.tr("记一笔"), systemImage: "plus")
-                    .font(.headline)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 14)
-                    .background(.tint, in: Capsule())
-                    .foregroundStyle(.white)
+            // 示例模式是只读的，不摆一个按下去只会报错的入口。
+            if !state.demo {
+                Button(action: presentNewTrade) {
+                    Label(L10n.tr("记一笔"), systemImage: "plus")
+                        .font(.headline)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 14)
+                        .background(.tint, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+                .padding(.bottom, 68)
+                .accessibilityLabel(L10n.tr("记一笔"))
             }
-            .padding(.bottom, 68)
-            .accessibilityLabel(L10n.tr("记一笔"))
         }
         .sheet(isPresented: $showingTradeForm) {
             TradeFormView(trade: editingTrade)
@@ -102,9 +125,10 @@ struct RootView: View {
             // 进入后台时留一个「正常结束」标记；下次启动看到它才算干净退出。
             if phase == .background { Diagnostics.record("EXIT") }
         }
-        .task(id: RefreshTrigger(settings: state.quoteSettings, active: scenePhase == .active)) {
+        .task(id: RefreshTrigger(settings: state.quoteSettings, active: scenePhase == .active, demo: state.demo)) {
             let interval = state.quoteSettings.interval
-            guard scenePhase == .active, interval > 0 else { return }
+            // 示例模式不发行情请求：既没有意义，也可能产生费用。
+            guard scenePhase == .active, interval > 0, !state.demo else { return }
             while !Task.isCancelled {
                 await state.refreshQuotes()
                 do { try await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000) }

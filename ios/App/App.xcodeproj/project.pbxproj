@@ -33,6 +33,7 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		AB2600010000000000000011 /* HSBCStatement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2600010000000000000001 /* HSBCStatement.swift */; };
 		AC2600010000000000000011 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2600010000000000000001 /* Diagnostics.swift */; };
+		AD2600010000000000000011 /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2600010000000000000001 /* DemoData.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +65,7 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		AB2600010000000000000001 /* HSBCStatement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/HSBCStatement.swift; sourceTree = "<group>"; };
 		AC2600010000000000000001 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/Diagnostics.swift; sourceTree = "<group>"; };
+		AD2600010000000000000001 /* DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/DemoData.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +126,7 @@
 				AA260001000000000000000E /* L10n.swift */,
 				AB2600010000000000000001 /* HSBCStatement.swift */,
 				AC2600010000000000000001 /* Diagnostics.swift */,
+				AD2600010000000000000001 /* DemoData.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -228,6 +231,7 @@
 				AA260001000000000000001E /* L10n.swift in Sources */,
 				AB2600010000000000000011 /* HSBCStatement.swift in Sources */,
 				AC2600010000000000000011 /* Diagnostics.swift in Sources */,
+				AD2600010000000000000011 /* DemoData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

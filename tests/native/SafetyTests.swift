@@ -128,7 +128,10 @@ enum SafetyTests {
         NativeTests.check(!broken.replace(with: backup), "P0-1/恢复失败 — CSV 导入路径仍被拒绝")
         NativeTests.check(broken.errorMessage != nil, "P0-1/恢复失败 — 导入失败也留下可展示的原因")
         broken.clearAll()
-        broken.loadDemo()
+        // 示例模式必须自己就不落盘：它绕过了 loadFailure 保护（commit 的守卫为 demo || loadFailure == nil），
+        // 所以这里只靠「写入不落盘」这一条来保住原文件。
+        broken.enterDemo()
+        broken.exitDemo()
         let stillIntact = try Data(contentsOf: file)
         NativeTests.check(stillIntact == before, "P0-1/恢复失败 — 交易/现金/报价/导入/清空/示例均未写入")
 
