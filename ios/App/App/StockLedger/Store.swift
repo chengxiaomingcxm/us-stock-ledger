@@ -242,8 +242,9 @@ final class AppState: ObservableObject {
         var next = ledger
         next.trades.removeAll { $0.id == id }
         guard !introducesOversell(next) else { return false }
+        guard commit(next) else { return false }
         if undoTrade == id { undoTrade = nil }
-        return commit(next)
+        return true
     }
 
     /// 手动录入路径的交易不变量：任何时点的卖出都不得超过当时持仓。
