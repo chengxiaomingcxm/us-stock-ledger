@@ -106,17 +106,27 @@ pnpm e2e      # playwright test
 | `package.json` | +1 script | 新增 `"e2e": "playwright test"`（`docs/PORTFOLIO_AUDIT.md` 的允许改动清单里已列 `e2e` script） |
 | `README.md` / `README.zh-Hans.md` | 新增「Testing & CI」一节 + 修正过期事实 | CI 命令、iOS 只能在 macOS runner 构建且未签名、Lint 偏离的完整说明；顺带把 `Vitest (147)` 更正为 148、CI 一行补上 ubuntu 的 checks |
 | `AGENTS.md` | 修正 CI 事实 | 新增 `checks.yml` 说明；「PR 不触发任何 CI」→「PR 触发 checks.yml，但不触发 build-ios.yml」；E2E 段落更新 |
+| `src/v126.css` | 2 处取值修正 | `.cash-totals` 的 `1fr` → `minmax(0,1fr)`（基础 3 列 + ≤520px 的 2 列），修掉 320px 视口下的横向溢出（见上） |
+| `e2e/preferences.spec.ts` | 断言可定位化 | 溢出时返回越界元素描述而非 `false`；判定口径不变 |
 
 未改动：`build-ios.yml` 的步骤链、任何产品代码、任何依赖。
 
 ## 验证
 
-- **E2E 本地实测**：`pnpm e2e` → **26 passed (50.6s)**（Windows + 配置里的 Chrome 路径分支）。
-- `scripts/verify.ps1` → **QUALITY GATE PASSED**（`pnpm test` 148 项、`tsc --noEmit && vite build`）。
-- 本次 push 会同时触发 `checks.yml`（新工作流验证自身）与 `build-ios.yml`。
+- **E2E 本地实测**：`pnpm e2e` → **26 passed (50.6s)**（Windows + 配置里的 Chrome 路径分支）；CSS 修完后再跑 → **26 passed (44.0s)**。
+- **全页面余量探针**（修完后）：持仓 / 交易 / 收益 / 设置 四页在 300 / 320 / 340 / 380px 下 `over=0`，没有第二个同类近失点。
+- `scripts/verify.ps1` → **QUALITY GATE PASSED**（`pnpm test` 148 项、`tsc --noEmit && vite build`）；pre-commit hook 在提交时又跑了一遍，同样是 PASSED。
+- 本次 push（`ecc0ebe`）同时触发 `checks.yml` 与 `build-ios.yml`，**两个都绿**（见下表）。
 
 ## CI 记录
 
-| run | commit | 结果 |
-| --- | --- | --- |
-| 见 `git log`（`portfolio/error-handling` tip） | — | 待本轮 push 后填入 |
+| run | commit | 工作流 | 结果 |
+| --- | --- | --- | --- |
+| 35445633090 | `9455b5d` | Checks | ❌ E2E 在 `preferences.spec.ts` 报 320px 横向溢出（首次发现上面那个缺陷） |
+| 35445633120 | `9455b5d` | Build unsigned iOS IPA | ⏹ 被同分支后一次 push 按 `concurrency` 取消 |
+| 35445762190 | `4eeaf34` | Checks | ❌ 装了 `fonts-noto-cjk` 后仍在同一处失败 → 排除「缺中文字体」 |
+| 35445762221 | `4eeaf34` | Build unsigned iOS IPA | ✅ |
+| **35447167998** | `ecc0ebe` | **Checks** | **✅ 绿**（`pnpm test` 148 passed → `pnpm build` → `pnpm e2e` **26 passed (12.6s)**，全在 ubuntu-latest；13:55:15 → 13:56:09，约 54 秒） |
+| 35447168023 | `ecc0ebe` | Build unsigned iOS IPA | ✅ 绿（15 步全过：单测 → 原生 swiftc 测试 → 模拟器日历 → 模拟器截图 → `pnpm build` → `cap sync ios` → 未签名 IPA 上传；13:55:13 → 14:09:07，约 14 分钟） |
+
+> 同分支连续 push 会按 `concurrency: checks-${{ github.ref }}` 取消上一次 run，所以只看 tip 的那次；`4eeaf34` 那次 iOS 构建成功、Checks 失败，`ecc0ebe` 这次两者都触发。

@@ -170,6 +170,8 @@ gh run watch <run-id> -R chengxiaomingcxm/us-stock-ledger --interval 45 --exit-s
 - 每条命令前加 `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" + [System.Environment]::GetEnvironmentVariable("Path","Machine");`，否则 `gh` / `pnpm` / `Get-Content` 可能找不到。
 - 用 `pnpm.cmd`（`pnpm.ps1` 会被执行策略拦）。
 - `gh ... --log` 输出巨大且带 ANSI 转义：先 `Out-File -Encoding utf8 .scratch/x.txt`，再用 node 读（`.replace(/^\uFEFF/,'')` 去 BOM）。
+- **`portfolio/*` 分支没有配 upstream**：裸 `git push` 会报 `fatal: The current branch ... has no upstream branch`，而 `git status -sb` 又只显示 `## portfolio/xxx`（没有 `[ahead 1]`），很容易误判成「推成功了」。一律用 `git push origin <branch>`，并用 `git ls-remote origin refs/heads/<branch>` 或远端 run 列表确认。
+- **PowerShell 的 `>` / `>>` 重定向写的是 UTF-16**，`read_file` 会当成二进制读不了。要可读就先 `node 脚本 > 文件` 或让 node 自己 `fs.writeFileSync(..., 'utf8')`；读已有文件时用 node 判 BOM（`FF FE` → `utf16le`）。
 - 所有临时/草稿文件放 `.scratch/`（已在 `.gitignore:26`）。
 
 ---
