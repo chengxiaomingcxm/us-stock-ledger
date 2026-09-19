@@ -186,7 +186,9 @@ struct PositionDetailView: View {
                         LabeledContent(L10n.tr("报价日期"), value: position.quote?.date ?? "—")
                         LabeledContent(L10n.tr("报价来源"), value: position.quote?.sourceLabel ?? "—")
                         if let quote = position.quote, Engine.isStaleQuote(quote) {
-                            Label(L10n.tr("报价较早（\(quote.date)），可用下方按钮同步最新行情。"), systemImage: "clock")
+                            // 不能把日期插进 key：`L10n.tr` 查的是静态表，插值后的 key 永远查不到，
+                            // 英文界面会原样显示中文。按 L10n 里已有的两段拼接。
+                            Label(L10n.tr("报价较早（") + quote.date + L10n.tr("），可用下方按钮同步最新行情。"), systemImage: "clock")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                         if let previous = state.previousClose[position.symbol] {

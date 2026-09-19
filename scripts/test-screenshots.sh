@@ -53,6 +53,15 @@ for screen in holdings trades returns settings calendar import; do
   [ "$size" -ge 20000 ] || { echo "FAIL: $screen.png 只有 $size 字节，疑似空白画面"; exit 1; }
 done
 
+# 日历那一屏必须真的有收益数据：它曾因为没订阅 AppState 而停在空态，
+# 而空态截图同样有 100+ KB，体积守卫拦不住。
+if ! xcrun simctl spawn "$UDID" log show --last 5m \
+  --predicate 'process == "Screens" AND eventMessage CONTAINS "HARNESS derived screen=calendar"' 2>/dev/null \
+  | grep -qE 'days=[1-9][0-9]* months=[1-9][0-9]*'; then
+  echo "FAIL: 日历屏没有收益数据（期望 days>0 且 months>0）"
+  exit 1
+fi
+
 echo '--- last 3 minutes of Screens process log ---'
 xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "Screens"' 2>/dev/null | tail -120 || true
 echo '--- HARNESS markers ---'

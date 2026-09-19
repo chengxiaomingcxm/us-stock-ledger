@@ -49,7 +49,12 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
         window.makeKeyAndVisible()
         NSLog("HARNESS key-visible")
         self.window = window
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { NSLog("HARNESS alive+3s") }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            NSLog("HARNESS alive+3s")
+            // 给截图脚本一个可断言的口径：这一屏到底有没有数据。
+            // 空态截图同样有一百多 KB，体积守卫拦不住。
+            NSLog("HARNESS derived screen=\(screen) days=\(state.dayReturns.count) months=\(state.insights.months.count)")
+        }
         return true
     }
 
@@ -63,7 +68,7 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
         case "settings":
             NavigationStack { SettingsView() }.environmentObject(state)
         case "calendar":
-            NavigationStack { calendarList(state) }.environmentObject(state)
+            NavigationStack { CalendarOnlyView() }.environmentObject(state)
         case "import":
             NavigationStack { ImportView() }.environmentObject(state)
         default:
@@ -71,9 +76,18 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
         }
     }
 
-    /// 与 `InsightsView` 里的日历同一个视图，但单独一屏以便取图。
-    /// 数据取示例账本自己重放出来的每日收益，不再是手写的假序列。
-    private func calendarList(_ state: AppState) -> some View {
+}
+
+/// 与 `InsightsView` 里的日历同一个视图，但单独一屏以便取图。
+/// 数据取示例账本自己重放出来的每日收益，不再是手写的假序列。
+///
+/// 必须是**带 `@EnvironmentObject` 的 View**：把 `state` 当普通参数传进来、在层级里直接读
+/// `state.insights`，SwiftUI 不会订阅 `AppState`，`derived` 重算完这一屏不会刷新，
+/// 截图就停在空态（已踩过：`calendar.png` 显示 “No history synced yet”）。
+private struct CalendarOnlyView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
         List {
             Section("Returns calendar") {
                 ReturnCalendar(data: state.insights).equatable()
