@@ -84,7 +84,7 @@ enum DemoData {
         var note: String
     }
 
-    /// 入金 / 出金 / 分红 / 账户费用。现金余额在整段时间里保持为正——
+    /// 入金 / 出金 / 分红 / 账户费用。每日收盘后的现金余额在整段时间里保持为正——
     /// 示例要像一笔真能成交的账户，不能出现透支。（`DemoModeTests` 会重放现金链来守这条不变量。）
     private static let cashSeeds: [CashSeed] = [
         CashSeed(at: 1, kind: .deposit, amount: "22000", tax: nil, symbol: nil, note: L10n.tr("示例入金")),

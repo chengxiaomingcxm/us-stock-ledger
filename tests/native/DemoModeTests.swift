@@ -81,23 +81,22 @@ enum DemoModeTests {
         NativeTests.check(sample.opening != nil, "示例含期初余额")
         NativeTests.check(sample.cash.map(\.date) == sample.cash.map(\.date).sorted(), "示例现金流水按时间排列")
 
-        // 现金链：任一天余额都不得为负。示例要像一笔真能成交的账户，不能出现透支。
-        var flows: [(date: String, delta: Decimal)] = []
-        if let opening = sample.opening { flows.append((opening.date, opening.amount)) }
+        // 现金链：只断言「每日收盘后的余额」不得为负。
+        // 同一交易日内的交易与流水谁先谁后，app 从未定义（界面只按日期汇总），
+        // 按某个具体顺序去断言会把一个臆想的假设写进测试。
+        var byDay: [String: Decimal] = [:]
+        if let opening = sample.opening { byDay[opening.date, default: 0] += opening.amount }
         for trade in sample.trades {
-            flows.append((trade.date, trade.side == .buy ? -trade.netCash : trade.netCash))
+            byDay[trade.date, default: 0] += trade.side == .buy ? -trade.netCash : trade.netCash
         }
-        for item in sample.cash { flows.append((item.date, item.net)) }
+        for item in sample.cash { byDay[item.date, default: 0] += item.net }
         var balance = Decimal(0)
         var overdrawn: String?
-        let ordered = flows.enumerated()
-            .sorted { ($0.element.date, $0.offset) < ($1.element.date, $1.offset) }
-            .map(\.element)
-        for flow in ordered {
-            balance += flow.delta
-            if balance < 0, overdrawn == nil { overdrawn = flow.date }
+        for day in byDay.keys.sorted() {
+            balance += byDay[day] ?? 0
+            if balance < 0, overdrawn == nil { overdrawn = day }
         }
-        NativeTests.check(overdrawn == nil, "示例现金余额全程为正（最早透支 \(overdrawn ?? "—")）")
+        NativeTests.check(overdrawn == nil, "示例现金每日收盘后均不为负（最早透支 \(overdrawn ?? "—")）")
 
         // 确定性：同一锚点必须生成同样的日期、价格与数量（id 是随机 UUID，不参与比较）。
         let again = DemoData.ledger(now: anchor)
