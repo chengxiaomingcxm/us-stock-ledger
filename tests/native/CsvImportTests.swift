@@ -21,11 +21,11 @@ enum CsvImportTests {
     """
 
     static func run() throws {
-        valid()
-        missingFields()
-        invalidFile()
-        duplicates()
-        oversellBatch()
+        try valid()
+        try missingFields()
+        try invalidFile()
+        try duplicates()
+        try oversellBatch()
         messages()
     }
 
@@ -98,7 +98,9 @@ enum CsvImportTests {
             text: "Date,Symbol,Side,Quantity,Price\n2999-01-01,AAPL,BUY,1,1", ledger: Ledger())
         NativeTests.check(future.rows.first?.status == .error, "非法 CSV：日期晚于今天 → 该行无法导入")
 
-        NativeTests.check(CsvImport.decode(Data("Date,Symbol".utf8)) == "Date,Symbol", "UTF-8 文本可解码")
+        // `check` 的 autoclosure 是非抛出的，会抛的调用要先取出来。
+        let decoded = try CsvImport.decode(Data("Date,Symbol".utf8))
+        NativeTests.check(decoded == "Date,Symbol", "UTF-8 文本可解码")
     }
 
     // MARK: - 重复数据
