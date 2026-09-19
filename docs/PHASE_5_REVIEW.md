@@ -28,6 +28,46 @@ pnpm e2e      # playwright test
 
 **接入前先实测**（不能让一个从没跑过的套件直接进 CI）：本机 Windows 实测 `pnpm e2e` → **26 passed (50.6s)**。CI 上 `ubuntu-latest` 装 `chromium` 后跑同一命令。
 
+### E2E 进 CI 后暴露的真实缺陷：收益页在 320px 只剩 0.28px 余量
+
+`checks.yml` 第一次跑就红了，红在本机全绿的用例上：
+
+```
+1) e2e/preferences.spec.ts:4:1 › 配色保留符号，外观和提醒重启后保留，深浅色各页无溢出
+   Error: 收益页在 320px 存在横向溢出
+   Received: false
+   Timeout 5000ms exceeded while waiting on the predicate
+```
+
+本机 26 项全绿、CI 只有这一项红 —— 既不能当 flaky 忽略，也不能靠放宽断言过关。排查：
+
+1. **先验证「容器缺中文字体」这个假设**：给 CI 装 `fonts-noto-cjk` 后再跑，**仍然失败** → 排除字体缺失，剩下的是**字体度量差异**（Linux 的 DejaVu/Noto 比 Windows 的 Segoe UI 略宽）把一处「本来就没有余量」的布局顶了出去。
+2. **把失败信息变得可定位**：断言口径**不变**（仍是 `document.documentElement.scrollWidth <= window.innerWidth`），只把 poll 的返回值从 `true` 换成「越界元素描述」，CI 日志就能直接指出是谁撑破了页面。
+3. **本机复现并量化**（`.scratch/overflow-probe.mjs`，逐宽度量 300→430）：
+
+   | 项 | 值 |
+   | --- | --- |
+   | `.cash-totals` 实际列宽 | `137.859px 137.859px` |
+   | 该 grid 的 min-content 下限 | 137.86 × 2 + 10(gap) = **285.7px** |
+   | grid 左侧偏移（workspace 16 + panel 17…实际量到 34） | 34px |
+   | 整页需要 | **319.72px** |
+   | 320px 视口余量 | **0.28px** |
+
+   即：本机之所以过，是因为恰好卡在 320px 及格线上；换个字体度量立刻溢出。300px 视口下溢出 20px，310px 下溢出 10px。
+
+**根因**（`src/v126.css`）：`.cash-totals{grid-template-columns:repeat(2,1fr)}` 里的 `1fr` 等价于 `minmax(auto,1fr)`，`auto` 下限取单元格的 min-content；而单元格里是 `$20,000.00`、`−$10,023.00` 这类**不可断行**的金额串，于是 grid 永远撑住 285.7px，把页面顶宽。
+
+**修法**：把 `1fr` 换成 `minmax(0,1fr)`，去掉 grid 的 min-content 下限（与本仓库 `.profit-calendar` 已有的 `repeat(7,minmax(0,1fr))` 写法一致）：
+
+- 基础规则：`repeat(3,1fr)` → `repeat(3,minmax(0,1fr))`（520px 断点上下都有同样隐患，一并去掉）
+- ≤520px：`repeat(2,1fr)` → `repeat(2,minmax(0,1fr))`
+
+**修完实测**（真实 CSS，已 `pnpm build`）：
+
+- 收益页 300/310/320/340/360/390/402/430 → **全部 over=0**（修复前 300 溢出 20px、310 溢出 10px）；
+- 360/402 的列宽与修改前**完全一致**（141px / 162px）→ 有余量时视觉不变；
+- 没有任何 `dd` 金额被折行（`getClientRects().length` 仍为 1）。
+
 ## §11 与 `AGENTS.md` 的冲突与偏离
 
 用户明确要求逐条报告，这里如实列出。
