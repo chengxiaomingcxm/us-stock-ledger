@@ -130,14 +130,16 @@ After that, `git commit` refuses to commit when the gate fails.
 
 ## CI 事实（不要凭印象描述）
 
-- **`build-ios.yml`**：触发条件只有 `workflow_dispatch` 与 `push: main`（`paths-ignore` 掉 `**/*.md`、`releases/**`、`scripts/publish-release.py`、它自己）。runner `macos-26`，Node 24，pnpm 11.19.0，超时 30 分钟（实测约 14 分钟）。步骤依次是：`pnpm install --frozen-lockfile` → `pnpm test` → `bash scripts/test-native.sh` → `test-calendar-rendering.sh` → `test-screenshots.sh` → `pnpm build` → `pnpm exec cap sync ios` → `bash scripts/build-unsigned-ios.sh` → 上传 IPA。
+- **`build-ios.yml`**：触发条件是 `workflow_dispatch` 与 `push: main` / `deepseek-dev` / `portfolio/**`（`paths-ignore` 掉 `**/*.md`、`releases/**`、`scripts/publish-release.py`、它自己）。runner `macos-26`（标准 GitHub 托管 runner；公开仓库 + 标准 runner 不产生 Actions 费用，但依旧要花时间和排队），Node 24，pnpm 11.19.0，超时 30 分钟（实测约 10–15 分钟）。步骤依次是：`pnpm install --frozen-lockfile` → `pnpm test` → `bash scripts/test-native.sh` → `test-calendar-rendering.sh` → `test-screenshots.sh` → `pnpm build` → `pnpm exec cap sync ios` → `bash scripts/build-unsigned-ios.sh` → 上传 IPA。
 - **`publish-release.yml`**：`workflow_dispatch`，或 `push: main` 且改动命中 `releases/**` / `scripts/publish-release.py` / 自身；执行 `python3 scripts/publish-release.py`（内部调用 `scripts/verify-ipa.py`）。
 - **PR 不触发任何 CI。**
-- 所以：**在 `portfolio/*` 等非 `main` 分支上，push 不会自动跑 CI，必须手动 dispatch**：
+- 因此：推 `main` / `deepseek-dev` / `portfolio/*` 都会**自动**起一个 run，不用手动 dispatch。只有不在这三类分支上的 ref（临时分支、tag、别人的 fork）才需要手动触发：
 
 ```sh
 gh workflow run build-ios.yml --ref <branch> -R chengxiaomingcxm/us-stock-ledger
 ```
+
+- run 归组 `concurrency: group: ios-${{ github.ref }}` + `cancel-in-progress: true`：**同一分支连续 push 会取消上一次 run**。所以别指望中间那个提交的 CI 结果，最后一个提交才是算数的那个；要验证中间提交，就等它跑完再推下一个。
 
 ### 用 gh 查/等 CI
 
@@ -146,6 +148,12 @@ gh run list -R chengxiaomingcxm/us-stock-ledger --branch <branch> --limit 5
 gh run watch <run-id> -R chengxiaomingcxm/us-stock-ledger --interval 45 --exit-status
 gh run view <run-id> -R chengxiaomingcxm/us-stock-ledger --log-failed
 gh run view <run-id> -R chengxiaomingcxm/us-stock-ledger --json status,conclusion,headSha
+```
+
+**等 CI 时不要结束回合。** `gh run watch` 会占用终端备用缓冲区，不重定向时工具会提前返回，结果就是「发起完就收工、等用户来问 CI 好没好」——这正是 Definition of Done 里禁止的那件事。固定做法：重定向到文件再等，跑完立刻在同一回合里汇报。
+
+```sh
+gh run watch <run-id> -R chengxiaomingcxm/us-stock-ledger --interval 45 --exit-status > .scratch/watch.txt 2>&1
 ```
 
 ### Windows / PowerShell 环境注意
