@@ -24,17 +24,17 @@ struct InsightsView: View {
                 ProfitRow(label: L10n.tr("账户费用"), value: -cash.fee)
                 ProfitRow(label: L10n.tr("账户总收益"), value: summary.totalProfit.map { $0 + cash.investNetAll })
                     .font(.headline)
-                Text("入金出金不计入收益；今日盈亏与收益日历只统计证券。")
+                Text(L10n.tr("入金出金不计入收益；今日盈亏与收益日历只统计证券。"))
                     .font(.caption).foregroundStyle(.secondary)
             }
 
             Section(L10n.tr("现金账本")) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("当前现金余额").font(.footnote).foregroundStyle(.secondary)
-                    Text(cash.balance == nil ? "待设置期初" : Fmt.money(cash.balance))
+                    Text(L10n.tr("当前现金余额")).font(.footnote).foregroundStyle(.secondary)
+                    Text(cash.balance == nil ? L10n.tr("待设置期初") : Fmt.money(cash.balance))
                         .font(.title2.weight(.semibold)).monospacedDigit()
                     if let opening = state.ledger.opening {
-                        Text("期初 \(opening.date) 开始前 · \(opening.note.isEmpty ? "—" : opening.note)")
+                        Text(L10n.tr("期初 {} 开始前 · {}", opening.date, opening.note.isEmpty ? "—" : opening.note))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -42,15 +42,15 @@ struct InsightsView: View {
                     cashForm = .opening
                 } label: {
                     HStack {
-                        Text(state.ledger.opening == nil ? "设置期初余额" : "修改期初余额")
+                        Text(state.ledger.opening == nil ? L10n.tr("设置期初余额") : L10n.tr("修改期初余额"))
                         Spacer()
-                        Text(state.ledger.opening.map { Fmt.money($0.amount) } ?? "未设置")
+                        Text(state.ledger.opening.map { Fmt.money($0.amount) } ?? L10n.tr("未设置"))
                             .foregroundStyle(.secondary)
                         Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
                     }
                 }
                 if state.ledger.opening != nil {
-                    Text("期初余额是「期初日期当天开始前」的现金；录错可点上方一行修改，或清除后重新设置。")
+                    Text(L10n.tr("期初余额是「期初日期当天开始前」的现金；录错可点上方一行修改，或清除后重新设置。"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 LabeledContent(L10n.tr("累计入金"), value: Fmt.money(cash.deposit))
@@ -66,7 +66,7 @@ struct InsightsView: View {
                 LabeledContent(L10n.tr("卖出收入（扣费）"), value: Fmt.money(cash.sellIn))
                 LabeledContent(L10n.tr("买卖净现金流"), value: Fmt.signedMoney(cash.tradeNet))
                 if cash.excludedTrades > 0 || cash.excludedRecords > 0 {
-                    Text("期初前有 \(cash.excludedTrades) 笔交易、\(cash.excludedRecords) 笔资金记录，已含在期初余额中，仅保留备查。")
+                    Text(L10n.tr("期初前有 {} 笔交易、{} 笔资金记录，已含在期初余额中，仅保留备查。", "\(cash.excludedTrades)", "\(cash.excludedRecords)"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
@@ -95,7 +95,7 @@ struct InsightsView: View {
                 ReturnCalendar(data: state.insights).equatable()
             } header: {
                 HStack {
-                    Text("收益日历")
+                    Text(L10n.tr("收益日历"))
                     Spacer()
                     if state.syncingHistory {
                         ProgressView().controlSize(.small)
@@ -107,9 +107,9 @@ struct InsightsView: View {
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("按上一交易日收盘与当日收盘计算每日收益，重放当前账本；缺少收盘价的交易日标记为待补全，不以零代替。历史行情来自 Yahoo 日线，与最新报价来源设置独立。")
+                    Text(L10n.tr("按上一交易日收盘与当日收盘计算每日收益，重放当前账本；缺少收盘价的交易日标记为待补全，不以零代替。历史行情来自 Yahoo 日线，与最新报价来源设置独立。"))
                     if let synced = state.historySyncedAt {
-                        Text("上次同步：\(Fmt.clock(synced))")
+                        Text(L10n.tr("上次同步：{}", Fmt.clock(synced)))
                     }
                     ForEach(state.historyErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
                         Text("\(entry.key)：\(entry.value)")
@@ -134,7 +134,7 @@ struct InsightsView: View {
         }
         .navigationTitle(L10n.tr("收益分析"))
         .safeAreaInset(edge: .top) {
-            if state.rebuilding { ProgressView("正在更新账本统计…").padding(8).frame(maxWidth: .infinity).background(.regularMaterial) }
+            if state.rebuilding { ProgressView(L10n.tr("正在更新账本统计…")).padding(8).frame(maxWidth: .infinity).background(.regularMaterial) }
         }
         .sheet(item: $cashForm) { mode in
             CashFormView(mode: mode).environmentObject(state)
@@ -197,7 +197,7 @@ struct CashFormView: View {
             Form {
                 if isOpening {
                     Section {
-                        Text("期初余额是“期初日期当天开始前”的现金。该日期当天及之后的入金、出金、分红、费用和股票买卖会联动余额；之前的记录视为已包含在期初余额中，保留备查、不重复计入。允许为零，不支持负数。")
+                        Text(L10n.tr("期初余额是“期初日期当天开始前”的现金。该日期当天及之后的入金、出金、分红、费用和股票买卖会联动余额；之前的记录视为已包含在期初余额中，保留备查、不重复计入。允许为零，不支持负数。"))
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                     if state.ledger.opening != nil {
@@ -207,30 +207,30 @@ struct CashFormView: View {
                                 dismiss()
                             }
                         } footer: {
-                            Text("清除后现金余额显示为待设置期初；已记录的入金、出金、分红和费用不受影响，可重新填写期初。")
+                            Text(L10n.tr("清除后现金余额显示为待设置期初；已记录的入金、出金、分红和费用不受影响，可重新填写期初。"))
                         }
                     }
                 } else {
                     Section {
-                        Picker("类型", selection: $kind) {
+                        Picker(L10n.tr("类型"), selection: $kind) {
                             ForEach(CashKind.allCases) { Text($0.label).tag($0) }
                         }
                     }
                 }
                 Section {
-                    DatePicker("日期（美东）", selection: Binding(
+                    DatePicker(L10n.tr("日期（美东）"), selection: Binding(
                         get: { DateFormatter.ledgerDate.date(from: date) ?? Date() },
                         set: { date = DateFormatter.ledgerDate.string(from: $0) }
                     ), in: ...Date(), displayedComponents: .date)
-                    TextField("金额（美元）", text: $amount).keyboardType(.decimalPad)
+                    TextField(L10n.tr("金额（美元）"), text: $amount).keyboardType(.decimalPad)
                     if kind == .dividend && !isOpening {
-                        TextField("预扣税费（选填）", text: $tax).keyboardType(.decimalPad)
+                        TextField(L10n.tr("预扣税费（选填）"), text: $tax).keyboardType(.decimalPad)
                     }
                     if (kind == .dividend || kind == .fee) && !isOpening {
-                        TextField("股票代码（选填）", text: $symbol)
+                        TextField(L10n.tr("股票代码（选填）"), text: $symbol)
                             .textInputAutocapitalization(.characters).autocorrectionDisabled()
                     }
-                    TextField("备注（选填）", text: $note, axis: .vertical).lineLimit(1...3)
+                    TextField(L10n.tr("备注（选填）"), text: $note, axis: .vertical).lineLimit(1...3)
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
@@ -245,9 +245,9 @@ struct CashFormView: View {
 
     private var title: String {
         switch mode {
-        case .opening: return state.ledger.opening == nil ? "设置期初余额" : "修改期初余额"
-        case .new: return "记录资金"
-        case .edit: return "编辑资金记录"
+        case .opening: return state.ledger.opening == nil ? L10n.tr("设置期初余额") : L10n.tr("修改期初余额")
+        case .new: return L10n.tr("记录资金")
+        case .edit: return L10n.tr("编辑资金记录")
         }
     }
 
@@ -273,7 +273,7 @@ struct CashFormView: View {
 
     private func save() {
         do {
-            let parsedAmount = try LedgerValidation.positive(Decimal(string: amount, locale: Locale(identifier: "en_US")) ?? -1, isOpening ? "期初余额" : "金额", allowZero: isOpening)
+            let parsedAmount = try LedgerValidation.positive(Decimal(string: amount, locale: Locale(identifier: "en_US")) ?? -1, isOpening ? L10n.tr("期初余额") : L10n.tr("金额"), allowZero: isOpening)
             let parsedDate = try LedgerValidation.date(date)
             if isOpening {
                 state.setOpening(CashOpening(amount: parsedAmount, date: parsedDate, note: try LedgerValidation.note(note)))
@@ -282,8 +282,8 @@ struct CashFormView: View {
             }
             var parsedTax: Decimal?
             if kind == .dividend, !tax.isEmpty {
-                let value = try LedgerValidation.positive(Decimal(string: tax, locale: Locale(identifier: "en_US")) ?? -1, "税费", allowZero: true)
-                if value > parsedAmount { throw LedgerError.message("税费不能超过分红金额。") }
+                let value = try LedgerValidation.positive(Decimal(string: tax, locale: Locale(identifier: "en_US")) ?? -1, L10n.tr("税费"), allowZero: true)
+                if value > parsedAmount { throw LedgerError.message(L10n.tr("税费不能超过分红金额。")) }
                 parsedTax = value
             }
             var parsedSymbol: String?
@@ -473,8 +473,8 @@ struct ReturnCalendar: View, Equatable {
 
     private func accessibilityLabel(_ cell: Cell) -> String {
         guard let day = cell.day else { return "" }
-        guard let row = cell.row else { return "\(month)-\(day) 非交易日" }
-        return "\(row.date) \(row.profit == nil ? "待补全" : Fmt.signedMoney(row.profit))"
+        guard let row = cell.row else { return "\(month)-\(day) " + L10n.tr("非交易日") }
+        return "\(row.date) \(row.profit == nil ? L10n.tr("待补全") : Fmt.signedMoney(row.profit))"
     }
 
     private func legend(color: Color, text: String) -> some View {
@@ -504,7 +504,7 @@ struct DayReturnDetail: View {
                             if let profit = item.profit {
                                 ProfitRow(label: item.symbol, value: profit)
                             } else {
-                                LabeledContent(item.symbol, value: item.reason ?? "待补全")
+                                LabeledContent(item.symbol, value: item.reason ?? L10n.tr("待补全"))
                             }
                         }
                     }
@@ -541,26 +541,26 @@ struct CumulativeProfitChart: View, Equatable {
 
     var body: some View {
         if points.count < 2 {
-            Text("同步两个以上交易日后可查看曲线。")
+            Text(L10n.tr("同步两个以上交易日后可查看曲线。"))
                 .font(.footnote).foregroundStyle(.secondary)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("累计收益").font(.footnote).foregroundStyle(.secondary)
+                    Text(L10n.tr("累计收益")).font(.footnote).foregroundStyle(.secondary)
                     Spacer()
                     AmountText(value: points.last?.value).font(.headline)
                 }
-                Text("最高 \(Fmt.compactSigned(highest)) · 最低 \(Fmt.compactSigned(lowest)) · \(points.count) 个交易日")
+                Text(L10n.tr("最高 {} · 最低 {} · {} 个交易日", Fmt.compactSigned(highest), Fmt.compactSigned(lowest), "\(points.count)"))
                     .font(.caption2).foregroundStyle(.secondary)
                 if missingDays > 0 {
-                    Text("其中 \(missingDays) 天缺少收盘价，按无变化延续，未计入收益。")
+                    Text(L10n.tr("其中 {} 天缺少收盘价，按无变化延续，未计入收益。", "\(missingDays)"))
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
                 ProfitPlot(data: data, color: UIColor(lineColor), labelColor: (scheme == .dark ? UIColor.lightGray : UIColor.darkGray))
                 .frame(height: 168)
                 .accessibilityElement()
-                .accessibilityLabel("累计收益曲线，当前 \(Fmt.signedMoney(points.last?.value))，最高 \(Fmt.signedMoney(highest))，最低 \(Fmt.signedMoney(lowest))，共 \(points.count) 个交易日")
+                .accessibilityLabel(L10n.tr("累计收益曲线，当前 {}，最高 {}，最低 {}，共 {} 个交易日", Fmt.signedMoney(points.last?.value), Fmt.signedMoney(highest), Fmt.signedMoney(lowest), "\(points.count)"))
             }
         }
     }

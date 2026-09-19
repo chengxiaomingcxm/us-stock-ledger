@@ -52,10 +52,10 @@ enum LedgerStore {
             return record
         }
         ledger.trades = [
-            trade("VOO", .buy, "2026-04-02", "15", "512.30", "1", "示例：买入 ETF"),
+            trade("VOO", .buy, "2026-04-02", "15", "512.30", "1", L10n.tr("示例：买入 ETF")),
             trade("AAPL", .buy, "2026-06-15", "20", "198.40", "1"),
             trade("AAPL", .buy, "2026-07-06", "10", "212.75", "1"),
-            trade("AAPL", .sell, "2026-08-12", "12", "231.20", "1.05", "示例：部分止盈"),
+            trade("AAPL", .sell, "2026-08-12", "12", "231.20", "1.05", L10n.tr("示例：部分止盈")),
             trade("MSFT", .buy, "2026-05-20", "8", "428.90", "1"),
         ]
         ledger.quotes = [
@@ -63,14 +63,14 @@ enum LedgerStore {
             Quote(symbol: "MSFT", price: amount("512.40"), date: "2026-09-17", source: nil, fetchedAt: nil),
             Quote(symbol: "VOO", price: amount("578.05"), date: "2026-09-17", source: nil, fetchedAt: nil),
         ]
-        ledger.opening = CashOpening(amount: amount("5000"), date: "2026-04-01", note: "示例期初余额")
+        ledger.opening = CashOpening(amount: amount("5000"), date: "2026-04-01", note: L10n.tr("示例期初余额"))
         ledger.cash = [
             CashRecord(id: UUID(), sequence: 0, date: "2026-04-01", kind: .deposit, amount: amount("20000"),
-                       tax: nil, symbol: nil, note: "示例入金", source: "manual", externalId: nil),
+                       tax: nil, symbol: nil, note: L10n.tr("示例入金"), source: "manual", externalId: nil),
             CashRecord(id: UUID(), sequence: 1, date: "2026-08-15", kind: .dividend, amount: amount("6.24"),
-                       tax: amount("0.94"), symbol: "AAPL", note: "示例分红", source: "manual", externalId: nil),
+                       tax: amount("0.94"), symbol: "AAPL", note: L10n.tr("示例分红"), source: "manual", externalId: nil),
             CashRecord(id: UUID(), sequence: 2, date: "2026-09-01", kind: .fee, amount: amount("1.25"),
-                       tax: nil, symbol: nil, note: "示例账户费用", source: "manual", externalId: nil),
+                       tax: nil, symbol: nil, note: L10n.tr("示例账户费用"), source: "manual", externalId: nil),
         ]
         return ledger
     }
@@ -166,7 +166,7 @@ final class AppState: ObservableObject {
             let data = try await Task.detached(priority: .utility) { try LedgerStore.encoded(next) }.value
             guard !Task.isCancelled else { return false }
             guard token == generation else {
-                errorMessage = "同步期间账本已修改，已保留最新账本，请重新同步行情。"
+                errorMessage = L10n.tr("同步期间账本已修改，已保留最新账本，请重新同步行情。")
                 return false
             }
             try LedgerStore.write(data)

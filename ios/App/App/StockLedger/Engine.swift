@@ -259,11 +259,11 @@ enum Engine {
                 let after = prices[symbol + "|" + date]
                 let isSplit = splitSymbols.contains(symbol)
                 var reason: String?
-                if isSplit { reason = "发现拆股，需先核对股数与成本" }
-                else if stray.contains(symbol) { reason = "相邻交易日之间有交易记录，请核对美东交易日期" }
-                else if gap, startQty > 0 { reason = "相邻收盘记录之间有未确认日期" }
-                else if startQty > 0, before == nil { reason = "缺少 \(previous ?? "前一交易日") 收盘价" }
-                else if endQty > 0, after == nil { reason = "缺少 \(date) 收盘价" }
+                if isSplit { reason = L10n.tr("发现拆股，需先核对股数与成本") }
+                else if stray.contains(symbol) { reason = L10n.tr("相邻交易日之间有交易记录，请核对美东交易日期") }
+                else if gap, startQty > 0 { reason = L10n.tr("相邻收盘记录之间有未确认日期") }
+                else if startQty > 0, before == nil { reason = L10n.tr("缺少") + " \(previous ?? L10n.tr("前一交易日")) " + L10n.tr("收盘价") }
+                else if endQty > 0, after == nil { reason = L10n.tr("缺少") + " \(date) " + L10n.tr("收盘价") }
 
                 if endQty > 0, let after, !isSplit { value += endQty * after } else if endQty > 0 { endComplete = false }
                 if isSplit { endComplete = false }
@@ -356,7 +356,7 @@ enum Engine {
     }
 
     struct TodayResult {
-        var title: String = "今日盈亏"
+        var title: String = L10n.tr("今日盈亏")
         var pnl: Decimal?
         var percent: Decimal?
         var caption: String
@@ -372,7 +372,7 @@ enum Engine {
         let symbols = Set(ledger.trades.map(\.symbol))
         let quotes = ledger.quotes.filter { symbols.contains($0.symbol) && $0.date <= today }
         guard let date = quotes.map(\.date).max() else {
-            return TodayResult(caption: "尚无报价，请同步行情")
+            return TodayResult(caption: L10n.tr("尚无报价，请同步行情"))
         }
         var before: [String: Decimal] = [:]
         var dates: [String: String] = [:]
@@ -394,8 +394,8 @@ enum Engine {
         }
         var result = todayPnl(ledger, previousClose: before, previousCloseDates: dates, today: date)
         let closed = quotes.filter { $0.date == date }.allSatisfy { $0.source == "yahoo-close" }
-        result.title = closed ? "最近收盘收益" : (date == today ? "今日盈亏" : "最近报价日收益")
-        result.caption = "美东 \(date) · " + (closed ? "已完成交易日收盘" : "最新报价") + (result.pnl == nil ? " · 待补全" : "")
+        result.title = closed ? L10n.tr("最近收盘收益") : (date == today ? L10n.tr("今日盈亏") : L10n.tr("最近报价日收益"))
+        result.caption = "\(L10n.tr("美东")) \(date) · " + (closed ? L10n.tr("已完成交易日收盘") : L10n.tr("最新报价")) + (result.pnl == nil ? " · " + L10n.tr("待补全") : "")
         return result
     }
 
@@ -426,16 +426,16 @@ enum Engine {
 
             if openQty > 0 {
                 if previousClose[symbol] == nil {
-                    reason = "缺少上一交易日收盘价"
+                    reason = L10n.tr("缺少上一交易日收盘价")
                 } else if let date = previousCloseDates[symbol], date >= today {
-                    reason = "上一收盘价日期异常，请重新同步行情"
+                    reason = L10n.tr("上一收盘价日期异常，请重新同步行情")
                 }
             }
             if reason == nil, endQty > 0 {
                 if let quote {
-                    if quote.date != today { reason = "缺少 \(today) 报价（当前报价为 \(quote.date)）" }
+                    if quote.date != today { reason = L10n.tr("缺少") + " \(today) " + L10n.tr("报价") + " (\(quote.date))" }
                 } else {
-                    reason = "缺少当日报价"
+                    reason = L10n.tr("缺少当日报价")
                 }
             }
 
@@ -456,14 +456,14 @@ enum Engine {
             rows.append(TodayRow(symbol: symbol, pnl: profit, reason: nil))
         }
 
-        var caption = "美东 \(today)"
+        var caption = "\(L10n.tr("美东")) \(today)"
         if !previousCloseDates.isEmpty, let date = previousCloseDates.values.min() {
-            caption += " · 对比 \(date) 收盘"
+            caption += " · \(L10n.tr("对比")) \(date) " + L10n.tr("收盘")
         } else if !previousClose.isEmpty {
-            caption += " · 对比上一交易日收盘"
+            caption += " · " + L10n.tr("对比上一交易日收盘")
         }
-        if todayTrades.isEmpty == false { caption += " · 今日 \(todayTrades.count) 笔交易已计入" }
-        if !complete { caption = missing.count > 1 ? "缺少 \(missing.count) 项行情 · 待补全" : "缺少行情 · 待补全" }
+        if todayTrades.isEmpty == false { caption += " · \(L10n.tr("今日")) \(todayTrades.count) " + L10n.tr("笔交易已计入") }
+        if !complete { caption = missing.count > 1 ? L10n.tr("缺少") + " \(missing.count) " + L10n.tr("项行情 · 待补全") : L10n.tr("缺少行情 · 待补全") }
 
         return TodayResult(
             pnl: complete ? total : nil,
@@ -545,7 +545,7 @@ struct InsightsPresentation {
     }
 }
 struct LedgerDerived {
-    var displayReturn = Engine.TodayResult(caption: "正在计算")
+    var displayReturn = Engine.TodayResult(caption: L10n.tr("正在计算"))
     var unknownDividendTax = 0
     var summary = LedgerSummary()
     var cash = CashTotals()

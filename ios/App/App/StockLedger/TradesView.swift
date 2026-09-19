@@ -128,7 +128,7 @@ struct DateField: View {
             if !value.isEmpty {
                 Button { value = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain).foregroundStyle(.tertiary)
-                    .accessibilityLabel("清除\(title)")
+                    .accessibilityLabel(L10n.tr("清除 {}", title))
             }
         }
     }
@@ -285,9 +285,9 @@ struct TradeFormView: View {
 
     private func save() {
         do {
-            let parsedQuantity = try LedgerValidation.positive(Decimal(string: quantity, locale: Locale(identifier: "en_US")) ?? -1, "成交股数")
-            let parsedPrice = try LedgerValidation.positive(Decimal(string: price, locale: Locale(identifier: "en_US")) ?? -1, "成交单价")
-            let parsedFee = try LedgerValidation.positive(Decimal(string: fee, locale: Locale(identifier: "en_US")) ?? 0, "手续费", allowZero: true)
+            let parsedQuantity = try LedgerValidation.positive(Decimal(string: quantity, locale: Locale(identifier: "en_US")) ?? -1, L10n.tr("成交股数"))
+            let parsedPrice = try LedgerValidation.positive(Decimal(string: price, locale: Locale(identifier: "en_US")) ?? -1, L10n.tr("成交单价"))
+            let parsedFee = try LedgerValidation.positive(Decimal(string: fee, locale: Locale(identifier: "en_US")) ?? 0, L10n.tr("手续费"), allowZero: true)
             var updated = Trade(
                 id: trade?.id ?? UUID(),
                 sequence: trade?.sequence ?? 0,
@@ -308,7 +308,7 @@ struct TradeFormView: View {
                 updated.settlementAmount = original.settlementAmount
                 updated.settlementDate = original.settlementDate
             }
-            guard state.saveTrade(updated) else { throw LedgerError.message(state.errorMessage ?? "保存失败") }
+            guard state.saveTrade(updated) else { throw LedgerError.message(state.errorMessage ?? L10n.tr("保存失败")) }
             dismiss()
         } catch {
             self.error = error.localizedDescription

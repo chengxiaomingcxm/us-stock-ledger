@@ -84,7 +84,7 @@ struct HoldingsView: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(position.symbol)，\(Fmt.quantity(position.quantity)) 股，浮动收益 \(Fmt.signedMoney(position.unrealized))")
+        .accessibilityLabel(L10n.tr("{}，{} 股，浮动收益 {}", position.symbol, Fmt.quantity(position.quantity), Fmt.signedMoney(position.unrealized)))
     }
 
     private func quoteLabel(_ position: Position) -> String {
@@ -138,7 +138,7 @@ struct TodayCard: View {
                     .font(.caption2).foregroundStyle(.secondary)
             }
             ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
-                Label("\(entry.key) 刷新失败：\(entry.value)", systemImage: "wifi.exclamationmark")
+                Label("\(entry.key) " + L10n.tr("刷新失败") + ": \(entry.value)", systemImage: "wifi.exclamationmark")
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }

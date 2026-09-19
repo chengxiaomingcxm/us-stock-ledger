@@ -135,7 +135,7 @@ struct AmountText: View {
         Text(text)
             .monospacedDigit()
             .foregroundStyle(color(for: value))
-            .accessibilityLabel(value == nil ? "待补全" : (value! > 0 ? "盈利 \(text)" : value! < 0 ? "亏损 \(text)" : "持平 \(text)"))
+            .accessibilityLabel(value == nil ? L10n.tr("待补全") : (value! > 0 ? L10n.tr("盈利") + " \(text)" : value! < 0 ? L10n.tr("亏损") + " \(text)" : L10n.tr("持平") + " \(text)"))
     }
 
     private func color(for value: Decimal?) -> Color {
