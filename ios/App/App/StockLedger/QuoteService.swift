@@ -254,7 +254,7 @@ enum QuoteService {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 429 { throw QuoteError.message("请求限流，请延长刷新间隔。") }
         if status == 401 || status == 403 { throw QuoteError.message("API Key 无效或无行情权限。") }
-        guard status == 200 else { throw QuoteError.message("行情请求失败（\(status)）。") }
+        guard status == 200 else { throw QuoteError.message(L10n.tr("行情请求失败（{}）。", "\(status)")) }
         do {
             return try JSONSerialization.jsonObject(with: data)
         } catch {

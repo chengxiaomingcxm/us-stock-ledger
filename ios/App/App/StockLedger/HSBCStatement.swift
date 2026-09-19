@@ -38,7 +38,7 @@ enum HSBCStatement {
         f.dateFormat = "ddMMMyyyy"
         f.isLenient = false
         guard let d = f.date(from: text), f.string(from: d).uppercased() == text.uppercased() else {
-            throw LedgerError.message("月结单日期无效：\(text)")
+            throw LedgerError.message(L10n.tr("月结单日期无效：{}", text))
         }
         f.dateFormat = "yyyy-MM-dd"
         return try LedgerValidation.date(f.string(from: d))
@@ -104,7 +104,7 @@ enum HSBCStatement {
                         guard seen.insert(id).inserted else { throw LedgerError.message("文件内交易编号重复，未导入任何记录。") }
                         let side: TradeSide = r[10].uppercased() == "PUR" ? .buy : .sell
                         guard (side == .sell) == (r[6] == "-"), r[3] == r[7] else {
-                            throw LedgerError.message("\(ref)：方向、股数符号或币种不一致。")
+                            throw LedgerError.message(L10n.tr("{}：方向、股数符号或币种不一致。", ref))
                         }
                         let tradeDate = try date(r[1]), settlementDate = try date(r[2])
                         guard settlementDate >= tradeDate else { throw LedgerError.message("交收日早于成交日。") }
@@ -113,7 +113,7 @@ enum HSBCStatement {
                         let fee = feeByReference[ref] ?? 0
                         let expected = side == .buy ? price * quantity + fee : price * quantity - fee
                         guard abs(expected - settlement) <= Decimal(string: "0.005")! else {
-                            throw LedgerError.message("\(ref)：成交价、费用与交收额不符，需核对成交确认书。")
+                            throw LedgerError.message(L10n.tr("{}：成交价、费用与交收额不符，需核对成交确认书。", ref))
                         }
                         consumed.insert(ref)
                         let excluded = r[3].uppercased() != "USD" || symbol[2].uppercased() != "SHS"
@@ -232,7 +232,7 @@ enum StatementImport {
             for index in 0..<document.pageCount {
                 try Task.checkCancellation()
                 guard let text = document.page(at: index).map({ pageText($0) }), text.count > 20 else {
-                    throw LedgerError.message("第 \(index + 1) 页没有完整文字层，扫描件暂不支持。")
+                    throw LedgerError.message(L10n.tr("第 {} 页没有完整文字层，扫描件暂不支持。", "\(index + 1)"))
                 }
                 pages.append(text)
             }

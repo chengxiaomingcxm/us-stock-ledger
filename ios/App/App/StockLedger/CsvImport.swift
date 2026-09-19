@@ -263,18 +263,19 @@ enum CsvImport {
         let groupedPattern = "^\\d{1,3}(,\\d{3})+(\\.\\d+)?$"
         guard text.range(of: plainPattern, options: .regularExpression) != nil
             || text.range(of: groupedPattern, options: .regularExpression) != nil else {
-            throw CsvImportError.message("\(label)格式无效（示例：1,234.56 或 1234.56）")
+            throw CsvImportError.message(L10n.tr("{}格式无效（示例：1,234.56 或 1234.56）", label))
         }
         let plain = text.replacingOccurrences(of: ",", with: "")
         let parts = plain.split(separator: ".", omittingEmptySubsequences: false)
         if parts[0].count > 12 || (parts.count == 2 && parts[1].count > 8) {
-            throw CsvImportError.message("\(label)超出支持范围或精度")
+            throw CsvImportError.message(L10n.tr("{}超出支持范围或精度", label))
         }
         guard let value = Decimal(string: plain, locale: Locale(identifier: "en_US")) else {
-            throw CsvImportError.message("\(label)无效")
+            throw CsvImportError.message(L10n.tr("{}无效", label))
         }
         if value < 0 || (!allowZero && value == 0) {
-            throw CsvImportError.message("\(label)必须\(allowZero ? "不小于 0" : "大于 0")")
+            // 插值后的字符串永远查不到译文，所以先按模板成形；`message` 只吃一个 String。
+            throw CsvImportError.message(L10n.tr(allowZero ? "{}必须不小于 0" : "{}必须大于 0", label))
         }
         return value
     }
@@ -339,7 +340,7 @@ enum CsvImport {
 
         let missing = TradeField.allCases.filter { $0.required && report.mapping[$0] == nil }
         if !missing.isEmpty {
-            throw CsvImportError.message("请先指定必需列：\(missing.map(\.label).joined(separator: "、"))。")
+            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: "、")))
         }
 
         let existingIds = Set(ledger.trades.compactMap { $0.externalId })
@@ -359,7 +360,7 @@ enum CsvImport {
                 guard let priceText = field(raw, report.mapping, .price) else { throw CsvImportError.message("缺少单价") }
 
                 if let currency = field(raw, report.mapping, .currency), currency.uppercased() != "USD" {
-                    throw CsvImportError.message("只支持美元记录，币种为 \(currency)")
+                    throw CsvImportError.message(L10n.tr("只支持美元记录，币种为 {}", currency))
                 }
                 let date = try dateTime(dateText)
                 let symbol = try LedgerValidation.symbol(symbolText)
@@ -500,7 +501,7 @@ enum CsvImport {
 
         let missing = CashField.allCases.filter { $0.required && report.cashMapping[$0] == nil }
         if !missing.isEmpty {
-            throw CsvImportError.message("请先指定必需列：\(missing.map(\.label).joined(separator: "、"))。")
+            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: "、")))
         }
         if report.cashMapping[.type] == nil, unifiedKind == nil {
             throw CsvImportError.message("未选择类型列，请指定统一类型（入金 / 出金 / 分红 / 费用）。")
@@ -524,7 +525,7 @@ enum CsvImport {
                 let kind = try value(.type).map { try cashKind($0) } ?? unifiedKind!
 
                 if let currency = value(.currency), currency.uppercased() != "USD" {
-                    throw CsvImportError.message("只支持美元记录，币种为 \(currency)")
+                    throw CsvImportError.message(L10n.tr("只支持美元记录，币种为 {}", currency))
                 }
                 let date = try dateTime(dateText)
                 let amount = try number(amountText, "金额")
