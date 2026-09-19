@@ -159,10 +159,11 @@ final class AppState: ObservableObject {
         }
         self.quoteSettings = settings
         self.persist = persist
-        if let loadFailure { Diagnostics.record("LOAD", loadFailure) }
         let saved = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "app.language") ?? "") ?? .zhHans
         self.language = saved
         L10n.current = saved
+        // 必须在所有存储属性初始化完成之后才能读 self.loadFailure。
+        if let loadFailure { Diagnostics.record("LOAD", loadFailure) }
         rebuild(self.ledger)
     }
 
@@ -273,11 +274,12 @@ final class AppState: ObservableObject {
     }
 
     /// 行情失败会在每次刷新重复出现，只在「失败集合发生变化」时记一次，避免日志被刷满。
-    private func logFailures(_ errors: [String: String], kind: String, last: inout String) {
+    /// 返回新的签名交给调用方保存（不用 inout，避免对 self 存储属性的重叠访问）。
+    private func logFailures(_ errors: [String: String], kind: String, last: String) -> String {
         let signature = errors.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: " | ")
-        guard !signature.isEmpty, signature != last else { return }
-        last = signature
+        guard !signature.isEmpty, signature != last else { return last }
         Diagnostics.record(kind, signature)
+        return signature
     }
 
     @discardableResult
@@ -320,7 +322,7 @@ final class AppState: ObservableObject {
         let result = await QuoteService.fetchAll(symbols: symbols, settings: settings)
         guard !Task.isCancelled, settings == quoteSettings else { return }
         quoteErrors = result.errors
-        logFailures(result.errors, kind: "QUOTE", last: &lastQuoteFailure)
+        lastQuoteFailure = logFailures(result.errors, kind: "QUOTE", last: lastQuoteFailure)
         guard !result.quotes.isEmpty else { return }
 
         var incoming: [Quote] = []
@@ -350,7 +352,7 @@ final class AppState: ObservableObject {
 
         let result = await QuoteService.fetchSeriesAll(symbols: symbols.sorted())
         historyErrors = result.errors
-        logFailures(result.errors, kind: "HISTORY", last: &lastHistoryFailure)
+        lastHistoryFailure = logFailures(result.errors, kind: "HISTORY", last: lastHistoryFailure)
         guard !result.series.isEmpty else { return }
 
         var sessions = Set(ledger.history.sessions)
