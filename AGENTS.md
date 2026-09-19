@@ -150,11 +150,19 @@ gh run view <run-id> -R chengxiaomingcxm/us-stock-ledger --log-failed
 gh run view <run-id> -R chengxiaomingcxm/us-stock-ledger --json status,conclusion,headSha
 ```
 
-**等 CI 时不要结束回合。** `gh run watch` 会占用终端备用缓冲区，不重定向时工具会提前返回，结果就是「发起完就收工、等用户来问 CI 好没好」——这正是 Definition of Done 里禁止的那件事。固定做法：重定向到文件再等，跑完立刻在同一回合里汇报。
+**等 CI 时不要结束回合。** `gh run watch` 有两种都不理想的表现：不重定向时会占用终端备用缓冲区，工具提前返回；重定向后命令虽然真的阻塞，但工具可能把它转入后台，而「后台完成」的通知要等到**下一个回合**才浮现——结果就是「发起完就收工、等用户来问 CI 好没好」，正是 Definition of Done 里禁止的那件事。
+
+因此固定做法是**在同一回合里一边等一边干活**：
+
+1. 把 watch 以后台方式启动（`mode=async`），输出重定向到 `.scratch/w.txt`，拿到 terminal ID；
+2. **不要结束回合**：继续做本轮本来就要做的事（读代码、写测试、更新文档），每几次工具调用后用一次状态查询确认进度（写入文件再读文件，比读终端回显便宜）；
+3. watch 返回 `exit=0`（或查询显示 `completed`）后，立刻在同一回合里汇报结论；红了就取 `--log-failed` 定位根因再修。
 
 ```sh
-gh run watch <run-id> -R chengxiaomingcxm/us-stock-ledger --interval 45 --exit-status > .scratch/watch.txt 2>&1
+gh run watch <run-id> -R chengxiaomingcxm/us-stock-ledger --interval 45 --exit-status > .scratch/w.txt 2>&1
 ```
+
+> 同分支连续 push 会按 `concurrency` 取消上一次 run，所以只需要等**最后一次** push 的 run；被取消的那次不算失败。
 
 ### Windows / PowerShell 环境注意
 
