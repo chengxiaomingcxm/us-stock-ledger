@@ -9,16 +9,24 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        print("HARNESS-START")
         let screen = ProcessInfo.processInfo.arguments.dropFirst().first ?? "holdings"
+        print("HARNESS screen=\(screen)")
         // no-op persist：裸 harness 不写盘；语言必须在 AppState 初始化之后再切，
         // 因为初始化会把语言重置为 UserDefaults 里的持久化默认值。
         let state = AppState(ledger: LedgerStore.demo(), persist: { _ in })
+        print("HARNESS state-created")
         state.setLanguage(.en)
+        print("HARNESS language-en")
 
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = UIHostingController(rootView: makeScreen(screen, state: state))
+        print("HARNESS rootVC-set")
         window.makeKeyAndVisible()
+        print("HARNESS key-visible")
         self.window = window
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { print("HARNESS alive+2s") }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { print("HARNESS alive+5s") }
         return true
     }
 
