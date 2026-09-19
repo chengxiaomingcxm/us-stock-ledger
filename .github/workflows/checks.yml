@@ -48,8 +48,12 @@ jobs:
         run: pnpm test
       - name: Type check and build
         run: pnpm build
-      - name: Install the Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install the Playwright browser and CJK fonts
+        # 界面是中文的：容器默认不带中文字体时，回退字体会让文字更宽，
+        # 320px 的横向溢出断言就会因为「渲染环境」而不是「布局」失败。
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk
       - name: End-to-end tests
         run: pnpm e2e
       - name: Upload the Playwright report
