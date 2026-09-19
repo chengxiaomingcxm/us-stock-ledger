@@ -1,6 +1,21 @@
 import { test, expect } from '@playwright/test';
 test.beforeEach(async({page})=>{await page.route('https://query2.finance.yahoo.com/**',r=>r.abort());await page.route('https://financialmodelingprep.com/**',r=>r.abort());});
 const settings=async(page:any)=>page.locator('.bottom-nav').getByRole('button',{name:'设置',exact:true}).click();
+// 判定口径与原来一致（scrollWidth <= window.innerWidth），只是失败时把撑破页面的元素一并报出来：
+// 不同平台的字体度量不同，只报 true/false 无法定位是谁溢出的。
+const overflowInfo=async(page:any)=>page.evaluate(()=>{
+ const doc=document.documentElement,vw=window.innerWidth;
+ if(doc.scrollWidth<=vw)return '';
+ const hit:[[string,number,string]]=[];
+ for(const el of Array.from(document.querySelectorAll('body *'))){
+  const r=el.getBoundingClientRect();
+  if(r.right<=vw+1)continue;
+  const cls=String((el as HTMLElement).className||'').trim().replace(/\s+/g,'.');
+  hit.push([el.tagName.toLowerCase()+(cls?'.'+cls:''),Math.round(r.right),(el.textContent||'').trim().slice(0,16)]);
+ }
+ const sorted=hit.sort((a:any,b:any)=>b[1]-a[1]).slice(0,8);
+ return `scrollWidth=${doc.scrollWidth} innerWidth=${vw} :: `+sorted.map((h:any)=>`${h[0]}[right=${h[1]}]"${h[2]}"`).join(' | ');
+});
 test('配色保留符号，外观和提醒重启后保留，深浅色各页无溢出',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'先看看示例账本',exact:true}).click();await settings(page);
  await page.getByLabel('涨跌颜色',{exact:true}).selectOption('red-up');await expect(page.locator('html')).toHaveAttribute('data-colors','red-up');
@@ -9,7 +24,7 @@ test('配色保留符号，外观和提醒重启后保留，深浅色各页无�
   await page.getByLabel('外观',{exact:true}).selectOption(theme);await expect(page.locator('html')).toHaveAttribute('data-theme',theme);
   for(const name of ['持仓','交易','收益','设置']){
    await page.locator('.bottom-nav').getByRole('button',{name,exact:true}).click();
-   for(const width of [320,402,430]){await page.setViewportSize({width,height:874});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),{message:`${name}页在 ${width}px 存在横向溢出`}).toBe(true);}
+   for(const width of [320,402,430]){await page.setViewportSize({width,height:874});await expect.poll(()=>overflowInfo(page),{message:`${name}页在 ${width}px 存在横向溢出`}).toBe('');}
    if(name==='持仓'){await expect(page.getByTestId('unrealized')).toHaveText('+$1,362.25');await page.screenshot({path:`artifacts/v123-home-${theme}.png`,fullPage:true});}
    if(name==='设置')await page.screenshot({path:`artifacts/v123-settings-${theme}.png`,fullPage:true});
   }
