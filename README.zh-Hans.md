@@ -54,8 +54,8 @@ IPA 未签名，因为没有付费的 Apple 开发者账号；每个 Release 旁
 | 存储 | Documents 本地 JSON；API Key 存 iOS 钥匙串 |
 | 结单 | PDFKit（汇丰投资结单） |
 | 旧网页引擎（保留用于构建/测试） | TypeScript、Vite、Capacitor |
-| 测试 | Vitest（147 项）+ Swift 原生测试 + 模拟器日历渲染 |
-| CI | GitHub Actions（macOS） |
+| 测试 | Vitest（148 项）+ Swift 原生测试 + 模拟器日历渲染 + Playwright E2E（26 项） |
+| CI | GitHub Actions：`checks` 跑在 ubuntu-latest，iOS 构建跑在 macos-26 |
 
 ## 目录
 
@@ -76,6 +76,29 @@ bash scripts/build-unsigned-ios.sh       # macOS，产出 IPA
 ```
 
 开发在 `deepseek-dev` 上进行；审核通过后合并到 `main`，正式 IPA 只从 `main` 构建发布。
+
+## 测试与 CI
+
+推 `main` / `deepseek-dev` / `portfolio/**`，以及**任何 PR**，都会在 GitHub Actions 上跑同一套检查 —— 全部复用 `package.json` 里已有的 script，没有为 CI 另造新命令：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm test     # vitest run —— 148 项，13 个文件
+pnpm build    # tsc --noEmit && vite build
+pnpm e2e      # playwright test —— 26 项
+```
+
+`.github/workflows/checks.yml` 在 `ubuntu-latest` 上跑上面这条链；`.github/workflows/build-ios.yml` 另外在 `macos-26` 上跑 Swift 原生测试、模拟器日历与截图渲染、未签名 IPA 构建。iOS 只能在 macOS runner 上构建，而且产物是**未签名**的 —— 要装到真机仍需你自己的签名身份。
+
+> 只改 Markdown（`**/*.md`）的提交不会触发这两个工作流，只改 Markdown 的 PR 同理。
+
+### 静态检查：有意不引入 ESLint
+
+任务书 §11 要求 CI 跑 Lint。本仓库**没有 ESLint、没有 eslint 配置、也没有 `lint` script**，`AGENTS.md` 明确禁止在仓库本就不存在的情况下自行引入这类工具。所以 CI 不跑 Linter —— 这是**有意偏离，不是遗漏**：
+
+- `package.json` 没有新增 `lint` script，也**没有**把类型检查改名叫假的 `lint`。
+- 静态检查就是现有 `pnpm build` 已经在做的 **`tsc --noEmit`**（`strict: true`，覆盖 `src/`、`tests/` 与 `capacitor.config.ts`；不覆盖 `e2e/` 与 shell 脚本）。
+- 将来若要引入 Linter，应当单独决策（依赖 + 配置 + 人对接下新报出的问题），而不是为了勾选清单。
 
 ## 截图
 

@@ -54,8 +54,8 @@ Releases use proper semantic versioning (`v1.0.0`, `v1.1.0`, …). See the [rele
 | Storage | Local JSON in Documents; API keys in the iOS Keychain |
 | Statements | PDFKit (HSBC investment statement) |
 | Legacy web engine (retained for build/test) | TypeScript, Vite, Capacitor |
-| Tests | Vitest (147) + native Swift tests + simulator calendar rendering |
-| CI | GitHub Actions on macOS |
+| Tests | Vitest (148) + native Swift tests + simulator calendar rendering + Playwright E2E (26) |
+| CI | GitHub Actions: `checks` on ubuntu-latest, iOS build on macos-26 |
 
 ## Project layout
 
@@ -76,6 +76,29 @@ bash scripts/build-unsigned-ios.sh       # macOS, produces the IPA
 ```
 
 Development happens on `deepseek-dev`; reviewed changes are merged to `main`, and official IPA builds run from `main` only.
+
+## Testing & CI
+
+Every push to `main`, `deepseek-dev` or `portfolio/**` — and every pull request — runs the same checks on GitHub Actions, using only the scripts that already exist in `package.json`:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm test     # vitest run — 148 cases in 13 files
+pnpm build    # tsc --noEmit && vite build
+pnpm e2e      # playwright test — 26 cases
+```
+
+`.github/workflows/checks.yml` runs that chain on `ubuntu-latest`. `.github/workflows/build-ios.yml` additionally runs the native Swift tests, the simulator calendar and screenshot renders, and the unsigned-IPA build on `macos-26`. The iOS app can only be built on macOS runners, and the artifact is **unsigned** — installing it on a device still needs your own signing identity.
+
+> Documentation-only commits (`**/*.md`) do not trigger either workflow; the same is true for pull requests that only touch Markdown.
+
+### Static checks: no ESLint, by design
+
+The Portfolio Polish checklist (§11) asks CI to run a linter. This repository has **no ESLint, no eslint config and no `lint` script**, and `AGENTS.md` explicitly forbids introducing lint tooling that the repository does not already have. So CI runs no linter — an intentional deviation, not an oversight:
+
+- `package.json` gained no `lint` script, and type checking was **not** renamed into a fake `lint` command.
+- Static checking is what the existing `pnpm build` already does: **`tsc --noEmit`** with `strict: true`, covering `src/`, `tests/` and `capacitor.config.ts` (it does not cover `e2e/` or the shell scripts).
+- If a linter is ever wanted, it should be introduced deliberately — dependency, config, and someone accepting the findings — not to tick a checklist box.
 
 ## Screenshots
 

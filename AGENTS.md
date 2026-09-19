@@ -66,7 +66,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 | 本地开发服务器 | `pnpm dev`（`vite --host 127.0.0.1`） | `package.json` |
 | E2E（Playwright） | `pnpm exec playwright test` | `playwright.config.ts` |
 
-关于 E2E：`e2e/` 下有 8 个文件 / 26 个用例，但**没有 npm script、CI 不跑它，且 `playwright.config.ts` 写死了 Windows 的 Chrome 路径**。在 CI 或 macOS 上不要假装它能跑通。
+关于 E2E：`e2e/` 下有 8 个文件 / 26 个用例，**`pnpm e2e`（= `playwright test`）已在 `package.json` 里**，`checks.yml` 在 ubuntu-latest 上用 Playwright 自带 chromium 跑它们（本机 Windows 实测 26 passed；`playwright.config.ts` 只在 `process.platform === 'win32'` 时用写死的 Chrome 路径）。改这些用例时必须真的跑一遍 `pnpm e2e`，不要假装它能跑通。
 
 ## Tests 放在哪
 
@@ -132,8 +132,9 @@ After that, `git commit` refuses to commit when the gate fails.
 
 - **`build-ios.yml`**：触发条件是 `workflow_dispatch` 与 `push: main` / `deepseek-dev` / `portfolio/**`（`paths-ignore` 掉 `**/*.md`、`releases/**`、`scripts/publish-release.py`、它自己）。runner `macos-26`（标准 GitHub 托管 runner；公开仓库 + 标准 runner 不产生 Actions 费用，但依旧要花时间和排队），Node 24，pnpm 11.19.0，超时 30 分钟（实测约 10–15 分钟）。步骤依次是：`pnpm install --frozen-lockfile` → `pnpm test` → `bash scripts/test-native.sh` → `test-calendar-rendering.sh` → `test-screenshots.sh` → `pnpm build` → `pnpm exec cap sync ios` → `bash scripts/build-unsigned-ios.sh` → 上传 IPA。
 - **`publish-release.yml`**：`workflow_dispatch`，或 `push: main` 且改动命中 `releases/**` / `scripts/publish-release.py` / 自身；执行 `python3 scripts/publish-release.py`（内部调用 `scripts/verify-ipa.py`）。
-- **PR 不触发任何 CI。**
-- 因此：推 `main` / `deepseek-dev` / `portfolio/*` 都会**自动**起一个 run，不用手动 dispatch。只有不在这三类分支上的 ref（临时分支、tag、别人的 fork）才需要手动触发：
+- **`checks.yml`**：`workflow_dispatch`、`push: main / deepseek-dev / portfolio/**`，以及**任何 PR**（`paths-ignore` 掉 `**/*.md` 与 `releases/**`）。runner `ubuntu-latest`，超时 15 分钟，步骤：`pnpm install --frozen-lockfile` → `pnpm test` → `pnpm build` → `pnpm exec playwright install --with-deps chromium` → `pnpm e2e`。**没有 lint 步骤**：本仓库没有 ESLint，`AGENTS.md` 也禁止自行引入（偏离理由见 README 「Static checks: no ESLint, by design」）。
+- **PR 触发 `checks.yml`，但不触发 `build-ios.yml`**：16 分钟的 macOS 构建只在 push 上跑，避免每个 PR 浪费 macOS 额度。
+- 因此：推 `main` / `deepseek-dev` / `portfolio/*` 会**自动**起两个 run（`checks` 与 `build-ios`），不用手动 dispatch。只有不在这三类分支上的 ref（临时分支、tag、别人的 fork）才需要手动触发：
 
 ```sh
 gh workflow run build-ios.yml --ref <branch> -R chengxiaomingcxm/us-stock-ledger
