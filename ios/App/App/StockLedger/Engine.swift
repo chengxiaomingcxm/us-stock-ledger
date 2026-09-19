@@ -95,6 +95,24 @@ enum Engine {
         )
     }
 
+    /// 交易不变量：按时间顺序重放，任何时点的卖出都不得超过当时可用股数。
+    /// 返回第一笔违规交易；全部合法时返回 nil。口径与 Web 版 `validateLedger` 一致。
+    /// 只看最终数量是不够的：Jan1 买 100 / Jan2 卖 100 / Jan3 买 100 的最终持仓虽然为 100，
+    /// 但删掉 Jan1 的买入后 Jan2 就已超卖，因此必须逐笔重放。
+    static func oversoldTrade(_ trades: [Trade]) -> Trade? {
+        var holding: [String: Decimal] = [:]
+        for trade in trades.sorted(by: { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }) {
+            if trade.side == .buy {
+                holding[trade.symbol, default: 0] += trade.quantity
+            } else {
+                let available = holding[trade.symbol] ?? 0
+                if trade.quantity > available { return trade }
+                holding[trade.symbol] = available - trade.quantity
+            }
+        }
+        return nil
+    }
+
     /// 期初余额是“期初日当天开始前”的现金；期初日及之后的入金、出金、分红、费用和买卖计入余额。
     /// 未设置期初时不根据股票历史推断现金，也不计入买卖现金流。
     static func cashTotals(_ ledger: Ledger) -> CashTotals {

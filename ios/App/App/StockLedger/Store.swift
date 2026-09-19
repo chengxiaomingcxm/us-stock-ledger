@@ -5,16 +5,36 @@ import Combine
 // 不读取旧 Web 版的 Capacitor Preferences；产品重新编号不更改存储位置。
 
 enum LedgerStore {
-    private static var fileURL: URL {
+    /// 仅测试使用：把账本读写重定向到临时目录，避免测试碰到真实的 Documents。
+    static var fileURLOverride: URL?
+
+    /// 账本文件位置。
+    static var fileURL: URL {
+        if let fileURLOverride { return fileURLOverride }
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return documents.appendingPathComponent("ledger-v2.json")
     }
 
-    static func load() -> Ledger {
-        guard let data = try? Data(contentsOf: fileURL) else { return Ledger() }
-        let decoder = JSONDecoder()
-        return (try? decoder.decode(Ledger.self, from: data)) ?? Ledger()
+    /// 读取结果。「没有文件」与「文件读不出来」必须严格区分：
+    /// 后者绝不能被当成空账本，否则下一次保存会用空账本覆盖仍可抢救的原文件。
+    enum LoadResult {
+        case missing          // 首次启动：文件不存在，是合法状态
+        case loaded(Ledger)   // 正常读取
+        case failed(String)   // 文件存在但无法读取/解码；原文件保持不动
     }
+
+    static func loadResult() -> LoadResult {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return .missing }
+        do {
+            let data = try Data(contentsOf: fileURL)
+            return .loaded(try JSONDecoder().decode(Ledger.self, from: data))
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    /// 账本读不出来时给用户看的一句话（也是暂停写入的说明）。
+    static let unreadableMessage = "账本文件无法读取，已暂停写入以保护原文件；请到「设置 → 从备份恢复」。"
 
     static func save(_ ledger: Ledger) throws {
         try write(encoded(ledger))
@@ -81,6 +101,8 @@ final class AppState: ObservableObject {
     @Published private(set) var ledger: Ledger
     @Published var undoTrade: UUID?
     @Published var errorMessage: String?
+    /// 非 nil 表示磁盘上的账本存在但读不出来：此时暂停一切写入以保护原文件。
+    @Published private(set) var loadFailure: String?
     /// 界面语言：中文 / English，跟随设置并持久化。
     @Published var language: AppLanguage {
         didSet {
@@ -115,15 +137,26 @@ final class AppState: ObservableObject {
     private var computedLedger: Ledger?
     private let persist: (Ledger) throws -> Void
 
-    init(ledger: Ledger = LedgerStore.load(), settings: QuoteSettings = QuoteService.load(),
+    /// `ledger` 为 nil 时从磁盘读取；显式传入账本（测试 / 示例 / 截图工具）时完全不碰磁盘。
+    init(ledger: Ledger? = nil, settings: QuoteSettings = QuoteService.load(),
          persist: @escaping (Ledger) throws -> Void = LedgerStore.save) {
-        self.ledger = ledger
+        switch ledger.map(LedgerStore.LoadResult.loaded) ?? LedgerStore.loadResult() {
+        case .loaded(let value):
+            self.ledger = value
+            self.loadFailure = nil
+        case .missing:
+            self.ledger = Ledger()
+            self.loadFailure = nil
+        case .failed(let reason):
+            self.ledger = Ledger()
+            self.loadFailure = reason
+        }
         self.quoteSettings = settings
         self.persist = persist
         let saved = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "app.language") ?? "") ?? .zhHans
         self.language = saved
         L10n.current = saved
-        rebuild(ledger)
+        rebuild(self.ledger)
     }
 
     func setLanguage(_ value: AppLanguage) { language = value }
@@ -150,8 +183,13 @@ final class AppState: ObservableObject {
         }
     }
     /// Save first; failed persistence leaves both the in-memory and disk ledger intact.
+    /// 账本读取失败期间拒绝一切写入，避免用空账本覆盖原文件。
     @discardableResult
     func commit(_ next: Ledger) -> Bool {
+        guard loadFailure == nil else {
+            errorMessage = L10n.tr(LedgerStore.unreadableMessage)
+            return false
+        }
         do { try persist(next) }
         catch { errorMessage = error.localizedDescription; return false }
         ledger = next
@@ -161,6 +199,7 @@ final class AppState: ObservableObject {
 
     /// Automatic refresh must not JSON-encode the entire history on the scrolling thread.
     private func commitRefresh(_ next: Ledger) async -> Bool {
+        guard loadFailure == nil else { return false }
         let token = generation
         do {
             let data = try await Task.detached(priority: .utility) { try LedgerStore.encoded(next) }.value
@@ -192,16 +231,27 @@ final class AppState: ObservableObject {
             created.sequence = next.nextTradeSequence
             next.trades.append(created)
         }
+        guard !introducesOversell(next) else { return false }
         guard commit(next) else { return false }
         if isNew { undoTrade = trade.id }
         return true
     }
 
-    func deleteTrade(_ id: UUID) {
+    @discardableResult
+    func deleteTrade(_ id: UUID) -> Bool {
         var next = ledger
         next.trades.removeAll { $0.id == id }
+        guard !introducesOversell(next) else { return false }
         if undoTrade == id { undoTrade = nil }
-        commit(next)
+        return commit(next)
+    }
+
+    /// 手动录入路径的交易不变量：按时间顺序重放后，任何时点的卖出都不得超过当时持仓。
+    /// 账本在本次改动前就已经不合法时放行，避免历史脏数据把用户永久锁死。
+    private func introducesOversell(_ next: Ledger) -> Bool {
+        guard let bad = Engine.oversoldTrade(next.trades), Engine.oversoldTrade(ledger.trades) == nil else { return false }
+        errorMessage = L10n.tr("{} 在 {} 的卖出超过当时持仓，账本未改动。", bad.symbol, bad.date)
+        return true
     }
 
     func undoLastTrade() {
@@ -374,6 +424,14 @@ final class AppState: ObservableObject {
     func replace(with ledger: Ledger) {
         undoTrade = nil
         commit(ledger)
+    }
+
+    /// 用户明确选择用备份恢复：这是账本读取失败后唯一被放行的写入路径。
+    @discardableResult
+    func replaceFromBackup(_ next: Ledger) -> Bool {
+        loadFailure = nil
+        undoTrade = nil
+        return commit(next)
     }
 
     // MARK: - 示例与清空

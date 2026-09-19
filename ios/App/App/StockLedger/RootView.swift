@@ -71,6 +71,16 @@ struct RootView: View {
             .tag(3)
         }
         .id(state.language)
+        .safeAreaInset(edge: .top) {
+            if state.loadFailure != nil {
+                Text(L10n.tr(LedgerStore.unreadableMessage))
+                    .font(.footnote)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(.yellow.opacity(0.25))
+            }
+        }
         .overlay(alignment: .bottom) {
             Button(action: presentNewTrade) {
                 Label(L10n.tr("记一笔"), systemImage: "plus")

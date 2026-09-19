@@ -47,6 +47,8 @@ struct NativeTests {
 
     @MainActor
     static func main() async throws {
+        EngineGoldenTests.run()
+        try SafetyTests.run()
         let empty = Ledger()
         // Draw out of content-stream order to exercise PDFKit's visual column reconstruction.
         let pdf = NSMutableData()

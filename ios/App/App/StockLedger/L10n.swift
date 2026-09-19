@@ -403,6 +403,8 @@ enum L10n {
         "不小于 0": "0 or more",
         "大于 0": "greater than 0",
         "{}最多 500 字。": "{} is at most 500 characters.",
+        "账本文件无法读取，已暂停写入以保护原文件；请到「设置 → 从备份恢复」。": "The ledger file could not be read. Writing is paused to protect the original file — restore from a backup in Settings.",
+        "{} 在 {} 的卖出超过当时持仓，账本未改动。": "The sale of {} on {} exceeds the holding at that time. The ledger was not changed.",
         "收益日历按每个交易日重放账本：当日收益 = 当日收盘市值 − 上一交易日收盘市值 + 当日卖出净额 − 当日买入含费支出。月份用左右箭头切换，格子里直接显示当日收益金额，点按查看按股票的明细；缺少收盘价的交易日显示“待补”且不计入月度合计。累计收益曲线把每日收益逐日累加，横轴最多显示六个日期刻度，虚线是零轴。日历与曲线需要先「同步历史」获取收盘价与交易日历（来自 Yahoo 日线）。": "The returns calendar replays the ledger each trading day: that day's return = close value − previous close value + net sells − buys including fees. Switch months with the arrows; each cell shows that day's amount and tapping opens the per-symbol detail. Days without a close show “awaiting” and are excluded from the monthly total. The cumulative curve adds daily returns; the axis shows up to six date ticks and the dashed line is zero. Calendar and curve need “Sync history” first to fetch closes and the trading calendar (from Yahoo daily).",
         "发现拆股，需先核对股数与成本": "Stock split found; check share counts and cost first",
         "相邻交易日之间有交易记录，请核对美东交易日期": "Trades exist between adjacent trading days; check the US Eastern trade dates",
