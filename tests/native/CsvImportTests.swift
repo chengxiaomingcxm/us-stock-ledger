@@ -26,7 +26,7 @@ enum CsvImportTests {
         try invalidFile()
         try duplicates()
         try oversellBatch()
-        messages()
+        try messages()
     }
 
     // MARK: - 合法 CSV
