@@ -9,24 +9,24 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        print("HARNESS-START")
+        // NSLog goes to the unified log, which the CI reads with `log show`.
+        // plain print() is lost: stdout is block-buffered when simctl redirects it.
+        NSLog("HARNESS-START")
         let screen = ProcessInfo.processInfo.arguments.dropFirst().first ?? "holdings"
-        print("HARNESS screen=\(screen)")
-        // no-op persist：裸 harness 不写盘；语言必须在 AppState 初始化之后再切，
-        // 因为初始化会把语言重置为 UserDefaults 里的持久化默认值。
+        // Set English before init (like the working Chinese baseline) and again
+        // after init (init resets L10n.current to the persisted value).
+        L10n.current = .en
         let state = AppState(ledger: LedgerStore.demo(), persist: { _ in })
-        print("HARNESS state-created")
-        state.setLanguage(.en)
-        print("HARNESS language-en")
+        L10n.current = .en
+        NSLog("HARNESS state-ready lang=\(L10n.current.rawValue) screen=\(screen)")
 
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = UIHostingController(rootView: makeScreen(screen, state: state))
-        print("HARNESS rootVC-set")
+        NSLog("HARNESS rootVC-set")
         window.makeKeyAndVisible()
-        print("HARNESS key-visible")
+        NSLog("HARNESS key-visible")
         self.window = window
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { print("HARNESS alive+2s") }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { print("HARNESS alive+5s") }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { NSLog("HARNESS alive+3s") }
         return true
     }
 
