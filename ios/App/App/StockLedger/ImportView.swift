@@ -8,6 +8,10 @@ struct ImportView: View {
     @EnvironmentObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
 
+    /// 截图 harness 用：预置一份 CSV 文本，跳过文件选择直接进入字段映射与预览。
+    /// 与 `LedgerStore.fileURLOverride` 同类的最小接缝——正常运行时恒为空串，行为不变。
+    static var prefillOverride = ""
+
     @State private var showingPicker = false
     @State private var fileName = ""
     @State private var text = ""
@@ -141,6 +145,14 @@ struct ImportView: View {
         .fileImporter(isPresented: $showingPicker,
                       allowedContentTypes: [.commaSeparatedText, .tabSeparatedText, .plainText, .text, .data]) { result in
             load(result)
+        }
+        // 走与选文件同一条路径（识别表头 → 自动映射 → 校验），只是数据不是从 URL 读的。
+        .task {
+            guard !Self.prefillOverride.isEmpty, text.isEmpty else { return }
+            text = Self.prefillOverride
+            fileName = "demo-trades.csv"
+            if let head = CsvImport.parse(text).first { mode = CsvImport.detectMode(head) }
+            remap(auto: true)
         }
     }
 

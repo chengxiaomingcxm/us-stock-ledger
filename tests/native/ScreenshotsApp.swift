@@ -7,19 +7,41 @@ import UIKit
 final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
+    /// 截图用的虚构券商导出：5 行合法 + 1 行负数数量。表头沿用仓库自带的
+    /// `CsvImport`/`csvTemplate` 口径；全部为买入，因为它是与示例账本叠加后
+    /// 做整批校验的，卖出会在演示账本上引入超卖风险。
+    /// 只用于展示映射与校验界面，永远不会真的写进账本。
+    private static let importCSV = """
+    Date,Symbol,Side,Quantity,Price,Fee,TradeID,Note
+    2026-09-14,MSFT,BUY,4,498.20,1.00,D-1041,Weekly top-up
+    2026-09-15,AAPL,BUY,3,226.40,1.00,D-1042,Add to position
+    2026-09-15,NVDA,BUY,2,171.85,1.00,D-1043,
+    2026-09-16,VOO,BUY,1,575.10,1.00,D-1044,Dividend reinvestment
+    2026-09-17,SGOV,BUY,12,103.05,1.00,D-1045,Cash sweep
+    2026-09-17,TSLA,BUY,-5,254.60,1.00,D-1046,Quantity column cannot be negative
+    """
+
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // NSLog (not print) so the CI can read these from the unified log with
         // `log show`; print output is block-buffered and lost on terminate.
         NSLog("HARNESS-START")
         let screen = ProcessInfo.processInfo.arguments.dropFirst().first ?? "holdings"
-        // Set English before building the demo ledger so its sample notes are English too.
+        // `AppState.init` overwrites `L10n.current` from UserDefaults, so English must be
+        // switched on after construction and before the demo ledger is generated —
+        // the generator localises its sample notes at that moment.
+        let state = AppState(settings: QuoteSettings(), persist: { _ in })
         L10n.current = .en
-        let state = AppState(ledger: LedgerStore.demo(), persist: { _ in })
-        // Proper switch afterwards, so state.language and L10n.current agree and the
-        // Settings picker shows English too.
+        // Keeps `state.language` and `L10n.current` in sync so the Settings picker is English too.
         state.setLanguage(.en)
+        // Go through the real Demo Mode instead of injecting a ledger, so the screenshots
+        // show what a first-time visitor sees: the Phase 1 sample ledger (history and
+        // previous closes, no "Awaiting data") and no backup reminder (suppressed in demo).
+        state.enterDemo()
         NSLog("HARNESS state-ready lang=\(L10n.current.rawValue) screen=\(screen)")
+        // Only the import screenshot needs it: lets `ImportView` skip the file picker and
+        // show the mapping/preview steps with a fictional broker export.
+        ImportView.prefillOverride = Self.importCSV
 
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = UIHostingController(rootView: makeScreen(screen, state: state))
@@ -41,32 +63,22 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
         case "settings":
             NavigationStack { SettingsView() }.environmentObject(state)
         case "calendar":
-            NavigationStack { calendarList() }.environmentObject(state)
+            NavigationStack { calendarList(state) }.environmentObject(state)
+        case "import":
+            NavigationStack { ImportView() }.environmentObject(state)
         default:
             NavigationStack { HoldingsView(onAdd: {}, onOpenSettings: {}) }.environmentObject(state)
         }
     }
 
-    private func calendarList() -> some View {
-        let presentation = InsightsPresentation(days: sampleDays(month: "2026-09"))
-        return List {
+    /// 与 `InsightsView` 里的日历同一个视图，但单独一屏以便取图。
+    /// 数据取示例账本自己重放出来的每日收益，不再是手写的假序列。
+    private func calendarList(_ state: AppState) -> some View {
+        List {
             Section("Returns calendar") {
-                ReturnCalendar(data: presentation).equatable()
+                ReturnCalendar(data: state.insights).equatable()
             }
         }
         .navigationTitle("Returns")
-    }
-
-    private func sampleDays(month: String) -> [Engine.DayReturn] {
-        let count = month == "2026-02" ? 28 : month == "2026-09" ? 30 : 31
-        var days: [Engine.DayReturn] = []
-        for day in 1 ... count {
-            let amount = Decimal(day % 2 == 0 ? day : -day)
-            let profit: Decimal? = day == 10 ? nil : amount
-            let date = String(format: "%@-%02d", month, day)
-            days.append(Engine.DayReturn(date: date, previous: nil, profit: profit,
-                                         cumulative: Decimal(day), contributions: [], missing: []))
-        }
-        return days
     }
 }
