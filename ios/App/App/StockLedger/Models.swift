@@ -125,13 +125,24 @@ struct Ledger: Codable {
 
     func quote(for symbol: String) -> Quote? { quotes.first { $0.symbol == symbol } }
 
-    /// 交易按日期与录入顺序排列。
-    var orderedTrades: [Trade] {
-        trades.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+    /// 排序规则只在这里定义一次：(美东日期, sequence) 升序。
+    /// Swift 的 `sort` 不保证稳定，所以显式用数组下标做最终判据——这样即使备份里同日 sequence
+    /// 重复（可解码但顺序有歧义），Buy/Sell 的相对顺序也是数据的纯函数，可复现，不随排序实现变化。
+    static func sortedTrades(_ trades: [Trade]) -> [Trade] {
+        trades.enumerated()
+            .sorted { ($0.element.date, $0.element.sequence, $0.offset) < ($1.element.date, $1.element.sequence, $1.offset) }
+            .map(\.element)
     }
-    var orderedCash: [CashRecord] {
-        cash.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+
+    static func sortedCash(_ records: [CashRecord]) -> [CashRecord] {
+        records.enumerated()
+            .sorted { ($0.element.date, $0.element.sequence, $0.offset) < ($1.element.date, $1.element.sequence, $1.offset) }
+            .map(\.element)
     }
+
+    /// 交易 / 现金按日期与录入顺序排列。
+    var orderedTrades: [Trade] { Ledger.sortedTrades(trades) }
+    var orderedCash: [CashRecord] { Ledger.sortedCash(cash) }
     var nextTradeSequence: Int { (trades.map(\.sequence).max() ?? -1) + 1 }
     var nextCashSequence: Int { (cash.map(\.sequence).max() ?? -1) + 1 }
 }

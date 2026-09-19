@@ -125,7 +125,9 @@ struct SettingsView: View {
         .alert(L10n.tr("恢复这份备份？"), isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
             Button(L10n.tr("取消"), role: .cancel) { pendingImport = nil }
             Button(L10n.tr("替换并恢复"), role: .destructive) {
-                if let ledger = pendingImport { state.replaceFromBackup(ledger) }
+                if let ledger = pendingImport, !state.replaceFromBackup(ledger) {
+                    importError = state.errorMessage ?? L10n.tr("操作失败，账本未改变。")
+                }
                 pendingImport = nil
             }
         } message: {

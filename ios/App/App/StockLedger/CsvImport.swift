@@ -414,7 +414,7 @@ enum CsvImport {
     /// 同日相对顺序由用户选择：默认追加到同日已有交易之后，也可插入到同日已有交易之前。
     /// 合并后统一按数组顺序重排 sequence，保持 (日期, sequence) 排序语义。
     static func merge(_ existing: [Trade], _ imported: [Trade], insertBeforeSameDay: Bool) -> [Trade] {
-        var result = existing.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+        var result = Ledger.sortedTrades(existing)
         for trade in imported {
             if insertBeforeSameDay {
                 if let index = result.firstIndex(where: { $0.date >= trade.date }) { result.insert(trade, at: index) }
@@ -581,9 +581,7 @@ enum CsvImport {
     }
 
     static func mergeCash(_ existing: [CashRecord], _ imported: [CashRecord]) -> [CashRecord] {
-        var result = existing.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
-        result.append(contentsOf: imported)
-        result.sort { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+        let result = Ledger.sortedCash(existing + imported)
         return result.enumerated().map { index, record in
             var copy = record
             copy.sequence = index

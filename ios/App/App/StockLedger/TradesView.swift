@@ -9,6 +9,7 @@ struct TradesView: View {
     @State private var from = ""
     @State private var to = ""
     @State private var editing: Trade?
+    @State private var failure: String?
 
     private var result: Engine.RangeResult {
         Engine.range(state.ledger, from: from, to: to, side: side, query: query,
@@ -58,7 +59,9 @@ struct TradesView: View {
                     Button { editing = trade } label: { row(trade) }
                         .buttonStyle(.plain)
                         .swipeActions {
-                            Button(L10n.tr("删除"), role: .destructive) { state.deleteTrade(trade.id) }
+                            Button(L10n.tr("删除"), role: .destructive) {
+                                if !state.deleteTrade(trade.id) { failure = state.errorMessage ?? L10n.tr("操作失败，账本未改变。") }
+                            }
                         }
                 }
             }
@@ -68,11 +71,18 @@ struct TradesView: View {
         .sheet(item: $editing) { trade in
             TradeFormView(trade: trade).environmentObject(state)
         }
+        .alert(L10n.tr("操作未完成"), isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button(L10n.tr("好"), role: .cancel) { failure = nil }
+        } message: {
+            Text(failure ?? "")
+        }
         .overlay(alignment: .bottom) {
             if state.undoTrade != nil {
                 HStack {
                     Text(L10n.tr("交易已保存"))
-                    Button(L10n.tr("撤销新增")) { state.undoLastTrade() }
+                    Button(L10n.tr("撤销新增")) {
+                        if !state.undoLastTrade() { failure = state.errorMessage ?? L10n.tr("操作失败，账本未改变。") }
+                    }
                 }
                 .font(.footnote)
                 .padding(10)

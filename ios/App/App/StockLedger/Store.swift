@@ -246,17 +246,26 @@ final class AppState: ObservableObject {
         return commit(next)
     }
 
-    /// 手动录入路径的交易不变量：按时间顺序重放后，任何时点的卖出都不得超过当时持仓。
-    /// 账本在本次改动前就已经不合法时放行，避免历史脏数据把用户永久锁死。
+    /// 手动录入路径的交易不变量：任何时点的卖出都不得超过当时持仓。
+    /// 逐笔对比「违规时点」而不是只看最终持仓：只有 `next` 的每个违规时点在旧账本里都能找到
+    /// （同一股票、同一日期、同一 sequence）且超额股数没有扩大，才认为这次改动是在**修复**历史脏数据。
+    /// 新增另一只股票的超卖、扩大已有超卖、把违规提前到更早的时点、或删掉买入导致中间时点悬空，全部拒绝。
     private func introducesOversell(_ next: Ledger) -> Bool {
-        guard let bad = Engine.oversoldTrade(next.trades), Engine.oversoldTrade(ledger.trades) == nil else { return false }
-        errorMessage = L10n.tr("{} 在 {} 的卖出超过当时持仓，账本未改动。", bad.symbol, bad.date)
-        return true
+        var existing: [Engine.Oversell.ID: Decimal] = [:]
+        for item in Engine.oversells(ledger) { existing[item.id, default: 0] += item.quantity }
+        for item in Engine.oversells(next) {
+            guard let allowed = existing[item.id], item.quantity <= allowed else {
+                errorMessage = L10n.tr("{} 在 {} 的卖出超过当时持仓，账本未改动。", item.symbol, item.date)
+                return true
+            }
+        }
+        return false
     }
 
-    func undoLastTrade() {
-        guard let id = undoTrade else { return }
-        deleteTrade(id)
+    @discardableResult
+    func undoLastTrade() -> Bool {
+        guard let id = undoTrade else { return true }
+        return deleteTrade(id)
     }
 
     // MARK: - 报价
@@ -421,17 +430,25 @@ final class AppState: ObservableObject {
 
     // MARK: - 备份
 
-    func replace(with ledger: Ledger) {
+    @discardableResult
+    func replace(with ledger: Ledger) -> Bool {
+        guard commit(ledger) else { return false }
         undoTrade = nil
-        commit(ledger)
+        return true
     }
 
     /// 用户明确选择用备份恢复：这是账本读取失败后唯一被放行的写入路径。
+    /// 只有备份真正写盘成功才解除保护；写盘失败时保护状态、内存账本与原文件都不变。
     @discardableResult
     func replaceFromBackup(_ next: Ledger) -> Bool {
+        let blocked = loadFailure
         loadFailure = nil
+        guard commit(next) else {
+            loadFailure = blocked
+            return false
+        }
         undoTrade = nil
-        return commit(next)
+        return true
     }
 
     // MARK: - 示例与清空

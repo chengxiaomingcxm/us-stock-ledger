@@ -90,7 +90,157 @@ enum SafetyTests {
         NativeTests.check(recovered.trades.count == 2, "P0-1/恢复 — 备份内容已落盘")
     }
 
-    // MARK: - P0-2
+    /// P0-1 回归（续）：备份写盘失败时，写保护、内存账本与原文件都必须保持不变；
+    /// 之后所有普通写入路径（交易、现金、报价、CSV 导入、清空、示例）仍必须被阻止。
+    private static func restoreFailureKeepsTheProtection(_ file: URL) throws {
+        try Data(#"{"format":2,"trades":[{"symbol":"AAA""#.utf8).write(to: file)
+        var failWrites = false
+        let broken = AppState(settings: QuoteSettings(), persist: { _ in
+            if failWrites { throw LedgerError.message("disk full") }
+        })
+        NativeTests.check(broken.loadFailure != nil, "P0-1/恢复失败 — 先确认处于读取失败状态")
+        let before = try Data(contentsOf: file)
+
+        var backup = Ledger()
+        backup.trades = [trade(0, .buy, "3", "2026-01-05")]
+        backup.cash = [CashRecord(sequence: 0, date: "2026-01-06", kind: .deposit, amount: decimal("100"),
+                                  tax: nil, symbol: nil, note: "")]
+
+        failWrites = true
+        NativeTests.check(!broken.replaceFromBackup(backup), "P0-1/恢复失败 — replaceFromBackup 返回 false")
+        NativeTests.check(broken.loadFailure != nil, "P0-1/恢复失败 — 写保护仍然存在")
+        NativeTests.check(broken.errorMessage != nil, "P0-1/恢复失败 — 给出可读错误信息")
+        NativeTests.check(broken.ledger.trades.isEmpty && broken.ledger.cash.isEmpty, "P0-1/恢复失败 — 内存账本未改变")
+        let after = try Data(contentsOf: file)
+        NativeTests.check(after == before, "P0-1/恢复失败 — 原文件字节未改变")
+
+        // 之后所有普通写入必须仍然被阻止。
+        NativeTests.check(!broken.commit(backup), "P0-1/恢复失败 — commit 仍被拒绝")
+        NativeTests.check(!broken.saveTrade(trade(0, .buy, "1", "2026-01-07")), "P0-1/恢复失败 — saveTrade 仍被拒绝")
+        broken.setQuote(symbol: "AAA", price: 10, date: "2026-01-08")
+        broken.saveCash(CashRecord(sequence: 0, date: "2026-01-08", kind: .deposit, amount: decimal("5"),
+                                   tax: nil, symbol: nil, note: ""))
+        broken.setOpening(CashOpening(amount: decimal("1"), date: "2026-01-01", note: ""))
+        NativeTests.check(!broken.replace(with: backup), "P0-1/恢复失败 — CSV 导入路径仍被拒绝")
+        broken.clearAll()
+        broken.loadDemo()
+        let stillIntact = try Data(contentsOf: file)
+        NativeTests.check(stillIntact == before, "P0-1/恢复失败 — 交易/现金/报价/导入/清空/示例均未写入")
+
+        // 只有真正写盘成功后才解除保护并恢复普通保存。
+        failWrites = false
+        NativeTests.check(broken.replaceFromBackup(backup), "P0-1/恢复失败 — 写盘成功后允许恢复")
+        NativeTests.check(broken.loadFailure == nil, "P0-1/恢复失败 — 写盘成功后解除保护")
+        NativeTests.check(broken.ledger.trades.count == 1, "P0-1/恢复失败 — 内存账本已更新")
+        let recovered = try JSONDecoder().decode(Ledger.self, from: Data(contentsOf: file))
+        NativeTests.check(recovered.trades.count == 1, "P0-1/恢复失败 — 备份内容已落盘")
+        NativeTests.check(broken.saveTrade(trade(1, .buy, "1", "2026-01-09")), "P0-1/恢复失败 — 普通保存已恢复")
+    }
+
+    /// 修复前可能已经写入超卖账本；守卫必须继续阻止「新增伤害」，同时允许「修复」。
+    /// 脏账本：AAPL 在 2026-01-02 先卖 10 股（当时持仓 0 → 超卖 10），2026-01-03 才买入 10 股。
+    /// 违规键 = AAPL|2026-01-02|0，超额 10 股。
+    private static func legacyOversellStillGuardsNewDamage() {
+        let sellID = UUID()
+        func dirty() -> Ledger {
+            var sell = trade(0, .sell, "10", "2026-01-02", symbol: "AAPL")
+            sell.id = sellID
+            return ledger([sell, trade(1, .buy, "10", "2026-01-03", symbol: "AAPL")])
+        }
+        func state(_ value: Ledger) -> AppState {
+            AppState(ledger: value, settings: QuoteSettings(), persist: { _ in })
+        }
+
+        // Scenario 1：删掉违规卖出完全修复 → 允许。
+        let repairing = state(dirty())
+        NativeTests.check(repairing.deleteTrade(sellID), "已有超卖/S1 — 删除违规卖出被允许（修复）")
+        NativeTests.check(repairing.ledger.trades.count == 1, "已有超卖/S1 — 修复已写入")
+
+        // Scenario 4：新增与违规无关的合法买入 → 允许（AAPL 与 MSFT 互不串联）。
+        let unrelated = state(dirty())
+        NativeTests.check(unrelated.saveTrade(trade(2, .buy, "10", "2026-01-04", symbol: "MSFT")),
+                          "已有超卖/S4 — 无关股票的合法买入被允许")
+        NativeTests.check(Engine.oversells(unrelated.ledger).count == 1, "已有超卖/S4 — MSFT 没引入新违规")
+
+        // Scenario 2：新增另一只股票的超卖 → 拒绝。
+        let another = state(dirty())
+        NativeTests.check(another.saveTrade(trade(2, .buy, "10", "2026-01-04", symbol: "NVDA")),
+                          "已有超卖/S2 — 新股票的合法买入被允许")
+        let beforeS2 = another.ledger.trades.count
+        NativeTests.check(!another.saveTrade(trade(3, .sell, "20", "2026-01-05", symbol: "NVDA")),
+                          "已有超卖/S2 — 新增另一只股票的超卖被拒绝")
+        NativeTests.check(another.ledger.trades.count == beforeS2, "已有超卖/S2 — 账本未改变")
+
+        // Scenario 3：把已有超卖从 10 股扩大到 50 股 → 拒绝。
+        let growing = state(dirty())
+        var worse = dirty().trades[0]
+        worse.quantity = decimal("50")
+        NativeTests.check(!growing.saveTrade(worse), "已有超卖/S3 — 扩大已有超卖被拒绝")
+        NativeTests.check(growing.ledger.trades[0].quantity == decimal("10"), "已有超卖/S3 — 账本未改变")
+
+        // 把违规提前到更早的历史时点 → 拒绝。
+        let earlier = state(dirty())
+        var moved = dirty().trades[0]
+        moved.date = "2026-01-01"
+        NativeTests.check(!earlier.saveTrade(moved), "已有超卖 — 把违规提前到更早时点被拒绝")
+
+        // 补一笔更早的买入，把同一时点的超额从 10 股降到 6 股 → 允许（这是在修复）。
+        let shrinking = state(dirty())
+        NativeTests.check(shrinking.saveTrade(trade(2, .buy, "4", "2026-01-01", symbol: "AAPL")),
+                          "已有超卖 — 补更早买入缩小超额被允许")
+        NativeTests.check(Engine.oversells(shrinking.ledger).first?.quantity == decimal("6"),
+                          "已有超卖 — 缩小后同一时点超额为 6 股")
+    }
+
+    /// 同日 case：买后卖合法；卖后买在同一时点已经超卖。
+    private static func sameDayOrderIsEnforced() {
+        let buyFirst = state([])
+        NativeTests.check(buyFirst.saveTrade(trade(0, .buy, "10", "2026-02-02", symbol: "TSLA")), "同日/买后卖 — 买入")
+        NativeTests.check(buyFirst.saveTrade(trade(1, .sell, "10", "2026-02-02", symbol: "TSLA")), "同日/买后卖 — 同日卖出合法")
+
+        let sellFirst = state([])
+        NativeTests.check(!sellFirst.saveTrade(trade(0, .sell, "10", "2026-02-02", symbol: "TSLA")),
+                          "同日/卖后买 — 同日先卖被识别为历史超卖")
+        NativeTests.check(sellFirst.ledger.trades.isEmpty, "同日/卖后买 — 账本未改变")
+    }
+
+    /// 排序：同日 sequence 重复的备份不能靠不稳定的 sort 决定 Buy/Sell 顺序。
+    private static func duplicateSameDaySequenceIsDeterministic() {
+        var duplicated = Ledger()
+        var buy = Trade(sequence: 0, symbol: "TSLA", side: .buy, date: "2026-03-02",
+                        quantity: decimal("10"), price: 1, fee: 0, note: "buy")
+        var sell = Trade(sequence: 0, symbol: "TSLA", side: .sell, date: "2026-03-02",
+                         quantity: decimal("10"), price: 1, fee: 0, note: "sell")
+        buy.id = UUID(); sell.id = UUID()
+
+        duplicated.trades = [sell, buy]
+        NativeTests.check(duplicated.orderedTrades.map(\.note) == ["sell", "buy"],
+                          "排序/同日重复 sequence — 平手时保持数组顺序")
+        NativeTests.check(Engine.oversells(duplicated).count == 1, "排序/同日重复 sequence — 先卖必为超卖")
+
+        duplicated.trades = [buy, sell]
+        NativeTests.check(duplicated.orderedTrades.map(\.note) == ["buy", "sell"],
+                          "排序/同日重复 sequence — 交换数组顺序后语义也跟着确定")
+        NativeTests.check(Engine.oversells(duplicated).isEmpty, "排序/同日重复 sequence — 买后卖无违规")
+
+        // 30 笔完全平手：旧实现（直接 sort）在大数组上会走非稳定分支，顺序会脱离数组顺序。
+        var ties = Ledger()
+        ties.trades = (0..<30).map { index in
+            Trade(sequence: 0, symbol: "AAA", side: .buy, date: "2026-04-01",
+                  quantity: Decimal(index + 1), price: 1, fee: 0, note: "row\(index)")
+        }
+        NativeTests.check(ties.orderedTrades.map(\.note) == (0..<30).map { "row\($0)" },
+                          "排序/同日重复 sequence — 30 笔平手时仍严格保持数组顺序")
+
+        // sequence 不同时由 sequence 决定，与数组顺序无关。
+        var bySequence = Ledger()
+        var first = Trade(sequence: 0, symbol: "TSLA", side: .buy, date: "2026-03-03", quantity: 1, price: 1, fee: 0, note: "first")
+        var second = Trade(sequence: 1, symbol: "TSLA", side: .sell, date: "2026-03-03", quantity: 1, price: 1, fee: 0, note: "second")
+        first.id = UUID(); second.id = UUID()
+        bySequence.trades = [second, first]
+        NativeTests.check(bySequence.orderedTrades.map(\.note) == ["first", "second"],
+                          "排序/sequence 不同 — 由 sequence 决定，与数组顺序无关")
+    }
 
     private static func manualTradesRespectThePositionInvariant() {
         // 合法的部分卖出。
@@ -158,6 +308,10 @@ enum SafetyTests {
             try? FileManager.default.removeItem(at: directory)
         }
         try unreadableLedgerIsNotAnEmptyLedger(file)
+        try restoreFailureKeepsTheProtection(file)
         manualTradesRespectThePositionInvariant()
+        legacyOversellStillGuardsNewDamage()
+        sameDayOrderIsEnforced()
+        duplicateSameDaySequenceIsDeterministic()
     }
 }

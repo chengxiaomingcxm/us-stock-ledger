@@ -294,14 +294,19 @@ struct ImportView: View {
                 batchError = problem
                 return
             }
-            state.replace(with: candidate)
+            guard state.replace(with: candidate) else { importFailed(); return }
         case .cash:
-            state.replace(with: CsvImport.candidateCash(ledger: state.ledger, rows: rows))
+            guard state.replace(with: CsvImport.candidateCash(ledger: state.ledger, rows: rows)) else { importFailed(); return }
         }
         text = ""
         header = []
         rows = []
         error = nil
         notice = "已导入 \(count) 行，可在\(mode == .trade ? "交易" : "收益")页核对。"
+    }
+
+    /// 写盘失败时保留预览（行、映射、勾选状态都不动），只显示原因，绝不谎报「已导入」。
+    private func importFailed() {
+        error = state.errorMessage ?? L10n.tr("操作失败，账本未改变。")
     }
 }
