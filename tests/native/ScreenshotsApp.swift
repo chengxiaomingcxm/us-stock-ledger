@@ -9,15 +9,13 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        // NSLog goes to the unified log, which the CI reads with `log show`.
-        // plain print() is lost: stdout is block-buffered when simctl redirects it.
+        // NSLog (not print) so the CI can read these from the unified log with
+        // `log show`; print output is block-buffered and lost on terminate.
         NSLog("HARNESS-START")
         let screen = ProcessInfo.processInfo.arguments.dropFirst().first ?? "holdings"
-        // Set English before init (like the working Chinese baseline) and again
-        // after init (init resets L10n.current to the persisted value).
         L10n.current = .en
         let state = AppState(ledger: LedgerStore.demo(), persist: { _ in })
-        L10n.current = .en
+        L10n.current = .en // AppState.init resets it to the persisted language.
         NSLog("HARNESS state-ready lang=\(L10n.current.rawValue) screen=\(screen)")
 
         let window = UIWindow(frame: UIScreen.main.bounds)
