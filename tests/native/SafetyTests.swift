@@ -86,17 +86,21 @@ enum SafetyTests {
         backup.trades = [trade(0, .buy, "3", "2026-01-05"), trade(1, .sell, "1", "2026-01-06")]
         NativeTests.check(broken.replaceFromBackup(backup), "P0-1/恢复 — 备份恢复被放行")
         NativeTests.check(broken.loadFailure == nil, "P0-1/恢复 — 解除写入保护")
-        let recovered = try JSONDecoder().decode(Ledger.self, from: Data(contentsOf: file))
-        NativeTests.check(recovered.trades.count == 2, "P0-1/恢复 — 备份内容已落盘")
+        // 解码用 try? + 断言：测试失败要报 FAIL，不应该把测试进程抛崩。
+        let recovered = try? JSONDecoder().decode(Ledger.self, from: Data(contentsOf: file))
+        NativeTests.check(recovered?.trades.count == 2, "P0-1/恢复 — 备份内容已落盘")
     }
 
     /// P0-1 回归（续）：备份写盘失败时，写保护、内存账本与原文件都必须保持不变；
     /// 之后所有普通写入路径（交易、现金、报价、CSV 导入、清空、示例）仍必须被阻止。
     private static func restoreFailureKeepsTheProtection(_ file: URL) throws {
         try Data(#"{"format":2,"trades":[{"symbol":"AAA""#.utf8).write(to: file)
+        // 注入的 persist 只在「磁盘故障」时抛错；正常分支必须真的写盘，
+        // 否则恢复后的落盘断言就失去意义（测试自己制造的假阳性/假阴性）。
         var failWrites = false
-        let broken = AppState(settings: QuoteSettings(), persist: { _ in
+        let broken = AppState(settings: QuoteSettings(), persist: { next in
             if failWrites { throw LedgerError.message("disk full") }
+            try LedgerStore.save(next)
         })
         NativeTests.check(broken.loadFailure != nil, "P0-1/恢复失败 — 先确认处于读取失败状态")
         let before = try Data(contentsOf: file)
@@ -132,8 +136,8 @@ enum SafetyTests {
         NativeTests.check(broken.replaceFromBackup(backup), "P0-1/恢复失败 — 写盘成功后允许恢复")
         NativeTests.check(broken.loadFailure == nil, "P0-1/恢复失败 — 写盘成功后解除保护")
         NativeTests.check(broken.ledger.trades.count == 1, "P0-1/恢复失败 — 内存账本已更新")
-        let recovered = try JSONDecoder().decode(Ledger.self, from: Data(contentsOf: file))
-        NativeTests.check(recovered.trades.count == 1, "P0-1/恢复失败 — 备份内容已落盘")
+        let recovered = try? JSONDecoder().decode(Ledger.self, from: Data(contentsOf: file))
+        NativeTests.check(recovered?.trades.count == 1, "P0-1/恢复失败 — 备份内容已落盘")
         NativeTests.check(broken.saveTrade(trade(1, .buy, "1", "2026-01-09")), "P0-1/恢复失败 — 普通保存已恢复")
     }
 
