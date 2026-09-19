@@ -47,8 +47,12 @@ struct NativeTests {
 
     @MainActor
     static func main() async throws {
+        // 测试期间不得写真实的 Documents：诊断日志统一重定向到临时文件。
+        Diagnostics.fileURLOverride = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stock-ledger-native-tests-diagnostics.log")
         EngineGoldenTests.run()
         try SafetyTests.run()
+        try DiagnosticsTests.run()
         let empty = Ledger()
         // Draw out of content-stream order to exercise PDFKit's visual column reconstruction.
         let pdf = NSMutableData()

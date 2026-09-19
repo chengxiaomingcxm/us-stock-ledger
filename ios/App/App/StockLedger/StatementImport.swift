@@ -134,7 +134,11 @@ struct StatementImportView: View {
             guard state.commit(next) else { throw LedgerError.message(state.errorMessage ?? "保存失败，原账本未改变。") }
             rows = []; urls = []; password = ""; error = nil
             notice = "已导入 \(imported) 笔；可在交易和收益页面核对。"
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            let message = error.localizedDescription
+            self.error = message
+            Diagnostics.record("IMPORT", message)
+        }
     }
 }
 

@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("appearance.colors") private var colors = "green-up"
 
     @State private var exportText: String?
+    @State private var diagnosticsText: String?
     @State private var showingImporter = false
     @State private var pendingImport: Ledger?
     @State private var importError: String?
@@ -72,6 +73,13 @@ struct SettingsView: View {
                 } label: {
                     Label(L10n.tr("从备份恢复"), systemImage: "square.and.arrow.down")
                 }
+                if let diagnostics = diagnosticsText {
+                    Button {
+                        shareBox = ShareBox(value: diagnostics)
+                    } label: {
+                        Label(L10n.tr("导出错误日志"), systemImage: "doc.text.magnifyingglass")
+                    }
+                }
                 LabeledContent(L10n.tr("当前账本"), value: "\(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))")
                 LabeledContent(L10n.tr("上次备份"), value: BackupReminder.text(lastExport))
             } header: {
@@ -106,7 +114,9 @@ struct SettingsView: View {
         .navigationTitle(L10n.tr("设置"))
         .task {
             exportText = try? LedgerStore.exportText(state.ledger)
+            refreshDiagnostics()
         }
+        .onChange(of: state.errorMessage) { _ in refreshDiagnostics() }
         .onChange(of: state.ledger.trades.count) { _ in exportText = try? LedgerStore.exportText(state.ledger) }
         .onChange(of: state.ledger.cash.count) { _ in exportText = try? LedgerStore.exportText(state.ledger) }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
@@ -161,6 +171,12 @@ struct SettingsView: View {
         } message: {
             Text(L10n.tr("账本会恢复为空。请确认已导出备份，清空操作无法撤销。"))
         }
+    }
+
+    /// 只有真的写过日志才显示导出入口，避免让用户分享一个空文件。
+    private func refreshDiagnostics() {
+        let text = Diagnostics.text()
+        diagnosticsText = text.isEmpty ? nil : text
     }
 }
 

@@ -98,6 +98,10 @@ struct RootView: View {
                 .environmentObject(state)
         }
         .preferredColorScheme(Appearance.scheme(theme))
+        .onChange(of: scenePhase) { phase in
+            // 进入后台时留一个「正常结束」标记；下次启动看到它才算干净退出。
+            if phase == .background { Diagnostics.record("EXIT") }
+        }
         .task(id: RefreshTrigger(settings: state.quoteSettings, active: scenePhase == .active)) {
             let interval = state.quoteSettings.interval
             guard scenePhase == .active, interval > 0 else { return }

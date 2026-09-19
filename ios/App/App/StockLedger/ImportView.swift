@@ -272,7 +272,9 @@ struct ImportView: View {
             }
         } catch {
             rows = []
-            self.error = (error as? CsvImportError)?.errorDescription ?? error.localizedDescription
+            let message = (error as? CsvImportError)?.errorDescription ?? error.localizedDescription
+            self.error = message
+            Diagnostics.record("IMPORT", message)
         }
     }
 

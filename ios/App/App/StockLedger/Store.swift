@@ -100,7 +100,10 @@ enum LedgerStore {
 final class AppState: ObservableObject {
     @Published private(set) var ledger: Ledger
     @Published var undoTrade: UUID?
-    @Published var errorMessage: String?
+    /// 所有用户可见失败都在这里汇聚，顺便写入诊断日志（唯一汇聚点）。
+    @Published var errorMessage: String? {
+        didSet { if let errorMessage { Diagnostics.record("ERROR", errorMessage) } }
+    }
     /// 非 nil 表示磁盘上的账本存在但读不出来：此时暂停一切写入以保护原文件。
     @Published private(set) var loadFailure: String?
     /// 界面语言：中文 / English，跟随设置并持久化。
@@ -135,6 +138,9 @@ final class AppState: ObservableObject {
     private var calculation: Task<LedgerDerived, Never>?
     private var generation = 0
     private var computedLedger: Ledger?
+    /// 上一次已记录的行情失败集合，用于去重（行情失败会随每次刷新重复出现）。
+    private var lastQuoteFailure = ""
+    private var lastHistoryFailure = ""
     private let persist: (Ledger) throws -> Void
 
     /// `ledger` 为 nil 时从磁盘读取；显式传入账本（测试 / 示例 / 截图工具）时完全不碰磁盘。
@@ -153,6 +159,7 @@ final class AppState: ObservableObject {
         }
         self.quoteSettings = settings
         self.persist = persist
+        if let loadFailure { Diagnostics.record("LOAD", loadFailure) }
         let saved = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "app.language") ?? "") ?? .zhHans
         self.language = saved
         L10n.current = saved
@@ -265,6 +272,14 @@ final class AppState: ObservableObject {
         return false
     }
 
+    /// 行情失败会在每次刷新重复出现，只在「失败集合发生变化」时记一次，避免日志被刷满。
+    private func logFailures(_ errors: [String: String], kind: String, last: inout String) {
+        let signature = errors.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: " | ")
+        guard !signature.isEmpty, signature != last else { return }
+        last = signature
+        Diagnostics.record(kind, signature)
+    }
+
     @discardableResult
     func undoLastTrade() -> Bool {
         guard let id = undoTrade else { return true }
@@ -305,6 +320,7 @@ final class AppState: ObservableObject {
         let result = await QuoteService.fetchAll(symbols: symbols, settings: settings)
         guard !Task.isCancelled, settings == quoteSettings else { return }
         quoteErrors = result.errors
+        logFailures(result.errors, kind: "QUOTE", last: &lastQuoteFailure)
         guard !result.quotes.isEmpty else { return }
 
         var incoming: [Quote] = []
@@ -334,6 +350,7 @@ final class AppState: ObservableObject {
 
         let result = await QuoteService.fetchSeriesAll(symbols: symbols.sorted())
         historyErrors = result.errors
+        logFailures(result.errors, kind: "HISTORY", last: &lastHistoryFailure)
         guard !result.series.isEmpty else { return }
 
         var sessions = Set(ledger.history.sessions)
