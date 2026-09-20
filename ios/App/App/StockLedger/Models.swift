@@ -246,6 +246,24 @@ enum Fmt {
 
     static var today: String { MarketClock.date() }
 
+    /// 结单导入的行会带上一段**系统生成**的说明（模板固定，如「汇丰月结单；交收日 X」）。
+    /// 展示时按结构化字段重建为当前语言，**不改动已持久化的 note**（存量数据不做迁移）；
+    /// 用户自己改过的 note 不匹配模板，原样返回。见 docs/ENGLISH_UI_AUDIT.md A1 根因 2。
+    static func tradeNote(_ trade: Trade) -> String {
+        guard trade.source == "hsbc-statement", let settlement = trade.settlementDate else { return trade.note }
+        let prefix = "汇丰月结单；交收日 "
+        guard trade.note.hasPrefix(prefix), String(trade.note.dropFirst(prefix.count)) == settlement else { return trade.note }
+        return L10n.tr("汇丰月结单；交收日 {}", settlement)
+    }
+
+    /// 汇丰净额分红的说明同样是系统生成的，按结构化字段（source + tax）重建。
+    static func cashNote(_ record: CashRecord) -> String {
+        if record.source == "hsbc-statement-net", record.tax == nil {
+            return L10n.tr("汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露")
+        }
+        return record.note
+    }
+
     /// 用于「上次同步」等时间点的简短展示。
     static func clock(_ time: Date) -> String {
         let formatter = DateFormatter()

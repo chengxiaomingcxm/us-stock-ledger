@@ -103,8 +103,8 @@ struct ImportView: View {
 
                 Section {
                     LabeledContent(L10n.tr("可导入"), value: "\(readyCount) \(L10n.tr("行"))")
-                    LabeledContent(L10n.tr("疑似重复"), value: "\(suspectedCount) \(L10n.tr("行"))（\(L10n.tr("默认不勾选"))）")
-                    LabeledContent(L10n.tr("已导入"), value: "\(duplicateCount) \(L10n.tr("行"))（\(L10n.tr("按编号跳过"))）")
+                    LabeledContent(L10n.tr("疑似重复"), value: L10n.tr("{} 行（{}）", "\(suspectedCount)", L10n.tr("默认不勾选")))
+                    LabeledContent(L10n.tr("已导入"), value: L10n.tr("{} 行（{}）", "\(duplicateCount)", L10n.tr("按编号跳过")))
                     LabeledContent(L10n.tr("无法导入"), value: "\(errorCount) \(L10n.tr("行"))")
                     if mode == .trade {
                         Toggle(L10n.tr("插入到同日已有交易之前"), isOn: $insertBefore)
@@ -113,9 +113,9 @@ struct ImportView: View {
                 } header: {
                     Text(L10n.tr("第三步：确认"))
                 } footer: {
-                    Text(mode == .trade
+                    Text(L10n.tr(mode == .trade
                          ? "同日买卖的相对顺序会影响已实现收益。账本同一天已有该股票交易时，请先确认顺序再导入。"
-                         : "资金记录按日期顺序写入；重复导入不会重复记账，期初余额仍需按券商账单手动设置。")
+                         : "资金记录按日期顺序写入；重复导入不会重复记账，期初余额仍需按券商账单手动设置。"))
                 }
 
                 Section(L10n.tr("预览")) {
@@ -169,14 +169,14 @@ struct ImportView: View {
                         .foregroundStyle(row.selected ? Color.accentColor : Color.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(row.selected ? "取消选择第 \(row.line) 行" : "选择第 \(row.line) 行")
+                .accessibilityLabel(L10n.tr(row.selected ? "取消选择第 {} 行" : "选择第 {} 行", "\(row.line)"))
             } else {
                 Image(systemName: row.status == .error ? "xmark.circle" : "clock.arrow.circlepath")
                     .foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title(row)).font(.subheadline)
-                Text("第 \(row.line) 行 · \(row.status.label)\(row.message.map { " · \($0)" } ?? "")")
+                Text(L10n.tr("第 {} 行 · {}{}", "\(row.line)", row.status.label, row.message.map { " · \(L10n.tr($0))" } ?? ""))
                     .font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
@@ -186,15 +186,16 @@ struct ImportView: View {
 
     private func title(_ row: ImportRow) -> String {
         if let trade = row.trade {
-            let fee = trade.fee > 0 ? " 费 \(Fmt.moneyPlain(trade.fee))" : ""
-            return "\(trade.date) \(trade.symbol) \(trade.side.label) \(Fmt.quantity(trade.quantity)) 股 × \(Fmt.moneyPlain(trade.price))\(fee)"
+            let fee = trade.fee > 0 ? L10n.tr(" 费 {}", Fmt.moneyPlain(trade.fee)) : ""
+            return L10n.tr("{} {} {} {} 股 × {}{}", trade.date, trade.symbol, trade.side.label,
+                           Fmt.quantity(trade.quantity), Fmt.moneyPlain(trade.price), fee)
         }
         if let cash = row.cash {
-            let tax = cash.tax.map { " 税 \(Fmt.moneyPlain($0))" } ?? ""
+            let tax = cash.tax.map { L10n.tr(" 税 {}", Fmt.moneyPlain($0)) } ?? ""
             let symbol = cash.symbol.map { " · \($0)" } ?? ""
             return "\(cash.date) \(cash.kind.label) \(Fmt.moneyPlain(cash.amount))\(tax)\(symbol)"
         }
-        return "该行无法解析"
+        return L10n.tr("该行无法解析")
     }
 
     private func toggle(_ row: ImportRow) {
@@ -289,7 +290,9 @@ struct ImportView: View {
             revalidate()
             if auto, !rows.isEmpty {
                 let skipped = errorCount + duplicateCount
-                notice = skipped > 0 ? "已识别 \(rows.count) 行，其中 \(skipped) 行需要留意。" : "已识别 \(rows.count) 行，可直接导入。"
+                notice = skipped > 0
+                    ? L10n.tr("已识别 {} 行，其中 {} 行需要留意。", "\(rows.count)", "\(skipped)")
+                    : L10n.tr("已识别 {} 行，可直接导入。", "\(rows.count)")
             }
         } catch {
             rows = []
@@ -323,7 +326,7 @@ struct ImportView: View {
         header = []
         rows = []
         error = nil
-        notice = "已导入 \(count) 行，可在\(mode == .trade ? "交易" : "收益")页核对。"
+        notice = L10n.tr("已导入 {} 行，可在{}页核对。", "\(count)", L10n.tr(mode == .trade ? "交易" : "收益"))
     }
 
     /// 写盘失败时保留预览（行、映射、勾选状态都不动），只显示原因，绝不谎报「已导入」。

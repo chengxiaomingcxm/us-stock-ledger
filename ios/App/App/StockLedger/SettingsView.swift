@@ -148,7 +148,7 @@ struct SettingsView: View {
                 pendingImport = nil
             }
         } message: {
-            Text(L10n.tr("将替换当前的") + " \(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))。")
+            Text(L10n.tr("将替换当前的") + " \(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))" + L10n.tr("。"))
         }
         .alert(L10n.tr("导入失败"), isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
             Button(L10n.tr("好"), role: .cancel) { importError = nil }

@@ -143,7 +143,7 @@ struct TodayCard: View {
             LabeledContent(L10n.tr("持仓市值"), value: Fmt.money(state.summary.value))
                 .font(.footnote)
             ForEach(result.rows.filter { $0.reason != nil }) { row in
-                Label("\(row.symbol)：\(L10n.tr(row.reason ?? ""))", systemImage: "exclamationmark.triangle")
+                Label(L10n.tr("{}：{}", row.symbol, L10n.tr(row.reason ?? "")), systemImage: "exclamationmark.triangle")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in

@@ -39,6 +39,13 @@ struct RootView: View {
     @State private var tab: Int = 0
     @State private var showingTradeForm = false
     @State private var editingTrade: Trade?
+
+    /// UI 日期跟随 App 语言，而不是设备 locale：DatePicker 等系统控件的显示文本取自环境 locale。
+    /// 数据层不受影响，仍用 DateFormatter.ledgerDate（en_US_POSIX + yyyy-MM-dd）。
+    /// 见 docs/ENGLISH_UI_AUDIT.md A1 根因 3。
+    private var displayLocale: Locale {
+        Locale(identifier: state.language == .en ? "en_US" : "zh_CN")
+    }
     private struct RefreshTrigger: Equatable {
         var settings: QuoteSettings
         var active: Bool
@@ -135,6 +142,8 @@ struct RootView: View {
                 catch { return }
             }
         }
+        // 放在链尾，让此前提下的 sheet/alert 也继承同一个 locale。
+        .environment(\.locale, displayLocale)
     }
 
     private func presentNewTrade() {

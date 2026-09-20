@@ -62,9 +62,19 @@ struct InsightsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 ProfitRow(label: L10n.tr("账户费用"), value: -cash.fee)
-                LabeledContent(L10n.tr("买入支出（含费）"), value: Fmt.money(-cash.buyOut))
-                LabeledContent(L10n.tr("卖出收入（扣费）"), value: Fmt.money(cash.sellIn))
-                LabeledContent(L10n.tr("买卖净现金流"), value: Fmt.signedMoney(cash.tradeNet))
+                // 未设置期初余额时 Engine.cashTotals 不计算买卖现金流（见其注释），buyOut/sellIn/tradeNet 恒为 0。
+                // 直接渲染 $0.00 会被读成「真实的零」；改为显示未配置 + 提示，不动任何计算。
+                let tracksCashFlow = state.ledger.opening != nil
+                let buyOut: Decimal? = tracksCashFlow ? -cash.buyOut : nil
+                let sellIn: Decimal? = tracksCashFlow ? cash.sellIn : nil
+                let tradeNet: Decimal? = tracksCashFlow ? cash.tradeNet : nil
+                LabeledContent(L10n.tr("买入支出（含费）"), value: Fmt.money(buyOut))
+                LabeledContent(L10n.tr("卖出收入（扣费）"), value: Fmt.money(sellIn))
+                LabeledContent(L10n.tr("买卖净现金流"), value: Fmt.signedMoney(tradeNet))
+                if !tracksCashFlow {
+                    Text(L10n.tr("设置期初余额后可跟踪买卖现金流。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if cash.excludedTrades > 0 || cash.excludedRecords > 0 {
                     Text(L10n.tr("期初前有 {} 笔交易、{} 笔资金记录，已含在期初余额中，仅保留备查。", "\(cash.excludedTrades)", "\(cash.excludedRecords)"))
                         .font(.caption).foregroundStyle(.secondary)
@@ -112,7 +122,7 @@ struct InsightsView: View {
                         Text(L10n.tr("上次同步：{}", Fmt.clock(synced)))
                     }
                     ForEach(state.historyErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
-                        Text("\(entry.key)：\(entry.value)")
+                        Text(L10n.tr("{}：{}", entry.key, entry.value))
                     }
                 }
             }
@@ -151,7 +161,7 @@ struct InsightsView: View {
                 .background(Color.accentColor.opacity(0.15), in: Capsule())
             VStack(alignment: .leading, spacing: 2) {
                 Text(Fmt.signedMoney(record.net)).monospacedDigit()
-                Text("\(record.date)\(record.symbol.map { " · \($0)" } ?? "")\(record.note.isEmpty ? "" : " · \(record.note)")")
+                Text("\(record.date)\(record.symbol.map { " · \($0)" } ?? "")\(Fmt.cashNote(record).isEmpty ? "" : " · \(Fmt.cashNote(record))")")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()

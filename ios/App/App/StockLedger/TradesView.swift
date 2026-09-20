@@ -16,6 +16,9 @@ struct TradesView: View {
                      gains: state.summary.gains, ordered: state.orderedTrades)
     }
 
+    /// 有任何筛选条件时为真；表头计数与「清除筛选」按钮共用，避免两处条件各写一遍。
+    private var hasFilter: Bool { !from.isEmpty || !to.isEmpty || side != nil || !query.isEmpty }
+
     var body: some View {
         let result = self.result
         return List {
@@ -31,7 +34,12 @@ struct TradesView: View {
             Section(L10n.tr("日期区间（美东）")) {
                 DateField(title: L10n.tr("起始日期"), value: $from)
                 DateField(title: L10n.tr("结束日期"), value: $to)
-                if !from.isEmpty || !to.isEmpty || side != nil || !query.isEmpty {
+                // 区间写反时结果必然是空列表，不提示会被误读成「筛选坏了」。
+                if !from.isEmpty, !to.isEmpty, from > to {
+                    Text(L10n.tr("起始日期晚于结束日期，请调整。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if hasFilter {
                     Button(L10n.tr("清除筛选")) { side = nil; from = ""; to = ""; query = "" }
                 }
             }
@@ -47,7 +55,11 @@ struct TradesView: View {
                 Text(L10n.tr("汇总"))
             }
 
-            Section("\(L10n.tr("全部交易")) \(state.ledger.trades.count)") {
+            // 表头必须反映「下面列的是什么」：有筛选时用过滤后的计数，
+            // 否则未过滤的全量计数会让人以为筛选没生效。汇总与列表本就用同一份 result。
+            Section(hasFilter
+                    ? "\(L10n.tr("范围内")) \(result.list.count) \(L10n.tr("笔"))"
+                    : "\(L10n.tr("全部交易")) \(state.ledger.trades.count)") {
                 if result.list.isEmpty {
                     if state.ledger.trades.isEmpty {
                         Button(L10n.tr("记录第一笔交易"), action: onAdd)
@@ -113,8 +125,9 @@ struct TradesView: View {
                 Text("\(L10n.tr("手续费")) \(Fmt.money(trade.fee))")
             }
             .font(.caption).foregroundStyle(.secondary)
-            if !trade.note.isEmpty {
-                Text(trade.note).font(.caption).foregroundStyle(.secondary)
+            // 结单导入的系统说明按结构化字段重建为当前语言；不改持久化数据。
+            if !Fmt.tradeNote(trade).isEmpty {
+                Text(Fmt.tradeNote(trade)).font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 2)

@@ -340,7 +340,7 @@ enum CsvImport {
 
         let missing = TradeField.allCases.filter { $0.required && report.mapping[$0] == nil }
         if !missing.isEmpty {
-            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: "、")))
+            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: L10n.tr("、"))))
         }
 
         let existingIds = Set(ledger.trades.compactMap { $0.externalId })
@@ -440,12 +440,12 @@ enum CsvImport {
             let current = quantity[trade.symbol] ?? 0
             if trade.side == .sell {
                 guard current >= trade.quantity else {
-                    return "\(trade.symbol) 在 \(trade.date) 的卖出数量超过持有数量，请核对顺序或数量。"
+                    return L10n.tr("{} 在 {} 的卖出数量超过持有数量，请核对顺序或数量。", trade.symbol, trade.date)
                 }
                 quantity[trade.symbol] = current - trade.quantity
             } else {
                 guard current + trade.quantity < Decimal(1_000_000_000) else {
-                    return "\(trade.symbol) 的持有数量超出支持范围。"
+                    return L10n.tr("{} 的持有数量超出支持范围。", trade.symbol)
                 }
                 quantity[trade.symbol] = current + trade.quantity
             }
@@ -501,7 +501,7 @@ enum CsvImport {
 
         let missing = CashField.allCases.filter { $0.required && report.cashMapping[$0] == nil }
         if !missing.isEmpty {
-            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: "、")))
+            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: L10n.tr("、"))))
         }
         if report.cashMapping[.type] == nil, unifiedKind == nil {
             throw CsvImportError.message("未选择类型列，请指定统一类型（入金 / 出金 / 分红 / 费用）。")

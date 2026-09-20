@@ -77,6 +77,11 @@ final class AppState: ObservableObject {
         didSet {
             L10n.current = language
             UserDefaults.standard.set(language.rawValue, forKey: "app.language")
+            // 派生缓存里存着「求值当时就已本地化」的标题与说明：Engine 用 L10n.tr 生成后固化成字符串
+            // （Engine.displayedReturn → LedgerDerived.displayReturn），而缓存的失效键是账本与历史，不含语言。
+            // 只重绘视图不足以修正它们，必须让缓存重算，否则界面会停在旧语言。
+            // 见 docs/ENGLISH_UI_AUDIT.md A1。
+            if oldValue != language { rebuild(ledger) }
         }
     }
     /// 各股票上一交易日收盘价与日期，由行情同步填入；手动报价不参与今日盈亏基准。
@@ -317,7 +322,7 @@ final class AppState: ObservableObject {
             }
         }
         if await applyQuotes(incoming) { lastSyncedAt = Date() }
-        else if let errorMessage, !Task.isCancelled { quoteErrors["账本"] = errorMessage }
+        else if let errorMessage, !Task.isCancelled { quoteErrors[L10n.tr("账本")] = errorMessage }
     }
 
     /// 同步历史收盘价与交易日历：收益日历、月度统计和上一收盘价都基于这些数据。
@@ -376,7 +381,7 @@ final class AppState: ObservableObject {
             next.quotes.append(quote)
         }
         if await commitRefresh(next) { historySyncedAt = Date() }
-        else if let errorMessage, !Task.isCancelled { historyErrors["账本"] = errorMessage }
+        else if let errorMessage, !Task.isCancelled { historyErrors[L10n.tr("账本")] = errorMessage }
     }
 
     /// 合并报价：绝不覆盖更新的报价；同日手动报价优先于自动报价。

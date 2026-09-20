@@ -96,7 +96,7 @@ struct StatementImportView: View {
         rows = []
         error = nil
         warnings = []
-        notice = "已选择 \(selected.count) 份文件，正在读取…"
+        notice = L10n.tr("已选择 {} 份文件，正在读取…", "\(selected.count)")
         loading = true
         let ledger = state.ledger, secret = password
         let worker = Task.detached(priority: .userInitiated) {
@@ -135,7 +135,7 @@ struct StatementImportView: View {
             let imported = count
             guard state.commit(next) else { throw LedgerError.message(state.errorMessage ?? "保存失败，原账本未改变。") }
             rows = []; urls = []; password = ""; error = nil
-            notice = "已导入 \(imported) 笔；可在交易和收益页面核对。"
+            notice = L10n.tr("已导入 {} 笔；可在交易和收益页面核对。", "\(imported)")
         } catch {
             let message = error.localizedDescription
             self.error = message

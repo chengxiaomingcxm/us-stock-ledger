@@ -48,7 +48,7 @@ struct QuoteSourceView: View {
                 }
                 .disabled(state.syncingQuotes || state.demo)
                 ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
-                    Label("\(entry.key)：\(entry.value)", systemImage: "wifi.exclamationmark")
+                    Label(L10n.tr("{}：{}", entry.key, entry.value), systemImage: "wifi.exclamationmark")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             } header: {

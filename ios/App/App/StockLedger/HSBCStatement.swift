@@ -9,14 +9,30 @@ enum HSBCStatement {
         var trade: Trade?
         var cash: CashRecord?
         var currency: String
-        var detail: String
         var issue: String?
         var duplicate = false
         var selected = true
         var date: String { trade?.date ?? cash?.date ?? "" }
         var symbol: String { trade?.symbol ?? cash?.symbol ?? "" }
-        var label: String { trade?.side.label ?? cash?.kind.label ?? "记录" }
+        var label: String { L10n.tr(trade?.side.label ?? cash?.kind.label ?? "记录") }
         var amount: Decimal { trade?.netCash ?? cash?.net ?? 0 }
+
+        /// 预览明细：由结构化字段在**展示时**生成，因此跟随语言；
+        /// 也避开了「把数值拼进翻译键」——拼好的键永远查不到词典。
+        var detail: String {
+            if let trade {
+                let fee = trade.fee > 0 ? L10n.tr(" 费 {}", Fmt.moneyPlain(trade.fee)) : ""
+                let settlement = trade.settlementDate.map { L10n.tr(" · 交收 {}", $0) } ?? ""
+                return L10n.tr("{} {} {} {} 股 × {}{}{}", trade.date, trade.symbol, trade.side.label,
+                               Fmt.quantity(trade.quantity), Fmt.moneyPlain(trade.price), fee, settlement)
+            }
+            if let cash {
+                let tax = cash.tax.map { L10n.tr(" 税 {}", Fmt.moneyPlain($0)) } ?? ""
+                let symbol = cash.symbol.map { " · \($0)" } ?? ""
+                return "\(cash.date) \(cash.kind.label) \(Fmt.moneyPlain(cash.amount))\(tax)\(symbol)"
+            }
+            return L10n.tr("无法识别")
+        }
     }
     struct Report {
         var rows: [Row] = []
@@ -122,7 +138,6 @@ enum HSBCStatement {
                                           note: "汇丰月结单；交收日 \(settlementDate)", source: "hsbc-statement", externalId: id,
                                           settlementAmount: settlement, settlementDate: settlementDate)
                         report.rows.append(Row(id: id, trade: trade, currency: r[3].uppercased(),
-                                               detail: "成交 \(tradeDate) · 交收 \(settlementDate) · \(quantity) 股 × \(price) · 费用 \(fee)",
                                                issue: excluded ? "非美元股票，不写入美元账本" : nil, selected: !excluded))
                     }
                 }
@@ -144,7 +159,7 @@ enum HSBCStatement {
                                   symbol: d[2].uppercased(), note: "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露",
                                   source: "hsbc-statement-net", externalId: id)
             let excluded = d[4].uppercased() != "USD"
-            report.rows.append(Row(id: id, cash: cash, currency: d[4].uppercased(), detail: cash.note,
+            report.rows.append(Row(id: id, cash: cash, currency: d[4].uppercased(),
                                    issue: excluded ? "非美元分红，不写入美元账本" : nil, selected: !excluded))
         }
         guard matches(#"CASH\s+DIVIDEND"#, flat).count == dividends.count,

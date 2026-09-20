@@ -299,7 +299,7 @@ enum Engine {
                 if isSplit { endComplete = false }
 
                 if let reason {
-                    missing.append("\(symbol)：\(reason)")
+                    missing.append(L10n.tr("{}：{}", symbol, reason))
                     contributions.append(Contribution(symbol: symbol, profit: nil, reason: reason))
                 } else {
                     let endValue = endQty > 0 && after != nil ? endQty * after! : 0
@@ -471,7 +471,7 @@ enum Engine {
 
             if let reason {
                 complete = false
-                missing.append("\(symbol)：\(reason)")
+                missing.append(L10n.tr("{}：{}", symbol, reason))
                 rows.append(TodayRow(symbol: symbol, pnl: nil, reason: reason))
                 continue
             }
