@@ -590,11 +590,15 @@ private final class ProfitPlotView: UIView {
     private let curve = CAShapeLayer()
     private let axis = CAShapeLayer()
     private var labels: [UILabel] = []
+    private var scales: [UILabel] = []
     private var data = InsightsPresentation()
     private var previousBounds = CGRect.null
     private var renderedRevision: UUID?
     override init(frame: CGRect) {
         super.init(frame: frame)
+        // ponytail: 曲线是 CAShapeLayer，不做长按拖动读数——那要先跟外层 Form 的滚动手势做仲裁，
+        // 而本机没有 Swift 工具链验证不了真机行为。这里只补参考值把量级说清楚（审计书 P2-1 方案 A）；
+        // 升级路径：真机可验证时再加 UILongPressGestureRecognizer（0.15s）画竖线 + 气泡读数。
         isUserInteractionEnabled = false
         curve.fillColor = nil; curve.lineWidth = 2; curve.lineJoin = .round
         axis.fillColor = nil; axis.lineWidth = 1; axis.lineDashPattern = [3, 3]
@@ -605,6 +609,13 @@ private final class ProfitPlotView: UIView {
             label.textAlignment = .center
             addSubview(label); labels.append(label)
         }
+        // 参考值靠右对齐，占曲线右侧那条窄栏。
+        for _ in 0..<3 {
+            let label = UILabel()
+            label.font = .monospacedDigitSystemFont(ofSize: 9, weight: .regular)
+            label.textAlignment = .right
+            addSubview(label); scales.append(label)
+        }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(data: InsightsPresentation, color: UIColor, labelColor: UIColor) {
@@ -612,6 +623,7 @@ private final class ProfitPlotView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         curve.strokeColor = color.cgColor; axis.strokeColor = labelColor.withAlphaComponent(0.35).cgColor
         for label in labels { label.textColor = labelColor }
+        for label in scales { label.textColor = labelColor }
         CATransaction.commit()
         if renderedRevision != data.revision { setNeedsLayout() }
     }
@@ -620,20 +632,32 @@ private final class ProfitPlotView: UIView {
         guard bounds != previousBounds || renderedRevision != data.revision else { return }
         previousBounds = bounds; renderedRevision = data.revision
         let height = max(bounds.height - 16, 1)
-        var transform = CGAffineTransform(scaleX: bounds.width, y: height)
+        // 曲线让出右侧一条窄栏给参考值：数字贴在边上，不会压在曲线上。
+        let gutter = min(40, bounds.width * 0.2)
+        let plot = max(bounds.width - gutter, 1)
+        var transform = CGAffineTransform(scaleX: plot, y: height)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         curve.frame = bounds; axis.frame = bounds
         curve.path = data.curve.copy(using: &transform)
         let y = height * CGFloat(data.maximum / max(data.maximum - data.minimum, 0.0001))
-        let zero = CGMutablePath(); zero.move(to: CGPoint(x: 0, y: y)); zero.addLine(to: CGPoint(x: bounds.width, y: y))
+        let zero = CGMutablePath(); zero.move(to: CGPoint(x: 0, y: y)); zero.addLine(to: CGPoint(x: plot, y: y))
         axis.path = zero
         for i in labels.indices {
             guard data.ticks.indices.contains(i) else { labels[i].isHidden = true; continue }
             let index = data.ticks[i]
             labels[i].isHidden = false
             labels[i].text = String(data.points[index].date.suffix(5))
-            let x = bounds.width * CGFloat(index) / CGFloat(max(data.values.count - 1, 1))
-            labels[i].frame = CGRect(x: min(max(x - 20, 0), max(bounds.width - 40, 0)), y: height + 2, width: 40, height: 14)
+            let x = plot * CGFloat(index) / CGFloat(max(data.values.count - 1, 1))
+            labels[i].frame = CGRect(x: min(max(x - 20, 0), max(plot - 40, 0)), y: height + 2, width: 40, height: 14)
+        }
+        let references = data.axisReferences()
+        for i in scales.indices {
+            guard references.indices.contains(i) else { scales[i].isHidden = true; continue }
+            scales[i].isHidden = false
+            scales[i].text = references[i].text
+            let center = height * references[i].position
+            scales[i].frame = CGRect(x: plot + 2, y: min(max(center - 6, 0), max(height - 12, 0)),
+                                     width: max(bounds.width - plot - 2, 1), height: 12)
         }
         CATransaction.commit()
     }

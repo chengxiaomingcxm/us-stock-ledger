@@ -377,6 +377,43 @@ enum EngineGoldenTests {
         expect(sellsOnly.sellAmount, "480", "区间汇总 — 只看卖出时卖出金额不变")
     }
 
+    // MARK: - InsightsPresentation.axisReferences（曲线纵轴）
+
+    /// 曲线纵轴只标「上限 / 零轴 / 下限」三条，两条靠得太近时丢掉后一条。
+    /// 期望值人工推导（位置 0 = 顶边，1 = 底边）：
+    /// - 全为正：上限 120 → 0，零轴与下限（被夹到 0）都在 1 → 只留两条；
+    /// - 跨零：上限 80 → 0，零轴 → 80/120 = 0.667，下限 −40 → 1 → 三条齐全；
+    /// - 下限离零轴太近：上限 100、下限 −5，span = 105，零轴 → 100/105 = 0.952，
+    ///   与下限 1 只差 0.048 < 0.09 → 丢掉下限那条。
+    private static func axisReferences() {
+        var rising = InsightsPresentation()
+        rising.maximum = 120
+        rising.minimum = 0
+        let risingRows = rising.axisReferences()
+        NativeTests.check(risingRows.count == 2, "纵轴参考值 — 全为正时零轴与下限重合，只标两条")
+        NativeTests.check(risingRows.first?.text == "+120", "纵轴参考值 — 顶部那条是上限")
+        NativeTests.check(risingRows.first?.position == 0, "纵轴参考值 — 上限贴着顶边")
+        NativeTests.check(risingRows.last?.text == "0.00", "纵轴参考值 — 底部那条是零")
+        NativeTests.check(risingRows.last?.position == 1, "纵轴参考值 — 零点贴着底边")
+
+        var crossing = InsightsPresentation()
+        crossing.maximum = 80
+        crossing.minimum = -40
+        let crossingRows = crossing.axisReferences()
+        NativeTests.check(crossingRows.count == 3, "纵轴参考值 — 跨零时有上限 / 零轴 / 下限三条")
+        NativeTests.check(crossingRows[1].text == "0.00", "纵轴参考值 — 中间那条是零")
+        NativeTests.check(crossingRows[1].position > 0.66 && crossingRows[1].position < 0.67,
+                          "纵轴参考值 — 零轴在 80/120 处")
+        NativeTests.check(crossingRows[2].position == 1, "纵轴参考值 — 下限贴着底边")
+
+        var tight = InsightsPresentation()
+        tight.maximum = 100
+        tight.minimum = -5
+        let tightRows = tight.axisReferences()
+        NativeTests.check(tightRows.count == 2, "纵轴参考值 — 下限离零轴太近时丢掉下限那条")
+        NativeTests.check(tightRows.first?.text == "+100", "纵轴参考值 — 丢的是靠后的那条，不是上限")
+    }
+
     // MARK: - 入口
 
     static func run() {
@@ -395,5 +432,6 @@ enum EngineGoldenTests {
         todayPnlSameDaySell()
         todayPnlStaleBaseline()
         rangeSummary()
+        axisReferences()
     }
 }

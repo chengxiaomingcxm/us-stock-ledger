@@ -585,6 +585,23 @@ struct InsightsPresentation {
             ticks = Array(Set((0..<min(6, days.count)).map { $0 * (days.count - 1) / max(min(6, days.count) - 1, 1) })).sorted()
         }
     }
+
+    /// 曲线纵轴的参考值：上限、零轴、下限，位置是**归一化的**（0 = 顶边，1 = 底边）。
+    ///
+    /// `maximum` / `minimum` 已经按 0 夹紧，所以全为正的历史里下限本身就是零轴——两条会落在同一条边上。
+    /// `proximity` 之内只保留先出现的那条：宁可少标一个数，也不把两行字压在一起。
+    func axisReferences(proximity: CGFloat = 0.09) -> [(text: String, position: CGFloat)] {
+        let span = max(maximum - minimum, 0.0001)
+        var placed: [CGFloat] = []
+        var rows: [(text: String, position: CGFloat)] = []
+        for value in [maximum, 0, minimum] {
+            let position = CGFloat((maximum - value) / span)
+            guard !placed.contains(where: { abs($0 - position) < proximity }) else { continue }
+            placed.append(position)
+            rows.append((Fmt.compactSigned(Decimal(value)), position))
+        }
+        return rows
+    }
 }
 struct LedgerDerived {
     var displayReturn = Engine.TodayResult(caption: L10n.tr("正在计算"))
