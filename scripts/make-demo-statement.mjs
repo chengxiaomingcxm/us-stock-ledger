@@ -28,7 +28,7 @@ const STATEMENT = [
   'SAMPLE / DEMONSTRATION ONLY',
   'Fictional data - not a real bank statement',
   '',
-  'Statement period: 01SEP2026 to 30SEP2026',
+  'Statement period: 01SEP2026 to 12SEP2026',
   'A/C no : 123-456789-001',
   'Account holder: SAMPLE INVESTOR (fictional)',
   'Reporting currency: USD',
@@ -40,37 +40,37 @@ const STATEMENT = [
   '',
   'FOREIGN SHARES',
   'AAPL SAMPLE APPLE INC (SHS)',
-  '14SEP2026 16SEP2026 USD 198.40000 25 USD 4,961.00',
+  '02SEP2026 04SEP2026 USD 198.40000 25 USD 4,961.00',
   'Reference: DEMO001AAPL Type: PUR',
-  '21SEP2026 23SEP2026 USD 210.75000 10- USD 2,106.50',
+  '09SEP2026 11SEP2026 USD 210.75000 10- USD 2,106.50',
   'Reference: DEMO003AAPL Type: SAL',
   'NVDA SAMPLE NVIDIA CORP (SHS)',
-  '15SEP2026 17SEP2026 USD 174.30000 12 USD 2,091.60',
+  '03SEP2026 05SEP2026 USD 174.30000 12 USD 2,091.60',
   'Reference: DEMO002NVDA Type: PUR',
   '',
   'UNIT TRUSTS',
   'DEMOETF SAMPLE HONG KONG INDEX FUND (UNT)',
-  '15SEP2026 17SEP2026 HKD 40.00000 30 HKD 1,200.00',
+  '03SEP2026 05SEP2026 HKD 40.00000 30 HKD 1,200.00',
   'Reference: DEMO004FUND Type: PUR',
   '',
   'Charges and income summary',
   'Date Charges/income description Charges amount Income amount',
   '',
-  '14SEP2026 PURCHASE SAMPLE APPLE INC (SHS)',
+  '02SEP2026 PURCHASE SAMPLE APPLE INC (SHS)',
   'OUR REFERENCE:DEMO001AAPL',
   'XACT CHARGE USD 1.00',
   '',
-  '21SEP2026 SALE SAMPLE APPLE INC (SHS)',
+  '09SEP2026 SALE SAMPLE APPLE INC (SHS)',
   'OUR REFERENCE:DEMO003AAPL',
   'XACT CHARGE USD 1.00',
   '',
-  '16SEP2026 CASH DIVIDEND AAPL',
+  '08SEP2026 CASH DIVIDEND AAPL',
   'SAMPLE APPLE INC (SHS)',
   'OUR REFERENCE:DEMO005DIV',
   'PAID BENEFITS USD 24.50',
   '',
-  '28SEP2026 CASH DIVIDEND MSFT',
-  'SAMPLE MICROSOFT CORP (SHS)',
+  '11SEP2026 CASH DIVIDEND NVDA',
+  'SAMPLE NVIDIA CORP (SHS)',
   'OUR REFERENCE:DEMO006DIV',
   'PAID BENEFITS USD 12.20',
   '',
@@ -179,6 +179,9 @@ const date = (text) => {
 function verify(pages) {
   const problems = [];
   const expect = (condition, message) => { if (!condition) problems.push(message); };
+  // `LedgerValidation.date` 拒绝晚于「今天（美东）」的日期，成交日与交收日都要过这一关；
+  // 分红日期走同一条日期校验。曾经因为少建了这一条，日期写到当月月底才在 CI 上暴雷。
+  const nyToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
 
   expect(pages.length === 1, `expected a single page, got ${pages.length}`);
   const whole = pages.join('\n');
@@ -235,6 +238,8 @@ function verify(pages) {
           expect(record[3] === record[7], `${reference}: currencies differ`);
           const tradeDate = date(record[1]);
           const settlementDate = date(record[2]);
+          expect(tradeDate <= nyToday && settlementDate <= nyToday,
+            `${reference}: ${tradeDate}/${settlementDate} is later than today (${nyToday}, America/New_York)`);
           expect(settlementDate >= tradeDate, `${reference}: settlement ${settlementDate} before trade ${tradeDate}`);
           const price = money(record[4]);
           const quantity = money(record[5]);
@@ -263,12 +268,15 @@ function verify(pages) {
     seen.add(id);
     const net = money(dividend[5]);
     expect(net > 0, `${dividend[3]}: net ${net} must be positive`);
+    expect(date(dividend[1]) <= nyToday, `${dividend[3]}: ${date(dividend[1])} is later than today (${nyToday})`);
     rows.push({ id, kind: 'dividend', symbol: dividend[2].toUpperCase(), amount: net, currency: dividend[4].toUpperCase() });
   }
 
   expect(matches(/CASH\s+DIVIDEND/gi, flat).length === dividends.length, 'every CASH DIVIDEND line must be parsed');
   expect(matches(/XACT\s+CHARGE/gi, flat).length === charges.length, 'every XACT CHARGE line must be parsed');
   [...feeByReference.keys()].forEach((key) => expect(consumed.has(key), `charge ${key} is not linked to a trade`));
+  // 收集到问题就必须真的失败：之前只打印 PASSED 不检查 problems，等于这一整套规则空转。
+  if (problems.length) throw new Error(`fixture self-check failed:\n- ${problems.join('\n- ')}`);
 
   for (const row of rows) {
     row.excluded = row.kind === 'trade'
@@ -306,6 +314,7 @@ if (extracted[extracted.length - 1] !== STATEMENT[STATEMENT.length - 1]) {
 console.log(`wrote ${target} (${bytes.length} bytes, ${extracted.length} text lines)`);
 console.log(`parsed: rows=${result.rows.length} selected=${result.selected.length} `
   + `trades=${result.usdTrades.length} dividends=${result.selectedDividends.length} fees=${result.feeByReference.size}`);
+console.log(`dates checked against today in America/New_York: ${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())}`);
 console.log(`account in fixture: ${result.accounts[0]} (fictional)`);
 console.log('--- extracted text layer ---');
 console.log(extracted.join('\n'));

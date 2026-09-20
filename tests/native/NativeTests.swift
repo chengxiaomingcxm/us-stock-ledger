@@ -159,7 +159,7 @@ struct NativeTests {
         check(demoReport.rows.count == 6, "demo statement previews 4 trades and 2 dividends")
         check(demoReport.rows.filter(\.selected).count == 5, "non-USD fund row is not selected")
         let demoBuy = demoReport.rows.compactMap(\.trade).first { $0.symbol == "AAPL" && $0.side == .buy }
-        check(demoBuy?.date == "2026-09-14" && demoBuy?.settlementDate == "2026-09-16", "demo buy keeps both dates")
+        check(demoBuy?.date == "2026-09-02" && demoBuy?.settlementDate == "2026-09-04", "demo buy keeps both dates")
         check(demoBuy?.quantity == 25 && demoBuy?.price == Decimal(string: "198.4"), "demo buy quantity and unit price")
         check(demoBuy?.fee == 1 && demoBuy?.settlementAmount == Decimal(string: "4961"), "demo buy links charge to settlement")
         check(demoBuy?.source == "hsbc-statement" && demoBuy?.externalId?.hasSuffix(":DEMO001AAPL") == true,
