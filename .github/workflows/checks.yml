@@ -1,0 +1,68 @@
+name: Checks
+
+# §11 Phase 5：push 与 pull request 都自动跑「现有命令」的检查链。
+# 这里只复用仓库已有的 script，不新增工程规范：
+#   pnpm test  = vitest run
+#   pnpm build = tsc --noEmit && vite build   ← 类型检查就是这一步，没有单独的 lint（见 README「Testing & CI」）
+#   pnpm e2e   = playwright test              ← 26 个用例，本机实测 26 passed
+# macOS 上的未签名 IPA 构建仍由 build-ios.yml 负责，不在这里重复。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - deepseek-dev
+      - 'portfolio/**'
+    paths-ignore:
+      - '**/*.md'
+      - 'releases/**'
+      - 'scripts/publish-release.py'
+      - '.github/workflows/publish-release.yml'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'releases/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Unit tests
+        run: pnpm test
+      - name: Type check and build
+        run: pnpm build
+      - name: Install the Playwright browser and CJK fonts
+        # 界面是中文的：容器默认不带中文字体时，回退字体会让文字更宽，
+        # 320px 的横向溢出断言就会因为「渲染环境」而不是「布局」失败。
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk
+      - name: End-to-end tests
+        run: pnpm e2e
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Playwright-report
+          path: |
+            playwright-report/
+            artifacts/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

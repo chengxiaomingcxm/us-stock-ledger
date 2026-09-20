@@ -2,7 +2,10 @@ name: Build unsigned iOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+      - deepseek-dev
+      - 'portfolio/**'
     paths-ignore:
       - '**/*.md'
       - 'releases/**'
@@ -41,6 +44,15 @@ jobs:
         with:
           name: Calendar-rendering
           path: build/calendar-render/*.png
+          if-no-files-found: warn
+      - name: Render English UI screenshots
+        run: bash scripts/test-screenshots.sh
+      - name: Upload app screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: App-screenshots
+          path: build/screenshots/*.png
           if-no-files-found: warn
       - name: Build application
         run: pnpm build

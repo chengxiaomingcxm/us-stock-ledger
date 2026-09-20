@@ -1,6 +1,6 @@
 import Foundation
 
-// 2.0 券商 CSV 导入：先预览、再写入。解析规则与 1.x 保持一致——
+// 券商 CSV 导入：先预览、再写入。解析规则保持稳定——
 // 严格数字与日期校验、币种校验、成交编号去重、同日相对顺序由用户确认。
 // 任何无法确定的记录都标记为错误或疑似重复，绝不静默改写账本。
 
@@ -11,15 +11,15 @@ enum TradeField: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .date: return "日期"
-        case .symbol: return "代码"
-        case .side: return "方向"
-        case .quantity: return "数量"
-        case .price: return "单价"
-        case .fee: return "手续费"
-        case .note: return "备注"
-        case .currency: return "币种"
-        case .id: return "成交编号"
+        case .date: return L10n.tr("日期")
+        case .symbol: return L10n.tr("代码")
+        case .side: return L10n.tr("方向")
+        case .quantity: return L10n.tr("数量")
+        case .price: return L10n.tr("单价")
+        case .fee: return L10n.tr("手续费")
+        case .note: return L10n.tr("备注")
+        case .currency: return L10n.tr("币种")
+        case .id: return L10n.tr("成交编号")
         }
     }
 
@@ -50,10 +50,10 @@ enum RowStatus: String {
 
     var label: String {
         switch self {
-        case .ready: return "可导入"
-        case .suspected: return "疑似重复"
-        case .duplicate: return "已导入"
-        case .error: return "无法导入"
+        case .ready: return L10n.tr("可导入")
+        case .suspected: return L10n.tr("疑似重复")
+        case .duplicate: return L10n.tr("已导入")
+        case .error: return L10n.tr("无法导入")
         }
     }
 }
@@ -63,12 +63,12 @@ enum ImportMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var label: String { self == .trade ? "成交明细" : "资金流水" }
+    var label: String { L10n.tr(self == .trade ? "成交明细" : "资金流水") }
 
     var detail: String {
         self == .trade
-            ? "券商的买卖成交记录，用于补全持仓与已实现收益。"
-            : "入金、出金、分红与账户费用，用于补全现金余额。"
+            ? L10n.tr("券商的买卖成交记录，用于补全持仓与已实现收益。")
+            : L10n.tr("入金、出金、分红与账户费用，用于补全现金余额。")
     }
 }
 
@@ -79,14 +79,14 @@ enum CashField: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .date: return "日期"
-        case .type: return "类型"
-        case .symbol: return "代码"
-        case .amount: return "金额"
-        case .tax: return "税费"
-        case .note: return "备注"
-        case .currency: return "币种"
-        case .id: return "流水编号"
+        case .date: return L10n.tr("日期")
+        case .type: return L10n.tr("类型")
+        case .symbol: return L10n.tr("代码")
+        case .amount: return L10n.tr("金额")
+        case .tax: return L10n.tr("税费")
+        case .note: return L10n.tr("备注")
+        case .currency: return L10n.tr("币种")
+        case .id: return L10n.tr("流水编号")
         }
     }
 
@@ -138,7 +138,7 @@ struct ImportReport {
 
 enum CsvImportError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case let .message(text) = self { return text }; return nil }
+    var errorDescription: String? { if case let .message(text) = self { return L10n.tr(text) }; return nil }
 }
 
 enum CsvImport {
@@ -263,18 +263,19 @@ enum CsvImport {
         let groupedPattern = "^\\d{1,3}(,\\d{3})+(\\.\\d+)?$"
         guard text.range(of: plainPattern, options: .regularExpression) != nil
             || text.range(of: groupedPattern, options: .regularExpression) != nil else {
-            throw CsvImportError.message("\(label)格式无效（示例：1,234.56 或 1234.56）")
+            throw CsvImportError.message(L10n.tr("{}格式无效（示例：1,234.56 或 1234.56）", label))
         }
         let plain = text.replacingOccurrences(of: ",", with: "")
         let parts = plain.split(separator: ".", omittingEmptySubsequences: false)
         if parts[0].count > 12 || (parts.count == 2 && parts[1].count > 8) {
-            throw CsvImportError.message("\(label)超出支持范围或精度")
+            throw CsvImportError.message(L10n.tr("{}超出支持范围或精度", label))
         }
         guard let value = Decimal(string: plain, locale: Locale(identifier: "en_US")) else {
-            throw CsvImportError.message("\(label)无效")
+            throw CsvImportError.message(L10n.tr("{}无效", label))
         }
         if value < 0 || (!allowZero && value == 0) {
-            throw CsvImportError.message("\(label)必须\(allowZero ? "不小于 0" : "大于 0")")
+            // 插值后的字符串永远查不到译文，所以先按模板成形；`message` 只吃一个 String。
+            throw CsvImportError.message(L10n.tr(allowZero ? "{}必须不小于 0" : "{}必须大于 0", label))
         }
         return value
     }
@@ -339,7 +340,7 @@ enum CsvImport {
 
         let missing = TradeField.allCases.filter { $0.required && report.mapping[$0] == nil }
         if !missing.isEmpty {
-            throw CsvImportError.message("请先指定必需列：\(missing.map(\.label).joined(separator: "、"))。")
+            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: L10n.tr("、"))))
         }
 
         let existingIds = Set(ledger.trades.compactMap { $0.externalId })
@@ -359,7 +360,7 @@ enum CsvImport {
                 guard let priceText = field(raw, report.mapping, .price) else { throw CsvImportError.message("缺少单价") }
 
                 if let currency = field(raw, report.mapping, .currency), currency.uppercased() != "USD" {
-                    throw CsvImportError.message("只支持美元记录，币种为 \(currency)")
+                    throw CsvImportError.message(L10n.tr("只支持美元记录，币种为 {}", currency))
                 }
                 let date = try dateTime(dateText)
                 let symbol = try LedgerValidation.symbol(symbolText)
@@ -414,7 +415,7 @@ enum CsvImport {
     /// 同日相对顺序由用户选择：默认追加到同日已有交易之后，也可插入到同日已有交易之前。
     /// 合并后统一按数组顺序重排 sequence，保持 (日期, sequence) 排序语义。
     static func merge(_ existing: [Trade], _ imported: [Trade], insertBeforeSameDay: Bool) -> [Trade] {
-        var result = existing.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+        var result = Ledger.sortedTrades(existing)
         for trade in imported {
             if insertBeforeSameDay {
                 if let index = result.firstIndex(where: { $0.date >= trade.date }) { result.insert(trade, at: index) }
@@ -439,12 +440,12 @@ enum CsvImport {
             let current = quantity[trade.symbol] ?? 0
             if trade.side == .sell {
                 guard current >= trade.quantity else {
-                    return "\(trade.symbol) 在 \(trade.date) 的卖出数量超过持有数量，请核对顺序或数量。"
+                    return L10n.tr("{} 在 {} 的卖出数量超过持有数量，请核对顺序或数量。", trade.symbol, trade.date)
                 }
                 quantity[trade.symbol] = current - trade.quantity
             } else {
                 guard current + trade.quantity < Decimal(1_000_000_000) else {
-                    return "\(trade.symbol) 的持有数量超出支持范围。"
+                    return L10n.tr("{} 的持有数量超出支持范围。", trade.symbol)
                 }
                 quantity[trade.symbol] = current + trade.quantity
             }
@@ -500,7 +501,7 @@ enum CsvImport {
 
         let missing = CashField.allCases.filter { $0.required && report.cashMapping[$0] == nil }
         if !missing.isEmpty {
-            throw CsvImportError.message("请先指定必需列：\(missing.map(\.label).joined(separator: "、"))。")
+            throw CsvImportError.message(L10n.tr("请先指定必需列：{}。", missing.map(\.label).joined(separator: L10n.tr("、"))))
         }
         if report.cashMapping[.type] == nil, unifiedKind == nil {
             throw CsvImportError.message("未选择类型列，请指定统一类型（入金 / 出金 / 分红 / 费用）。")
@@ -524,7 +525,7 @@ enum CsvImport {
                 let kind = try value(.type).map { try cashKind($0) } ?? unifiedKind!
 
                 if let currency = value(.currency), currency.uppercased() != "USD" {
-                    throw CsvImportError.message("只支持美元记录，币种为 \(currency)")
+                    throw CsvImportError.message(L10n.tr("只支持美元记录，币种为 {}", currency))
                 }
                 let date = try dateTime(dateText)
                 let amount = try number(amountText, "金额")
@@ -581,9 +582,7 @@ enum CsvImport {
     }
 
     static func mergeCash(_ existing: [CashRecord], _ imported: [CashRecord]) -> [CashRecord] {
-        var result = existing.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
-        result.append(contentsOf: imported)
-        result.sort { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+        let result = Ledger.sortedCash(existing + imported)
         return result.enumerated().map { index, record in
             var copy = record
             copy.sequence = index

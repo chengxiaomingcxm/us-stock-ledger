@@ -9,14 +9,30 @@ enum HSBCStatement {
         var trade: Trade?
         var cash: CashRecord?
         var currency: String
-        var detail: String
         var issue: String?
         var duplicate = false
         var selected = true
         var date: String { trade?.date ?? cash?.date ?? "" }
         var symbol: String { trade?.symbol ?? cash?.symbol ?? "" }
-        var label: String { trade?.side.label ?? cash?.kind.label ?? "记录" }
+        var label: String { L10n.tr(trade?.side.label ?? cash?.kind.label ?? "记录") }
         var amount: Decimal { trade?.netCash ?? cash?.net ?? 0 }
+
+        /// 预览明细：由结构化字段在**展示时**生成，因此跟随语言；
+        /// 也避开了「把数值拼进翻译键」——拼好的键永远查不到词典。
+        var detail: String {
+            if let trade {
+                let fee = trade.fee > 0 ? L10n.tr(" 费 {}", Fmt.moneyPlain(trade.fee)) : ""
+                let settlement = trade.settlementDate.map { L10n.tr(" · 交收 {}", $0) } ?? ""
+                return L10n.tr("{} {} {} {} 股 × {}{}{}", trade.date, trade.symbol, trade.side.label,
+                               Fmt.quantity(trade.quantity), Fmt.moneyPlain(trade.price), fee, settlement)
+            }
+            if let cash {
+                let tax = cash.tax.map { L10n.tr(" 税 {}", Fmt.moneyPlain($0)) } ?? ""
+                let symbol = cash.symbol.map { " · \($0)" } ?? ""
+                return "\(cash.date) \(cash.kind.label) \(Fmt.moneyPlain(cash.amount))\(tax)\(symbol)"
+            }
+            return L10n.tr("无法识别")
+        }
     }
     struct Report {
         var rows: [Row] = []
@@ -38,7 +54,7 @@ enum HSBCStatement {
         f.dateFormat = "ddMMMyyyy"
         f.isLenient = false
         guard let d = f.date(from: text), f.string(from: d).uppercased() == text.uppercased() else {
-            throw LedgerError.message("月结单日期无效：\(text)")
+            throw LedgerError.message(L10n.tr("月结单日期无效：{}", text))
         }
         f.dateFormat = "yyyy-MM-dd"
         return try LedgerValidation.date(f.string(from: d))
@@ -104,7 +120,7 @@ enum HSBCStatement {
                         guard seen.insert(id).inserted else { throw LedgerError.message("文件内交易编号重复，未导入任何记录。") }
                         let side: TradeSide = r[10].uppercased() == "PUR" ? .buy : .sell
                         guard (side == .sell) == (r[6] == "-"), r[3] == r[7] else {
-                            throw LedgerError.message("\(ref)：方向、股数符号或币种不一致。")
+                            throw LedgerError.message(L10n.tr("{}：方向、股数符号或币种不一致。", ref))
                         }
                         let tradeDate = try date(r[1]), settlementDate = try date(r[2])
                         guard settlementDate >= tradeDate else { throw LedgerError.message("交收日早于成交日。") }
@@ -113,16 +129,16 @@ enum HSBCStatement {
                         let fee = feeByReference[ref] ?? 0
                         let expected = side == .buy ? price * quantity + fee : price * quantity - fee
                         guard abs(expected - settlement) <= Decimal(string: "0.005")! else {
-                            throw LedgerError.message("\(ref)：成交价、费用与交收额不符，需核对成交确认书。")
+                            throw LedgerError.message(L10n.tr("{}：成交价、费用与交收额不符，需核对成交确认书。", ref))
                         }
                         consumed.insert(ref)
                         let excluded = r[3].uppercased() != "USD" || symbol[2].uppercased() != "SHS"
+                        // note 只留给用户/来源数据：交收日已结构化保存，说明在展示层生成。
                         let trade = Trade(sequence: 0, symbol: symbol[1].uppercased(), side: side, date: tradeDate,
                                           quantity: quantity, price: price, fee: fee,
-                                          note: "汇丰月结单；交收日 \(settlementDate)", source: "hsbc-statement", externalId: id,
+                                          source: "hsbc-statement", externalId: id,
                                           settlementAmount: settlement, settlementDate: settlementDate)
                         report.rows.append(Row(id: id, trade: trade, currency: r[3].uppercased(),
-                                               detail: "成交 \(tradeDate) · 交收 \(settlementDate) · \(quantity) 股 × \(price) · 费用 \(fee)",
                                                issue: excluded ? "非美元股票，不写入美元账本" : nil, selected: !excluded))
                     }
                 }
@@ -140,11 +156,11 @@ enum HSBCStatement {
             guard seen.insert(id).inserted else { throw LedgerError.message("文件内分红编号重复。") }
             let net = try amount(d[5])
             guard net > 0 else { throw LedgerError.message("分红派付金额必须大于零。") }
+            // 同上：净额分红由 source + tax 表达，说明在展示层生成，不写进 note。
             let cash = CashRecord(sequence: 0, date: try date(d[1]), kind: .dividend, amount: net, tax: nil,
-                                  symbol: d[2].uppercased(), note: "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露",
-                                  source: "hsbc-statement-net", externalId: id)
+                                  symbol: d[2].uppercased(), source: "hsbc-statement-net", externalId: id)
             let excluded = d[4].uppercased() != "USD"
-            report.rows.append(Row(id: id, cash: cash, currency: d[4].uppercased(), detail: cash.note,
+            report.rows.append(Row(id: id, cash: cash, currency: d[4].uppercased(),
                                    issue: excluded ? "非美元分红，不写入美元账本" : nil, selected: !excluded))
         }
         guard matches(#"CASH\s+DIVIDEND"#, flat).count == dividends.count,
@@ -232,7 +248,7 @@ enum StatementImport {
             for index in 0..<document.pageCount {
                 try Task.checkCancellation()
                 guard let text = document.page(at: index).map({ pageText($0) }), text.count > 20 else {
-                    throw LedgerError.message("第 \(index + 1) 页没有完整文字层，扫描件暂不支持。")
+                    throw LedgerError.message(L10n.tr("第 {} 页没有完整文字层，扫描件暂不支持。", "\(index + 1)"))
                 }
                 pages.append(text)
             }

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stock Ledger Quality Gate — runs before every commit.
+#
+# Enable it once per machine (from the repo root):
+#   git config core.hooksPath scripts/hooks
+#
+# This hook just delegates to the single source of truth, scripts/verify.ps1.
+# Keep the gate itself in verify.ps1 — do not duplicate the checks here.
+
+ROOT=$(git rev-parse --show-toplevel)
+exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/scripts/verify.ps1"

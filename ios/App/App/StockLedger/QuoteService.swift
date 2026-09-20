@@ -12,24 +12,24 @@ enum QuoteProvider: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .yahoo: return "Yahoo 收盘价"
-        case .finnhub: return "Finnhub 最新报价"
-        case .custom: return "自定义 HTTPS 接口"
+        case .yahoo: return L10n.tr("Yahoo 收盘价")
+        case .finnhub: return L10n.tr("Finnhub 最新报价")
+        case .custom: return L10n.tr("自定义 HTTPS 接口")
         }
     }
 
     var detail: String {
         switch self {
-        case .yahoo: return "免密钥，取已完成交易日的收盘价，盘中不提供当日最新价。"
-        case .finnhub: return "需 API Key，提供盘中最新报价与上一交易日收盘。"
-        case .custom: return "地址必须为 HTTPS 且包含 {symbol} 占位符。"
+        case .yahoo: return L10n.tr("免密钥，取已完成交易日的收盘价，盘中不提供当日最新价。")
+        case .finnhub: return L10n.tr("需 API Key，提供盘中最新报价与上一交易日收盘。")
+        case .custom: return L10n.tr("地址必须为 HTTPS 且包含 {symbol} 占位符。")
         }
     }
 }
 
 enum QuoteError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case let .message(text) = self { return text }; return nil }
+    var errorDescription: String? { if case let .message(text) = self { return L10n.tr(text) }; return nil }
 }
 
 struct QuoteSettings: Codable, Equatable {
@@ -254,7 +254,7 @@ enum QuoteService {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 429 { throw QuoteError.message("请求限流，请延长刷新间隔。") }
         if status == 401 || status == 403 { throw QuoteError.message("API Key 无效或无行情权限。") }
-        guard status == 200 else { throw QuoteError.message("行情请求失败（\(status)）。") }
+        guard status == 200 else { throw QuoteError.message(L10n.tr("行情请求失败（{}）。", "\(status)")) }
         do {
             return try JSONSerialization.jsonObject(with: data)
         } catch {

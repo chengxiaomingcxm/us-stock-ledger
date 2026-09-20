@@ -47,6 +47,16 @@ struct NativeTests {
 
     @MainActor
     static func main() async throws {
+        // 测试期间不得写真实的 Documents：诊断日志统一重定向到临时文件。
+        Diagnostics.fileURLOverride = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stock-ledger-native-tests-diagnostics.log")
+        EngineGoldenTests.run()
+        try SafetyTests.run()
+        try DiagnosticsTests.run()
+        try await DemoModeTests.run()
+        try CsvImportTests.run()
+        try ErrorPathTests.run()
+        try await LanguageTests.run()
         let empty = Ledger()
         // Draw out of content-stream order to exercise PDFKit's visual column reconstruction.
         let pdf = NSMutableData()
@@ -73,6 +83,18 @@ struct NativeTests {
         check(imported.trades.count == 2 && imported.cash.count == 1, "batch trade and dividend import")
         check(imported.cash[0].tax == nil && imported.cash[0].amount == Decimal(string: "0.88"), "unknown tax stays unknown")
         check(imported.cash.allSatisfy { $0.kind == .dividend }, "no invented deposits or separate trade fees")
+        // note 只留给用户/来源数据：系统说明必须靠结构化字段在展示层生成（见 docs/ENGLISH_UI_AUDIT.md A1）。
+        check(imported.trades.allSatisfy { $0.note.isEmpty } && imported.cash.allSatisfy { $0.note.isEmpty },
+              "imported rows keep note empty")
+        check(imported.trades.allSatisfy { $0.source == "hsbc-statement" && $0.settlementDate != nil },
+              "source and settlement date stay structured")
+        check(imported.cash.allSatisfy { $0.source == "hsbc-statement-net" && $0.externalId != nil },
+              "dividend net amount stays structured")
+        L10n.current = .en
+        check(imported.trades.allSatisfy { Fmt.tradeNote($0).hasPrefix("HSBC statement; settlement ") },
+              "english note is generated from structured fields")
+        check(!Fmt.cashNote(imported.cash[0]).isEmpty, "english dividend note is generated too")
+        L10n.current = .zhHans
         check(imported.trades[0].price == Decimal(string: "10.125"), "original price preserved")
         check(imported.trades[0].gross == Decimal(string: "10.13"), "bank-rounded buy cost")
         check(Engine.summary(imported).realized == Decimal(string: "2.21"), "bank settlement realized profit")
@@ -121,7 +143,7 @@ struct NativeTests {
             var row = row; row.removeValue(forKey: "settlementAmount"); row.removeValue(forKey: "settlementDate"); return row
         }
         let old = try JSONDecoder().decode(Ledger.self, from: JSONSerialization.data(withJSONObject: oldObject))
-        check(old.trades[0].settlementAmount == nil && old.trades.count == 2, "old 2.0 backup compatible")
+        check(old.trades[0].settlementAmount == nil && old.trades.count == 2, "backup without settlement fields still decodes")
 
         let failing = AppState(ledger: empty, settings: QuoteSettings(), persist: { _ in throw LedgerError.message("disk full") })
         check(!failing.commit(imported) && failing.ledger.trades.isEmpty, "save failure preserves in-memory ledger")

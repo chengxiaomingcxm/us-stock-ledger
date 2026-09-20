@@ -1,19 +1,62 @@
 import Foundation
 import Combine
 
-// 原生版 1.0 沿用原生 2.0 测试版的 Documents/ledger-v2.json。
-// 不读取旧 Web 版的 Capacitor Preferences；产品重新编号不更改存储位置。
+// 原生版账本固定存在 Documents/ledger-v2.json（1.0 起的存储基线）。
+// 不读取旧 Web 版的 Capacitor Preferences。
 
 enum LedgerStore {
-    private static var fileURL: URL {
+    /// 仅测试使用：把账本读写重定向到临时目录，避免测试碰到真实的 Documents。
+    static var fileURLOverride: URL?
+
+    /// 账本文件位置。
+    static var fileURL: URL {
+        if let fileURLOverride { return fileURLOverride }
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return documents.appendingPathComponent("ledger-v2.json")
     }
 
-    static func load() -> Ledger {
-        guard let data = try? Data(contentsOf: fileURL) else { return Ledger() }
+    /// 读取结果。「没有文件」与「文件读不出来」必须严格区分：
+    /// 后者绝不能被当成空账本，否则下一次保存会用空账本覆盖仍可抢救的原文件。
+    enum LoadResult {
+        case missing          // 首次启动：文件不存在，是合法状态
+        case loaded(Ledger)   // 正常读取
+        case failed(String)   // 文件存在但无法读取/解码；原文件保持不动
+    }
+
+    static func loadResult() -> LoadResult {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return .missing }
+        do {
+            let data = try Data(contentsOf: fileURL)
+            return .loaded(try decode(data))
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    /// 账本读不出来时给用户看的一句话（也是暂停写入的说明）。
+    static let unreadableMessage = "账本文件无法读取，已暂停写入以保护原文件；请到「设置 → 从备份恢复」。"
+    /// 文件由更新版本的 App 写入：处置与「损坏」不同——不能建议「从备份恢复」，
+    /// 那会用旧备份覆盖掉更完整的账本。
+    static let newerFormatMessage = "账本由更新版本的 App 写入，本版本无法安全读取；请更新 App。不要用旧备份覆盖它。"
+
+    /// 只读一眼文件里的格式代际；缺失或根本读不出来就交给完整解码去报错。
+    private struct FormatProbe: Decodable { var format: Int? }
+
+    /// 唯一解码入口：载入与「从备份恢复」共用，避免只守住一条路径。
+    /// 拒绝比本版本更新的格式——否则会被「成功解码」成丢字段的账本，而下一次原子写入
+    /// 就把它覆盖了，属于静默数据丢失（docs/PHASE_0_5_REVIEW.md P2-1 记的欠账）。
+    static func decode(_ data: Data) throws -> Ledger {
         let decoder = JSONDecoder()
-        return (try? decoder.decode(Ledger.self, from: data)) ?? Ledger()
+        if let found = (try? decoder.decode(FormatProbe.self, from: data))?.format,
+           found > Ledger.currentFormat {
+            throw LedgerError.message(newerFormatMessage)
+        }
+        return try decoder.decode(Ledger.self, from: data)
+    }
+
+    /// 读不出来时的横幅：格式代际问题给出它自己的处置建议，其余仍是通用那一句。
+    static func bannerText(for failure: String) -> String {
+        failure == L10n.tr(newerFormatMessage) ? L10n.tr(newerFormatMessage) : L10n.tr(unreadableMessage)
     }
 
     static func save(_ ledger: Ledger) throws {
@@ -36,51 +79,38 @@ enum LedgerStore {
         return String(decoding: try encoder.encode(ledger), as: UTF8.self)
     }
 
-    /// 示例账本：仅用于体验界面与计算，不包含任何真实数据。
-    static func demo() -> Ledger {
-        func amount(_ text: String) -> Decimal {
-            Decimal(string: text, locale: Locale(identifier: "en_US")) ?? 0
-        }
-        var ledger = Ledger()
-        var sequence = 0
-        func trade(_ symbol: String, _ side: TradeSide, _ date: String,
-                   _ quantity: String, _ price: String, _ fee: String, _ note: String = "") -> Trade {
-            let record = Trade(id: UUID(), sequence: sequence, symbol: symbol, side: side,
-                               date: date, quantity: amount(quantity), price: amount(price),
-                               fee: amount(fee), note: note, source: "manual", externalId: nil)
-            sequence += 1
-            return record
-        }
-        ledger.trades = [
-            trade("VOO", .buy, "2026-04-02", "15", "512.30", "1", "示例：买入 ETF"),
-            trade("AAPL", .buy, "2026-06-15", "20", "198.40", "1"),
-            trade("AAPL", .buy, "2026-07-06", "10", "212.75", "1"),
-            trade("AAPL", .sell, "2026-08-12", "12", "231.20", "1.05", "示例：部分止盈"),
-            trade("MSFT", .buy, "2026-05-20", "8", "428.90", "1"),
-        ]
-        ledger.quotes = [
-            Quote(symbol: "AAPL", price: amount("229.15"), date: "2026-09-17", source: nil, fetchedAt: nil),
-            Quote(symbol: "MSFT", price: amount("512.40"), date: "2026-09-17", source: nil, fetchedAt: nil),
-            Quote(symbol: "VOO", price: amount("578.05"), date: "2026-09-17", source: nil, fetchedAt: nil),
-        ]
-        ledger.opening = CashOpening(amount: amount("5000"), date: "2026-04-01", note: "示例期初余额")
-        ledger.cash = [
-            CashRecord(id: UUID(), sequence: 0, date: "2026-04-01", kind: .deposit, amount: amount("20000"),
-                       tax: nil, symbol: nil, note: "示例入金", source: "manual", externalId: nil),
-            CashRecord(id: UUID(), sequence: 1, date: "2026-08-15", kind: .dividend, amount: amount("6.24"),
-                       tax: amount("0.94"), symbol: "AAPL", note: "示例分红", source: "manual", externalId: nil),
-            CashRecord(id: UUID(), sequence: 2, date: "2026-09-01", kind: .fee, amount: amount("1.25"),
-                       tax: nil, symbol: nil, note: "示例账户费用", source: "manual", externalId: nil),
-        ]
-        return ledger
-    }
+    /// 示例账本：全部为虚构数据，仅用于体验界面与计算。生成逻辑见 `DemoData`。
+    static func demo(now: Date = Date()) -> Ledger { DemoData.ledger(now: now) }
 }
 
 @MainActor
 final class AppState: ObservableObject {
     @Published private(set) var ledger: Ledger
     @Published var undoTrade: UUID?
-    @Published var errorMessage: String?
+    /// 所有用户可见失败都在这里汇聚，顺便写入诊断日志（唯一汇聚点）。
+    @Published var errorMessage: String? {
+        didSet { if let errorMessage { Diagnostics.record("ERROR", errorMessage) } }
+    }
+    /// 非 nil 表示磁盘上的账本存在但读不出来：此时暂停一切写入以保护原文件。
+    @Published private(set) var loadFailure: String?
+    /// 示例模式：界面显示的是虚构数据，且所有写入都停在内存里，真实账本文件不受影响。
+    @Published private(set) var demo = false
+    /// 界面语言：中文 / English，跟随设置并持久化。
+    @Published var language: AppLanguage {
+        didSet {
+            L10n.current = language
+            UserDefaults.standard.set(language.rawValue, forKey: "app.language")
+            // 派生缓存里存着「求值当时就已本地化」的标题与说明：Engine 用 L10n.tr 生成后固化成字符串
+            // （Engine.displayedReturn → LedgerDerived.displayReturn），而缓存的失效键是账本与历史，不含语言。
+            // 只重绘视图不足以修正它们，必须让缓存重算，否则界面会停在旧语言。
+            // 见 docs/ENGLISH_UI_AUDIT.md A1。
+            // 示例账本还要多一步：它的文案（note）在生成时就已本地化，只重算派生缓存
+            // 不够，得按新语言重建示例数据本身；示例是只读沙盒，重建不会丢用户输入。
+            if oldValue != language {
+                if demo { enterDemo() } else { rebuild(ledger) }
+            }
+        }
+    }
     /// 各股票上一交易日收盘价与日期，由行情同步填入；手动报价不参与今日盈亏基准。
     @Published var previousClose: [String: Decimal] = [:]
     @Published var previousCloseDates: [String: String] = [:]
@@ -106,15 +136,37 @@ final class AppState: ObservableObject {
     private var calculation: Task<LedgerDerived, Never>?
     private var generation = 0
     private var computedLedger: Ledger?
+    /// 上一次已记录的行情失败集合，用于去重（行情失败会随每次刷新重复出现）。
+    private var lastQuoteFailure = ""
+    private var lastHistoryFailure = ""
     private let persist: (Ledger) throws -> Void
 
-    init(ledger: Ledger = LedgerStore.load(), settings: QuoteSettings = QuoteService.load(),
+    /// 「磁盘读取结果 → 初始状态」只在这里定义一次：启动与退出示例模式共用。
+    private static func restore(_ result: LedgerStore.LoadResult) -> (ledger: Ledger, failure: String?) {
+        switch result {
+        case .loaded(let value): return (value, nil)
+        case .missing: return (Ledger(), nil)
+        case .failed(let reason): return (Ledger(), reason)
+        }
+    }
+
+    /// `ledger` 为 nil 时从磁盘读取；显式传入账本（测试 / 示例 / 截图工具）时完全不碰磁盘。
+    init(ledger: Ledger? = nil, settings: QuoteSettings = QuoteService.load(),
          persist: @escaping (Ledger) throws -> Void = LedgerStore.save) {
-        self.ledger = ledger
+        let restored = Self.restore(ledger.map(LedgerStore.LoadResult.loaded) ?? LedgerStore.loadResult())
+        self.ledger = restored.ledger
+        self.loadFailure = restored.failure
         self.quoteSettings = settings
         self.persist = persist
-        rebuild(ledger)
+        let saved = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "app.language") ?? "") ?? .zhHans
+        self.language = saved
+        L10n.current = saved
+        // 必须在所有存储属性初始化完成之后才能读 self.loadFailure。
+        if let loadFailure { Diagnostics.record("LOAD", loadFailure) }
+        rebuild(self.ledger)
     }
+
+    func setLanguage(_ value: AppLanguage) { language = value }
     private func rebuild(_ value: Ledger) {
         calculation?.cancel()
         generation += 1
@@ -138,10 +190,25 @@ final class AppState: ObservableObject {
         }
     }
     /// Save first; failed persistence leaves both the in-memory and disk ledger intact.
+    /// 示例模式是只读沙盒：写入一律明确拒绝，既不落盘也不假装成功；
+    /// 账本读取失败期间也会拒绝一切写入，避免用空账本覆盖原文件。
     @discardableResult
     func commit(_ next: Ledger) -> Bool {
+        if demo {
+            errorMessage = L10n.tr("示例模式是只读的，不会修改账本；请先退出示例模式。")
+            return false
+        }
+        guard loadFailure == nil else {
+            errorMessage = L10n.tr(LedgerStore.unreadableMessage)
+            return false
+        }
         do { try persist(next) }
-        catch { errorMessage = error.localizedDescription; return false }
+        catch {
+            // 系统异常的原文只进日志；界面给一句可读、可行动的话。
+            Diagnostics.record("SAVE", error: error)
+            errorMessage = L10n.tr("账本保存失败，磁盘上的原文件没有被改动；请重试。")
+            return false
+        }
         ledger = next
         rebuild(next)
         return true
@@ -149,12 +216,14 @@ final class AppState: ObservableObject {
 
     /// Automatic refresh must not JSON-encode the entire history on the scrolling thread.
     private func commitRefresh(_ next: Ledger) async -> Bool {
+        // 示例模式不发行情请求；即使走到了这里也绝不落盘。
+        guard !demo, loadFailure == nil else { return false }
         let token = generation
         do {
             let data = try await Task.detached(priority: .utility) { try LedgerStore.encoded(next) }.value
             guard !Task.isCancelled else { return false }
             guard token == generation else {
-                errorMessage = "同步期间账本已修改，已保留最新账本，请重新同步行情。"
+                errorMessage = L10n.tr("同步期间账本已修改，已保留最新账本，请重新同步行情。")
                 return false
             }
             try LedgerStore.write(data)
@@ -162,7 +231,8 @@ final class AppState: ObservableObject {
             rebuild(next)
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            Diagnostics.record("SAVE", error: error)
+            errorMessage = L10n.tr("账本保存失败，磁盘上的原文件没有被改动；请重试。")
             return false
         }
     }
@@ -180,21 +250,53 @@ final class AppState: ObservableObject {
             created.sequence = next.nextTradeSequence
             next.trades.append(created)
         }
+        guard !introducesOversell(next) else { return false }
         guard commit(next) else { return false }
         if isNew { undoTrade = trade.id }
         return true
     }
 
-    func deleteTrade(_ id: UUID) {
+    @discardableResult
+    func deleteTrade(_ id: UUID) -> Bool {
         var next = ledger
         next.trades.removeAll { $0.id == id }
+        guard !introducesOversell(next) else { return false }
+        guard commit(next) else { return false }
         if undoTrade == id { undoTrade = nil }
-        commit(next)
+        return true
     }
 
-    func undoLastTrade() {
-        guard let id = undoTrade else { return }
-        deleteTrade(id)
+    /// 手动录入路径的交易不变量：任何时点的卖出都不得超过当时持仓。
+    /// 逐笔对比「违规时点」而不是只看最终持仓：只有 `next` 的每个违规时点在旧账本里都能找到
+    /// （同一股票、同一日期、同一 sequence）且超额股数没有扩大，才认为这次改动是在**修复**历史脏数据。
+    /// 新增另一只股票的超卖、扩大已有超卖、把违规提前到更早的时点、或删掉买入导致中间时点悬空，全部拒绝。
+    private func introducesOversell(_ next: Ledger) -> Bool {
+        let violations = Engine.oversells(next)
+        guard !violations.isEmpty else { return false }  // 正常账本（绝大多数保存）只重放一次
+        var existing: [Engine.Oversell.ID: Decimal] = [:]
+        for item in Engine.oversells(ledger) { existing[item.id, default: 0] += item.quantity }
+        for item in violations {
+            guard let allowed = existing[item.id], item.quantity <= allowed else {
+                errorMessage = L10n.tr("{} 在 {} 的卖出超过当时持仓，账本未改动。", item.symbol, item.date)
+                return true
+            }
+        }
+        return false
+    }
+
+    /// 行情失败会在每次刷新重复出现，只在「失败集合发生变化」时记一次，避免日志被刷满。
+    /// 返回新的签名交给调用方保存（不用 inout，避免对 self 存储属性的重叠访问）。
+    private func logFailures(_ errors: [String: String], kind: String, last: String) -> String {
+        let signature = errors.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: " | ")
+        guard !signature.isEmpty, signature != last else { return last }
+        Diagnostics.record(kind, signature)
+        return signature
+    }
+
+    @discardableResult
+    func undoLastTrade() -> Bool {
+        guard let id = undoTrade else { return true }
+        return deleteTrade(id)
     }
 
     // MARK: - 报价
@@ -231,6 +333,7 @@ final class AppState: ObservableObject {
         let result = await QuoteService.fetchAll(symbols: symbols, settings: settings)
         guard !Task.isCancelled, settings == quoteSettings else { return }
         quoteErrors = result.errors
+        lastQuoteFailure = logFailures(result.errors, kind: "QUOTE", last: lastQuoteFailure)
         guard !result.quotes.isEmpty else { return }
 
         var incoming: [Quote] = []
@@ -246,7 +349,7 @@ final class AppState: ObservableObject {
             }
         }
         if await applyQuotes(incoming) { lastSyncedAt = Date() }
-        else if let errorMessage, !Task.isCancelled { quoteErrors["账本"] = errorMessage }
+        else if let errorMessage, !Task.isCancelled { quoteErrors[L10n.tr("账本")] = errorMessage }
     }
 
     /// 同步历史收盘价与交易日历：收益日历、月度统计和上一收盘价都基于这些数据。
@@ -260,6 +363,7 @@ final class AppState: ObservableObject {
 
         let result = await QuoteService.fetchSeriesAll(symbols: symbols.sorted())
         historyErrors = result.errors
+        lastHistoryFailure = logFailures(result.errors, kind: "HISTORY", last: lastHistoryFailure)
         guard !result.series.isEmpty else { return }
 
         var sessions = Set(ledger.history.sessions)
@@ -304,7 +408,7 @@ final class AppState: ObservableObject {
             next.quotes.append(quote)
         }
         if await commitRefresh(next) { historySyncedAt = Date() }
-        else if let errorMessage, !Task.isCancelled { historyErrors["账本"] = errorMessage }
+        else if let errorMessage, !Task.isCancelled { historyErrors[L10n.tr("账本")] = errorMessage }
     }
 
     /// 合并报价：绝不覆盖更新的报价；同日手动报价优先于自动报价。
@@ -359,15 +463,51 @@ final class AppState: ObservableObject {
 
     // MARK: - 备份
 
-    func replace(with ledger: Ledger) {
+    @discardableResult
+    func replace(with ledger: Ledger) -> Bool {
+        guard commit(ledger) else { return false }
         undoTrade = nil
-        commit(ledger)
+        return true
+    }
+
+    /// 用户明确选择用备份恢复：这是账本读取失败后唯一被放行的写入路径。
+    /// 只有备份真正写盘成功才解除保护；写盘失败时保护状态、内存账本与原文件都不变。
+    @discardableResult
+    func replaceFromBackup(_ next: Ledger) -> Bool {
+        let blocked = loadFailure
+        loadFailure = nil
+        guard commit(next) else {
+            loadFailure = blocked
+            return false
+        }
+        undoTrade = nil
+        return true
     }
 
     // MARK: - 示例与清空
 
-    func loadDemo() {
-        replace(with: LedgerStore.demo())
+    /// 进入示例模式：只读沙盒，真实账本文件从头到尾不被触碰。
+    /// 已知边界（`ponytail:`）：示例模式不跨启动保留——重启就回到用户自己的数据。
+    /// 这是刻意选择，让示例数据永远不可能变成用户的账本。升级路径：用 `@AppStorage` 记住状态。
+    func enterDemo() {
+        demo = true
+        undoTrade = nil
+        errorMessage = nil
+        let sample = LedgerStore.demo()
+        ledger = sample
+        rebuild(sample)
+    }
+
+    /// 退出示例模式：重新从磁盘读取，连「账本读不出来」的保护状态一起恢复。
+    func exitDemo() {
+        demo = false
+        undoTrade = nil
+        errorMessage = nil
+        let restored = Self.restore(LedgerStore.loadResult())
+        ledger = restored.ledger
+        loadFailure = restored.failure
+        rebuild(restored.ledger)
+        if let failure = restored.failure { Diagnostics.record("LOAD", failure) }
     }
 
     func clearAll() {

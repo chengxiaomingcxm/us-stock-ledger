@@ -11,6 +11,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
+        // 诊断日志：启动时先核对上次是否正常结束，再写本次运行环境。
+        Diagnostics.start()
         window?.rootViewController = UIHostingController(rootView: RootView().environmentObject(AppState()))
         window?.makeKeyAndVisible()
 

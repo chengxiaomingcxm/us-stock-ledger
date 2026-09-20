@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-// 2.0 计算引擎：口径与 1.x 一致（移动平均成本、期初边界、买卖联动现金）。
+// 计算引擎：移动平均成本、期初边界、买卖联动现金。
 
 struct Position: Identifiable {
     var symbol: String
@@ -93,6 +93,36 @@ enum Engine {
             gains: gains,
             fees: fees
         )
+    }
+
+    /// 一个「卖出超过当时可用股数」的历史时点及其超额股数。
+    struct Oversell: Identifiable, Equatable {
+        var symbol: String
+        var date: String
+        var sequence: Int
+        var quantity: Decimal
+        var id: String { "\(symbol)|\(date)|\(sequence)" }
+    }
+
+    /// 交易不变量：按时间顺序重放，找出每个「卖出超过当时可用股数」的时点。
+    /// 只看最终数量是不够的：Jan1 买 100 / Jan2 卖 100 / Jan3 买 100 的最终持仓虽然为 100，
+    /// 但删掉 Jan1 的买入后 Jan2 就已超卖，因此必须逐笔重放（负持仓向后续时点累计）。
+    static func oversells(_ ledger: Ledger) -> [Oversell] {
+        var holding: [String: Decimal] = [:]
+        var found: [Oversell] = []
+        for trade in ledger.orderedTrades {
+            if trade.side == .buy {
+                holding[trade.symbol, default: 0] += trade.quantity
+            } else {
+                let available = holding[trade.symbol] ?? 0
+                if trade.quantity > available {
+                    found.append(Oversell(symbol: trade.symbol, date: trade.date, sequence: trade.sequence,
+                                          quantity: trade.quantity - available))
+                }
+                holding[trade.symbol] = available - trade.quantity
+            }
+        }
+        return found
     }
 
     /// 期初余额是“期初日当天开始前”的现金；期初日及之后的入金、出金、分红、费用和买卖计入余额。
@@ -259,17 +289,17 @@ enum Engine {
                 let after = prices[symbol + "|" + date]
                 let isSplit = splitSymbols.contains(symbol)
                 var reason: String?
-                if isSplit { reason = "发现拆股，需先核对股数与成本" }
-                else if stray.contains(symbol) { reason = "相邻交易日之间有交易记录，请核对美东交易日期" }
-                else if gap, startQty > 0 { reason = "相邻收盘记录之间有未确认日期" }
-                else if startQty > 0, before == nil { reason = "缺少 \(previous ?? "前一交易日") 收盘价" }
-                else if endQty > 0, after == nil { reason = "缺少 \(date) 收盘价" }
+                if isSplit { reason = L10n.tr("发现拆股，需先核对股数与成本") }
+                else if stray.contains(symbol) { reason = L10n.tr("相邻交易日之间有交易记录，请核对美东交易日期") }
+                else if gap, startQty > 0 { reason = L10n.tr("相邻收盘记录之间有未确认日期") }
+                else if startQty > 0, before == nil { reason = L10n.tr("缺少") + " \(previous ?? L10n.tr("前一交易日")) " + L10n.tr("收盘价") }
+                else if endQty > 0, after == nil { reason = L10n.tr("缺少") + " \(date) " + L10n.tr("收盘价") }
 
                 if endQty > 0, let after, !isSplit { value += endQty * after } else if endQty > 0 { endComplete = false }
                 if isSplit { endComplete = false }
 
                 if let reason {
-                    missing.append("\(symbol)：\(reason)")
+                    missing.append(L10n.tr("{}：{}", symbol, reason))
                     contributions.append(Contribution(symbol: symbol, profit: nil, reason: reason))
                 } else {
                     let endValue = endQty > 0 && after != nil ? endQty * after! : 0
@@ -313,8 +343,11 @@ enum Engine {
     /// 交易区间筛选与汇总（日期区间、买卖类型、关键字）。
     struct RangeResult {
         var list: [Trade] = []
-        var buyQuantity: Decimal = 0
-        var sellQuantity: Decimal = 0
+        var buyCount = 0
+        var sellCount = 0
+        /// 成交金额 = Σ(股数 × 成交价)，**不含手续费**；手续费单独列示，不混进金额。
+        var buyAmount: Decimal = 0
+        var sellAmount: Decimal = 0
         var fees: Decimal = 0
         var realized: Decimal = 0
         var hasRealized = false
@@ -336,7 +369,16 @@ enum Engine {
             }
             result.list.append(trade)
             result.fees += trade.fee
-            if trade.side == .buy { result.buyQuantity += trade.quantity } else { result.sellQuantity += trade.quantity }
+            // 金额口径按产品定义：股数 × 成交价，不含手续费。
+            // 不用 `gross`：那个在结单导入的行上等于银行舍入后的整笔交收额，
+            // 会让同一个数同时表达「成交额」与「银行现金流」两种含义。
+            if trade.side == .buy {
+                result.buyCount += 1
+                result.buyAmount += trade.quantity * trade.price
+            } else {
+                result.sellCount += 1
+                result.sellAmount += trade.quantity * trade.price
+            }
             if trade.side == .sell, let gain = gains[trade.id] {
                 result.realized += gain
                 result.hasRealized = true
@@ -356,7 +398,7 @@ enum Engine {
     }
 
     struct TodayResult {
-        var title: String = "今日盈亏"
+        var title: String = L10n.tr("今日盈亏")
         var pnl: Decimal?
         var percent: Decimal?
         var caption: String
@@ -372,7 +414,7 @@ enum Engine {
         let symbols = Set(ledger.trades.map(\.symbol))
         let quotes = ledger.quotes.filter { symbols.contains($0.symbol) && $0.date <= today }
         guard let date = quotes.map(\.date).max() else {
-            return TodayResult(caption: "尚无报价，请同步行情")
+            return TodayResult(caption: L10n.tr("尚无报价，请同步行情"))
         }
         var before: [String: Decimal] = [:]
         var dates: [String: String] = [:]
@@ -382,7 +424,7 @@ enum Engine {
                 if let day = quote.previousCloseDate { dates[quote.symbol] = day }
             }
         }
-        // Recover persisted daily baselines when opening an old 2.0 backup.
+        // 没有 previousClose 时用最近的历史收盘价补上当日基准（行情来源不提供，或从备份恢复后）。
         let history = Dictionary(grouping: ledger.history.closes) { $0.symbol }
         for symbol in symbols where before[symbol] == nil {
             if let close = history[symbol]?.filter({ $0.date < date }).max(by: { $0.date < $1.date }),
@@ -394,8 +436,8 @@ enum Engine {
         }
         var result = todayPnl(ledger, previousClose: before, previousCloseDates: dates, today: date)
         let closed = quotes.filter { $0.date == date }.allSatisfy { $0.source == "yahoo-close" }
-        result.title = closed ? "最近收盘收益" : (date == today ? "今日盈亏" : "最近报价日收益")
-        result.caption = "美东 \(date) · " + (closed ? "已完成交易日收盘" : "最新报价") + (result.pnl == nil ? " · 待补全" : "")
+        result.title = closed ? L10n.tr("最近收盘收益") : (date == today ? L10n.tr("今日盈亏") : L10n.tr("最近报价日收益"))
+        result.caption = "\(L10n.tr("美东")) \(date) · " + (closed ? L10n.tr("已完成交易日收盘") : L10n.tr("最新报价")) + (result.pnl == nil ? " · " + L10n.tr("待补全") : "")
         return result
     }
 
@@ -426,22 +468,22 @@ enum Engine {
 
             if openQty > 0 {
                 if previousClose[symbol] == nil {
-                    reason = "缺少上一交易日收盘价"
+                    reason = L10n.tr("缺少上一交易日收盘价")
                 } else if let date = previousCloseDates[symbol], date >= today {
-                    reason = "上一收盘价日期异常，请重新同步行情"
+                    reason = L10n.tr("上一收盘价日期异常，请重新同步行情")
                 }
             }
             if reason == nil, endQty > 0 {
                 if let quote {
-                    if quote.date != today { reason = "缺少 \(today) 报价（当前报价为 \(quote.date)）" }
+                    if quote.date != today { reason = L10n.tr("缺少") + " \(today) " + L10n.tr("报价") + " (\(quote.date))" }
                 } else {
-                    reason = "缺少当日报价"
+                    reason = L10n.tr("缺少当日报价")
                 }
             }
 
             if let reason {
                 complete = false
-                missing.append("\(symbol)：\(reason)")
+                missing.append(L10n.tr("{}：{}", symbol, reason))
                 rows.append(TodayRow(symbol: symbol, pnl: nil, reason: reason))
                 continue
             }
@@ -456,14 +498,14 @@ enum Engine {
             rows.append(TodayRow(symbol: symbol, pnl: profit, reason: nil))
         }
 
-        var caption = "美东 \(today)"
+        var caption = "\(L10n.tr("美东")) \(today)"
         if !previousCloseDates.isEmpty, let date = previousCloseDates.values.min() {
-            caption += " · 对比 \(date) 收盘"
+            caption += " · \(L10n.tr("对比")) \(date) " + L10n.tr("收盘")
         } else if !previousClose.isEmpty {
-            caption += " · 对比上一交易日收盘"
+            caption += " · " + L10n.tr("对比上一交易日收盘")
         }
-        if todayTrades.isEmpty == false { caption += " · 今日 \(todayTrades.count) 笔交易已计入" }
-        if !complete { caption = missing.count > 1 ? "缺少 \(missing.count) 项行情 · 待补全" : "缺少行情 · 待补全" }
+        if todayTrades.isEmpty == false { caption += " · \(L10n.tr("今日")) \(todayTrades.count) " + L10n.tr("笔交易已计入") }
+        if !complete { caption = missing.count > 1 ? L10n.tr("缺少") + " \(missing.count) " + L10n.tr("项行情 · 待补全") : L10n.tr("缺少行情 · 待补全") }
 
         return TodayResult(
             pnl: complete ? total : nil,
@@ -543,9 +585,29 @@ struct InsightsPresentation {
             ticks = Array(Set((0..<min(6, days.count)).map { $0 * (days.count - 1) / max(min(6, days.count) - 1, 1) })).sorted()
         }
     }
+
+    /// 曲线纵轴的参考值：上限、零轴、下限，位置是**归一化的**（0 = 顶边，1 = 底边）。
+    ///
+    /// `maximum` / `minimum` 已经按 0 夹紧，所以全为正的历史里下限本身就是零轴——两条会落在同一条边上。
+    /// `proximity` 之内只保留先出现的那条：宁可少标一个数，也不把两行字压在一起。
+    ///
+    /// 带上 `$`：同一张卡片的大数走 `Fmt.signedMoney`（`+$58.15`），参考值不带符号会被读成百分比。
+    /// 本 App 只记美元（结单导入会跳过非美元行），所以符号是固定的。
+    func axisReferences(proximity: CGFloat = 0.09) -> [(text: String, position: CGFloat)] {
+        let span = max(maximum - minimum, 0.0001)
+        var placed: [CGFloat] = []
+        var rows: [(text: String, position: CGFloat)] = []
+        for value in [maximum, 0, minimum] {
+            let position = CGFloat((maximum - value) / span)
+            guard !placed.contains(where: { abs($0 - position) < proximity }) else { continue }
+            placed.append(position)
+            rows.append((Fmt.compactMoney(Decimal(value)), position))
+        }
+        return rows
+    }
 }
 struct LedgerDerived {
-    var displayReturn = Engine.TodayResult(caption: "正在计算")
+    var displayReturn = Engine.TodayResult(caption: L10n.tr("正在计算"))
     var unknownDividendTax = 0
     var summary = LedgerSummary()
     var cash = CashTotals()

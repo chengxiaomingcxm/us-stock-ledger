@@ -1,12 +1,12 @@
 import Foundation
 
-// 原生版账本：沿用原生 2.0 测试版的格式 2，与旧 Web 版分开存储。
-// 计算口径与旧 Web 版保持一致：移动平均成本、已实现/浮动收益、现金期初边界与买卖联动。
+// 原生版账本：格式 2 是 1.0 起的数据基线（`Ledger.currentFormat`），与旧 Web 版分开存储。
+// 计算口径：移动平均成本、已实现/浮动收益、现金期初边界与买卖联动。
 
 enum TradeSide: String, Codable, CaseIterable, Identifiable {
     case buy, sell
     var id: String { rawValue }
-    var label: String { self == .buy ? "买入" : "卖出" }
+    var label: String { L10n.tr(self == .buy ? "买入" : "卖出") }
 }
 
 struct Trade: Identifiable, Codable, Hashable {
@@ -44,10 +44,10 @@ struct Quote: Identifiable, Codable, Hashable {
     /// 报价来源的中文说明；手动录入没有来源标记。
     var sourceLabel: String {
         switch source {
-        case "yahoo-close": return "美股收盘"
-        case "finnhub-live": return "Finnhub 报价"
-        case "custom-live": return "接口报价"
-        default: return "手动报价"
+        case "yahoo-close": return L10n.tr("美股收盘")
+        case "finnhub-live": return L10n.tr("Finnhub 报价")
+        case "custom-live": return L10n.tr("接口报价")
+        default: return L10n.tr("手动报价")
         }
     }
 
@@ -59,10 +59,10 @@ enum CashKind: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .deposit: return "入金"
-        case .withdraw: return "出金"
-        case .dividend: return "分红"
-        case .fee: return "账户费用"
+        case .deposit: return L10n.tr("入金")
+        case .withdraw: return L10n.tr("出金")
+        case .dividend: return L10n.tr("分红")
+        case .fee: return L10n.tr("账户费用")
         }
     }
 }
@@ -116,7 +116,11 @@ struct LedgerHistory: Codable {
 }
 
 struct Ledger: Codable {
-    var format: Int = 2
+    /// 持久化格式代际。**结构没变就不要动这个数字**——抬高它等于声明与旧文件不兼容。
+    /// 载入时会拒绝「比本版本更新」的文件（`LedgerStore.decode`），所以它同时是
+    /// 「本版本能理解的上限」。见 DATA-COMPATIBILITY.md。
+    static let currentFormat = 2
+    var format: Int = Ledger.currentFormat
     var trades: [Trade] = []
     var quotes: [Quote] = []
     var cash: [CashRecord] = []
@@ -125,13 +129,24 @@ struct Ledger: Codable {
 
     func quote(for symbol: String) -> Quote? { quotes.first { $0.symbol == symbol } }
 
-    /// 交易按日期与录入顺序排列。
-    var orderedTrades: [Trade] {
-        trades.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+    /// 排序规则只在这里定义一次：(美东日期, sequence) 升序。
+    /// Swift 的 `sort` 不保证稳定，所以显式用数组下标做最终判据——这样即使备份里同日 sequence
+    /// 重复（可解码但顺序有歧义），Buy/Sell 的相对顺序也是数据的纯函数，可复现，不随排序实现变化。
+    static func sortedTrades(_ trades: [Trade]) -> [Trade] {
+        trades.enumerated()
+            .sorted { ($0.element.date, $0.element.sequence, $0.offset) < ($1.element.date, $1.element.sequence, $1.offset) }
+            .map(\.element)
     }
-    var orderedCash: [CashRecord] {
-        cash.sorted { $0.date == $1.date ? $0.sequence < $1.sequence : $0.date < $1.date }
+
+    static func sortedCash(_ records: [CashRecord]) -> [CashRecord] {
+        records.enumerated()
+            .sorted { ($0.element.date, $0.element.sequence, $0.offset) < ($1.element.date, $1.element.sequence, $1.offset) }
+            .map(\.element)
     }
+
+    /// 交易 / 现金按日期与录入顺序排列。
+    var orderedTrades: [Trade] { Ledger.sortedTrades(trades) }
+    var orderedCash: [CashRecord] { Ledger.sortedCash(cash) }
     var nextTradeSequence: Int { (trades.map(\.sequence).max() ?? -1) + 1 }
     var nextCashSequence: Int { (cash.map(\.sequence).max() ?? -1) + 1 }
 }
@@ -164,20 +179,22 @@ enum LedgerValidation {
 
     static func positive(_ value: Decimal, _ label: String, allowZero: Bool = false) throws -> Decimal {
         if value < 0 || (!allowZero && value == 0) {
-            throw LedgerError.message("\(label)必须\(allowZero ? "不小于 0" : "大于 0")。")
+            throw LedgerError.message(L10n.tr("{}必须{}。", label, allowZero ? L10n.tr("不小于 0") : L10n.tr("大于 0")))
         }
         return value
     }
 
-    static func note(_ value: String, _ label: String = "备注") throws -> String {
-        guard value.count <= 500 else { throw LedgerError.message("\(label)最多 500 字。") }
+    /// 默认的 `label` 也必须过词典：它会被当成**值**填进 `"{}最多 500 字。"`，
+    /// 写死中文时英文界面会弹出「备注 is at most 500 characters.」。
+    static func note(_ value: String, _ label: String = L10n.tr("备注")) throws -> String {
+        guard value.count <= 500 else { throw LedgerError.message(L10n.tr("{}最多 500 字。", label)) }
         return value
     }
 }
 
 enum LedgerError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case let .message(text) = self { return text }; return nil }
+    var errorDescription: String? { if case let .message(text) = self { return L10n.tr(text) }; return nil }
 }
 
 // MARK: - 格式化
@@ -235,6 +252,26 @@ enum Fmt {
 
     static var today: String { MarketClock.date() }
 
+    /// 归属规则：`note` 只装**用户或银行/券商给的原文**，系统说明一律不写进去。
+    /// 系统说明由结构化字段在展示时生成，因此天然跟随语言，也不会把值拼进查表键。
+    /// 两种情况：
+    /// - 导入的行 note 为空 → 用 `settlementDate` 重建；
+    /// - 用户写过东西 → 原样返回，绝不覆盖。
+    /// 1.0 之前把同一句系统说明写进了 `note`：那不再是兼容目标，原样显示即可。
+    /// 底线不变——系统文案永远不会盖掉已经持久化的值。
+    static func tradeNote(_ trade: Trade) -> String {
+        guard trade.source == "hsbc-statement", let settlement = trade.settlementDate else { return trade.note }
+        guard trade.note.isEmpty else { return trade.note }
+        return L10n.tr("汇丰月结单；交收日 {}", settlement)
+    }
+
+    /// 同上：汇丰净额分红由 `source` + `tax` 表达，说明在展示时生成。
+    static func cashNote(_ record: CashRecord) -> String {
+        guard record.source == "hsbc-statement-net", record.tax == nil else { return record.note }
+        guard record.note.isEmpty else { return record.note }
+        return L10n.tr("汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露")
+    }
+
     /// 用于「上次同步」等时间点的简短展示。
     static func clock(_ time: Date) -> String {
         let formatter = DateFormatter()
@@ -255,5 +292,13 @@ enum Fmt {
         else if magnitude >= 100 { text = String(format: "%.0f", magnitude) }
         else { text = String(format: "%.2f", magnitude) }
         return sign + text
+    }
+
+    /// 同上，但带货币符号。符号排在正负号**之后**（`+$120`），与 `signedMoney` 同一种排法——
+    /// 直接写 `"$" + compactSigned(...)` 会得到 `$+120`，英文里是错的。
+    static func compactMoney(_ value: Decimal) -> String {
+        let text = compactSigned(value)
+        guard let sign = text.first, sign == "+" || sign == "−" else { return "$" + text }
+        return String(sign) + "$" + String(text.dropFirst())
     }
 }

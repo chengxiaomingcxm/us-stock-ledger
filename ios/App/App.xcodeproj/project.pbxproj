@@ -28,8 +28,12 @@
 		AA260001000000000000001A /* CsvImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA260001000000000000000A /* CsvImport.swift */; };
 		AA260001000000000000001B /* ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA260001000000000000000B /* ImportView.swift */; };
 		AA260001000000000000001C /* StatementImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA260001000000000000000C /* StatementImport.swift */; };
+		AA260001000000000000001D /* QuoteSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA260001000000000000000D /* QuoteSettingsView.swift */; };
+		AA260001000000000000001E /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA260001000000000000000E /* L10n.swift */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		AB2600010000000000000011 /* HSBCStatement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2600010000000000000001 /* HSBCStatement.swift */; };
+		AC2600010000000000000011 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2600010000000000000001 /* Diagnostics.swift */; };
+		AD2600010000000000000011 /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2600010000000000000001 /* DemoData.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,9 +59,13 @@
 		AA260001000000000000000A /* CsvImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/CsvImport.swift; sourceTree = "<group>"; };
 		AA260001000000000000000B /* ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/ImportView.swift; sourceTree = "<group>"; };
 		AA260001000000000000000C /* StatementImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/StatementImport.swift; sourceTree = "<group>"; };
+		AA260001000000000000000D /* QuoteSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/QuoteSettingsView.swift; sourceTree = "<group>"; };
+		AA260001000000000000000E /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/L10n.swift; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		AB2600010000000000000001 /* HSBCStatement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/HSBCStatement.swift; sourceTree = "<group>"; };
+		AC2600010000000000000001 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/Diagnostics.swift; sourceTree = "<group>"; };
+		AD2600010000000000000001 /* DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/DemoData.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,7 +122,11 @@
 				AA260001000000000000000A /* CsvImport.swift */,
 				AA260001000000000000000B /* ImportView.swift */,
 				AA260001000000000000000C /* StatementImport.swift */,
+				AA260001000000000000000D /* QuoteSettingsView.swift */,
+				AA260001000000000000000E /* L10n.swift */,
 				AB2600010000000000000001 /* HSBCStatement.swift */,
+				AC2600010000000000000001 /* Diagnostics.swift */,
+				AD2600010000000000000001 /* DemoData.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -215,7 +227,11 @@
 				AA260001000000000000001A /* CsvImport.swift in Sources */,
 				AA260001000000000000001B /* ImportView.swift in Sources */,
 				AA260001000000000000001C /* StatementImport.swift in Sources */,
+				AA260001000000000000001D /* QuoteSettingsView.swift in Sources */,
+				AA260001000000000000001E /* L10n.swift in Sources */,
 				AB2600010000000000000011 /* HSBCStatement.swift in Sources */,
+				AC2600010000000000000011 /* Diagnostics.swift in Sources */,
+				AD2600010000000000000011 /* DemoData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -356,14 +372,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.personal.stockledger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -378,14 +394,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.personal.stockledger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";

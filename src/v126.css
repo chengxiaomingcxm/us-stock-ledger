@@ -4,7 +4,9 @@
 .cash-balance small{display:block;color:var(--secondary);font-size:12px;margin-top:2px;max-width:320px}
 .cash-balance>span,.cash-assets>span{color:var(--secondary);font-size:12px}
 .cash-assets strong{display:block;font-size:20px;margin-top:4px;font-variant-numeric:tabular-nums}
-.cash-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+/* minmax(0,1fr)：1fr 的 auto 下限会被 "$20,000.00" 这类不可断行金额顶住，
+   320px 视口下把整页撑宽（实测 137.86×2+10=285.7px，只剩 0.28px 余量，换个字体就溢出）。 */
+.cash-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}
 .cash-totals>div{background:var(--control);border-radius:12px;padding:10px 12px}
 .cash-totals dt{color:var(--secondary);font-size:11px}
 .cash-totals dd{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
@@ -54,5 +56,5 @@
 .account-profit span{color:var(--secondary)}
 .account-profit strong{font-size:17px;font-variant-numeric:tabular-nums;color:var(--text)}
 .summary-split.summary-cash{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
-@media(max-width:520px){.cash-totals{grid-template-columns:repeat(2,1fr)}.cash-record{grid-template-columns:54px 1fr auto}.cash-record-actions .text-button{padding:4px}}
+@media(max-width:520px){.cash-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.cash-record{grid-template-columns:54px 1fr auto}.cash-record-actions .text-button{padding:4px}}
 @media(prefers-reduced-motion:no-preference){.cash-balance strong{transition:color .15s}}
