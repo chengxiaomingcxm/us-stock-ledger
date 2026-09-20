@@ -1,5 +1,8 @@
 import Foundation
 
+/// 只用于断言日志行的错误类型；定义在文件层，`type(of:)` 打印的名字才是可预期的。
+private struct DiagnosticsTestError: Error {}
+
 /// 诊断日志的回归测试：写入、读回、闪退判定、容量上限，全部走临时目录。
 @MainActor
 enum DiagnosticsTests {
@@ -44,6 +47,13 @@ enum DiagnosticsTests {
         Diagnostics.record("TEST", marker)
         NativeTests.check(Diagnostics.text().contains(marker), "record 追加的内容可以被读回")
         NativeTests.check(Diagnostics.text().contains("TEST"), "record 记录了来源分类")
+
+        // 抛出的错误走同一个入口：日志是纯文本、用户会直接转发，所以用半角冒号分隔。
+        Diagnostics.record("TEST", error: DiagnosticsTestError())
+        let errorLine = Diagnostics.text().split(separator: "\n").last.map(String.init) ?? ""
+        NativeTests.check(errorLine.contains("DiagnosticsTestError"), "错误行带上错误的类型名")
+        NativeTests.check(errorLine.contains(": "), "错误行用半角冒号分隔类型与说明")
+        NativeTests.check(!errorLine.contains("："), "错误行不含全角冒号")
 
         // 超过容量上限后裁剪，但仍保留最新写入。
         for index in 0..<400 {

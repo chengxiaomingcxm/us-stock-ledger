@@ -24,6 +24,7 @@ enum LanguageTests {
         placeholders()
         formatting()
         generatedNotes()
+        validationDefaultLabel()
         try await languageSwitchRebuildsCache()
     }
 
@@ -138,6 +139,29 @@ enum LanguageTests {
         var manualCash = net
         manualCash.source = "manual"
         NativeTests.check(Fmt.cashNote(manualCash) == manualCash.note, "手动录入的现金记录不重建")
+    }
+
+    // MARK: - 默认参数也是文案
+
+    /// `LedgerValidation.note` 的 `label` 默认值会被当成**值**填进 `"{}最多 500 字。"`，
+    /// 所以它自己也得走词典。写死「备注」时，英文界面会弹出「备注 is at most 500 characters.」——
+    /// 整句翻译得再好也救不回来，因为漏的是参数。
+    private static func validationDefaultLabel() {
+        L10n.current = .en
+        var message = ""
+        do { _ = try LedgerValidation.note(String(repeating: "x", count: 501)) }
+        catch { message = error.localizedDescription }
+        NativeTests.check(message == "Note is at most 500 characters.", "超长备注的报错走词典：\(message)")
+
+        // 边界：500 字是上限（允许），501 字才报错。
+        NativeTests.check((try? LedgerValidation.note(String(repeating: "x", count: 500))) != nil,
+                          "500 字不报错")
+
+        L10n.current = .zhHans
+        var chinese = ""
+        do { _ = try LedgerValidation.note(String(repeating: "x", count: 501)) }
+        catch { chinese = error.localizedDescription }
+        NativeTests.check(chinese == "备注最多 500 字。", "中文模式的默认标签不变：\(chinese)")
     }
 
     // MARK: - 根因 1：切语言必须让派生缓存失效

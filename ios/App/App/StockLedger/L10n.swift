@@ -143,10 +143,12 @@ enum L10n {
         "交易日期（美东）": "Trade date (ET)",
 
         // 收益页
-        "已实现收益 + 当前持仓浮动收益（证券口径）": "Realized + open gains (securities only)",
+        "已实现收益 + 当前持仓浮动收益（证券口径）": "Realized + unrealized P&L (securities only)",
         "分红净额（扣税）": "Dividends net of tax",
         "账户费用": "Account fees",
-        "账户总收益": "Total account return",
+        // 这个数 = 已实现 + 浮动 + 分红净额 − 账户费用，不含入金/出金。
+        // 「Total account return」会被读成整个账户的回报，所以改成把加了什么写清楚。
+        "账户总收益": "Total return incl. dividends and fees",
         "入金出金不计入收益；今日盈亏与收益日历只统计证券。": "Deposits and withdrawals are not returns; Today's P&L and the calendar count securities only.",
         "现金账本": "Cash ledger",
         "当前现金余额": "Current cash balance",
@@ -166,8 +168,9 @@ enum L10n {
         "各股票已实现收益": "Realized by symbol",
         "收益日历": "Returns calendar",
         "同步历史": "Sync history",
-        "本月收益": "This month",
-        "交易日": "trading days",
+        // 「This month」丢掉了“收益”这件事，而同一张卡片的日行叫 Daily P&L，这里跟上。
+        "本月收益": "Monthly P&L",
+        "交易日": "Trading days",
         "天": "days",
         "天收盘价不完整，未计入月度合计。": "days have incomplete closes and are excluded from the total.",
         "盈利": "Gain",
@@ -177,7 +180,8 @@ enum L10n {
         "累计收益": "Cumulative return",
         "个交易日": "trading days",
         "上一交易日": "Previous trading day",
-        "当日收益": "Daily return",
+        // 与卡片标题（最近收盘/报价日收益 = Daily P&L）指同一天同一个量，不能两个名字。
+        "当日收益": "Daily P&L",
         "累计资产": "Cumulative assets",
         "按股票": "By symbol",
         "缺失行情": "Missing data",

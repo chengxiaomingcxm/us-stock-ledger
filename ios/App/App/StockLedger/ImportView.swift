@@ -231,7 +231,7 @@ struct ImportView: View {
         notice = nil
         switch result {
         case .failure(let failure):
-            Diagnostics.record("IMPORT", "\(type(of: failure))：\(failure.localizedDescription)")
+            Diagnostics.record("IMPORT", error: failure)
             error = L10n.tr("无法读取所选文件，未导入任何记录。")
         case .success(let url):
             let scoped = url.startAccessingSecurityScopedResource()
@@ -254,7 +254,7 @@ struct ImportView: View {
     /// 只在日志里留原文，界面上给一句可读的话。
     private func readable(_ error: Error) -> String {
         if let csv = error as? CsvImportError, let text = csv.errorDescription { return text }
-        Diagnostics.record("IMPORT", "\(type(of: error))：\(error.localizedDescription)")
+        Diagnostics.record("IMPORT", error: error)
         return L10n.tr("无法读取所选文件，未导入任何记录。")
     }
 

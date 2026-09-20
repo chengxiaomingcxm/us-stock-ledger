@@ -112,7 +112,7 @@ struct StatementImportView: View {
             } catch {
                 guard operation == token else { return }
                 notice = nil
-                Diagnostics.record("IMPORT", "\(type(of: error))：\(error.localizedDescription)")
+                Diagnostics.record("IMPORT", error: error)
                 // 结单解析自己抛的错误是写给用户看的；PDFKit / 文件系统的原文不进界面。
                 self.error = error is LedgerError ? error.localizedDescription : L10n.tr("无法读取所选结单，未导入任何记录。")
             }

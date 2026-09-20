@@ -184,7 +184,9 @@ enum LedgerValidation {
         return value
     }
 
-    static func note(_ value: String, _ label: String = "备注") throws -> String {
+    /// 默认的 `label` 也必须过词典：它会被当成**值**填进 `"{}最多 500 字。"`，
+    /// 写死中文时英文界面会弹出「备注 is at most 500 characters.」。
+    static func note(_ value: String, _ label: String = L10n.tr("备注")) throws -> String {
         guard value.count <= 500 else { throw LedgerError.message(L10n.tr("{}最多 500 字。", label)) }
         return value
     }
@@ -290,5 +292,13 @@ enum Fmt {
         else if magnitude >= 100 { text = String(format: "%.0f", magnitude) }
         else { text = String(format: "%.2f", magnitude) }
         return sign + text
+    }
+
+    /// 同上，但带货币符号。符号排在正负号**之后**（`+$120`），与 `signedMoney` 同一种排法——
+    /// 直接写 `"$" + compactSigned(...)` 会得到 `$+120`，英文里是错的。
+    static func compactMoney(_ value: Decimal) -> String {
+        let text = compactSigned(value)
+        guard let sign = text.first, sign == "+" || sign == "−" else { return "$" + text }
+        return String(sign) + "$" + String(text.dropFirst())
     }
 }

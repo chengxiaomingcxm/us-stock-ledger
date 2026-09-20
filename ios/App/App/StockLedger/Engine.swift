@@ -590,6 +590,9 @@ struct InsightsPresentation {
     ///
     /// `maximum` / `minimum` 已经按 0 夹紧，所以全为正的历史里下限本身就是零轴——两条会落在同一条边上。
     /// `proximity` 之内只保留先出现的那条：宁可少标一个数，也不把两行字压在一起。
+    ///
+    /// 带上 `$`：同一张卡片的大数走 `Fmt.signedMoney`（`+$58.15`），参考值不带符号会被读成百分比。
+    /// 本 App 只记美元（结单导入会跳过非美元行），所以符号是固定的。
     func axisReferences(proximity: CGFloat = 0.09) -> [(text: String, position: CGFloat)] {
         let span = max(maximum - minimum, 0.0001)
         var placed: [CGFloat] = []
@@ -598,7 +601,7 @@ struct InsightsPresentation {
             let position = CGFloat((maximum - value) / span)
             guard !placed.contains(where: { abs($0 - position) < proximity }) else { continue }
             placed.append(position)
-            rows.append((Fmt.compactSigned(Decimal(value)), position))
+            rows.append((Fmt.compactMoney(Decimal(value)), position))
         }
         return rows
     }

@@ -131,11 +131,11 @@ struct SettingsView: View {
                     let data = try Data(contentsOf: url)
                     pendingImport = try LedgerStore.decode(data)
                 } catch {
-                    Diagnostics.record("RESTORE", "\(type(of: error))：\(error.localizedDescription)")
+                    Diagnostics.record("RESTORE", error: error)
                     importError = L10n.tr("这不是本应用的账本备份文件，未做任何改动。请选择由「导出账本备份」生成的文件。")
                 }
             case .failure(let error):
-                Diagnostics.record("RESTORE", "\(type(of: error))：\(error.localizedDescription)")
+                Diagnostics.record("RESTORE", error: error)
                 importError = L10n.tr("无法读取所选文件，未做任何改动。")
             }
         }
@@ -175,7 +175,7 @@ struct SettingsView: View {
             exportError = nil
         } catch {
             exportText = nil
-            Diagnostics.record("EXPORT", "\(type(of: error))：\(error.localizedDescription)")
+            Diagnostics.record("EXPORT", error: error)
             exportError = L10n.tr("导出失败，账本数据仍在本机；请稍后重试。")
         }
     }

@@ -39,6 +39,12 @@ enum Diagnostics {
         append("\(timestamp())  \(kind)\(message.isEmpty ? "" : "  \(message)")")
     }
 
+    /// 统一的「抛出的错误」行：`类型: 说明`。
+    /// 分隔用半角冒号：日志是纯文本、用户会直接转发，全角「：」是中日韩标点，混在英文行里读起来是错的。
+    static func record(_ kind: String, error: Error) {
+        record(kind, "\(type(of: error)): \(error.localizedDescription)")
+    }
+
     /// 供界面导出/分享。
     static func text() -> String {
         (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""

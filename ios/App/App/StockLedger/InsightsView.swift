@@ -560,7 +560,8 @@ struct CumulativeProfitChart: View, Equatable {
                     Spacer()
                     AmountText(value: points.last?.value).font(.headline)
                 }
-                Text(L10n.tr("最高 {} · 最低 {} · {} 个交易日", Fmt.compactSigned(highest), Fmt.compactSigned(lowest), "\(points.count)"))
+                // 与纵轴参考值、卡片大数保持同一种金额格式：都带 $，只有大数带分。
+                Text(L10n.tr("最高 {} · 最低 {} · {} 个交易日", Fmt.compactMoney(highest), Fmt.compactMoney(lowest), "\(points.count)"))
                     .font(.caption2).foregroundStyle(.secondary)
                 if missingDays > 0 {
                     Text(L10n.tr("其中 {} 天缺少收盘价，按无变化延续，未计入收益。", "\(missingDays)"))
@@ -610,10 +611,13 @@ private final class ProfitPlotView: UIView {
             addSubview(label); labels.append(label)
         }
         // 参考值靠右对齐，占曲线右侧那条窄栏。
+        // `−$40.00` 是 7 个等宽字符，正好压着 38pt 的栏宽，所以允许缩字而不是截成省略号。
         for _ in 0..<3 {
             let label = UILabel()
             label.font = .monospacedDigitSystemFont(ofSize: 9, weight: .regular)
             label.textAlignment = .right
+            label.adjustsFontSizeToFitWidth = true
+            label.minimumScaleFactor = 0.75
             addSubview(label); scales.append(label)
         }
     }
