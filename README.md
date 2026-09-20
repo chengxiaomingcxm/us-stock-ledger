@@ -133,7 +133,7 @@ releases/                  per-version release notes
 
 ## Testing
 
-Three suites, all runnable from a clone:
+Three suites — two cross-platform, the native one macOS-only:
 
 ```sh
 pnpm test                                # Vitest — 148 cases
@@ -187,10 +187,10 @@ The IPA is unsigned because it is built without a paid Apple Developer account; 
 pnpm install --frozen-lockfile
 
 pnpm test                    # Vitest
+pnpm build                   # tsc --noEmit && vite build — before e2e: vite preview serves dist/
 pnpm e2e                     # Playwright
 bash scripts/test-native.sh  # native Swift suites (macOS)
 
-pnpm build                   # tsc --noEmit && vite build
 pnpm ios:sync                # copy the built assets into the iOS project
 open ios/App/App.xcodeproj   # then run on a simulator or your own device
 ```

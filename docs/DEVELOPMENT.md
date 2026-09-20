@@ -37,7 +37,7 @@ CI uses the same command, so a lockfile change is the only way dependency versio
 pnpm dev        # vite --host 127.0.0.1
 ```
 
-This serves the **legacy web engine**, not the shipping app. It is still the quickest way to iterate on the ledger maths and the import screens, and it is what the Playwright suite drives.
+This serves the **legacy web engine**, not the shipping app. It is still the quickest way to iterate on the ledger maths and the import screens. The Playwright suite does **not** drive it: `playwright.config.ts` starts `vite preview` on `127.0.0.1:4183` against the built `dist/` output, so run `pnpm build` first (see below).
 
 To run the real app, open the Xcode project:
 
@@ -73,7 +73,7 @@ The simulator scripts expect an available `iPhone 17` simulator and write their 
 pnpm e2e        # playwright test
 ```
 
-`playwright.config.ts` starts `vite preview` on `127.0.0.1:4183` (`reuseExistingServer: true`), so a dev server you already have running on that port is reused. Specs live in `e2e/` — 26 cases covering the full user journeys, including "no horizontal overflow" at 320 / 402 / 430 px, which is what caught a real narrow-screen layout bug.
+`playwright.config.ts` starts `vite preview` on `127.0.0.1:4183` (`reuseExistingServer: true`) against the built `dist/` output — so run `pnpm build` first; a plain `pnpm dev` server does not serve that port. Specs live in `e2e/` — 26 cases covering the full user journeys, including "no horizontal overflow" at 320 / 402 / 430 px, which is what caught a real narrow-screen layout bug.
 
 To run a subset:
 
@@ -89,7 +89,7 @@ pnpm build                              # type check + production build of the w
 bash scripts/build-unsigned-ios.sh      # macOS — the unsigned IPA, with a .sha256 next to it
 ```
 
-`build-unsigned-ios.sh` produces `build/StockLedger-unsigned.ipa`. `scripts/verify-ipa.py` validates a produced IPA against the release manifest.
+`build-unsigned-ios.sh` produces `build/StockLedger-unsigned.ipa`. `scripts/verify-ipa.py` checks that IPA's structure (Mach-O / ARM64, bundle id, embedded `public/index.html`) and compares it with the `.sha256` written next to it; matching an IPA against `releases/*.json` is `scripts/publish-release.py`'s job.
 
 ## Quality Gate
 

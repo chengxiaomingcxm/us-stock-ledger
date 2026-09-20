@@ -133,7 +133,7 @@ releases/                  各版本发布说明
 
 ## 测试
 
-三套，clone 下来都能跑：
+三套 —— 两套跳平台，原生那套需要 macOS：
 
 ```sh
 pnpm test                                # Vitest —— 148 项
@@ -187,10 +187,10 @@ IPA 未签名，因为没有付费的 Apple 开发者账号；每个 Release 旁
 pnpm install --frozen-lockfile
 
 pnpm test                    # Vitest
+pnpm build                   # tsc --noEmit && vite build —— e2e 之前必须先构建，vite preview 服务的是 dist/
 pnpm e2e                     # Playwright
 bash scripts/test-native.sh  # Swift 原生套件（macOS）
 
-pnpm build                   # tsc --noEmit && vite build
 pnpm ios:sync                # 把构建产物同步进 iOS 工程
 open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 ```

@@ -123,8 +123,8 @@
 没有一条是渲染出来的界面文案。
 `en-values` 536 条（V1.0 收尾删掉 2 个已无引用的旧 demo 文案键后的值；本轮刚开始时是 538）、0 重复、0 空值、0 条英文值含 CJK/全角。
 
-> 提交 16 以后只动了文档 / 注释 / 用户可见文案（`c171e73`、`f031d0c`、`e72a57b`、`1017ed7`、`6ef18e9`，
-> 以及封版提交 `77081e5`（把 `main` 合入本分支，仅 `AGENTS.md` / `CHANGELOG.md` 受影响）、`dc17f66`、`ae5bbf9`、`3890b44`），
+> 提交 16 之后到封版为止的改动，**全部只涉及文档 / 注释 / 用户可见文案与实际版本字符串**（不含产品逻辑；
+> 完整列表见 PR #1 的 commit 列表，其中 `77081e5` 是把 `main` 合入本分支、只影响 `AGENTS.md` / `CHANGELOG.md`）。
 > 其中带 `.swift` 的 `e72a57b` 跑过完整 CI：`checks` `35500279164` / `build-ios` `35500279299` **双绿**。
 > 封版方式：`main` ← `portfolio/readme` 的 **PR #1**（<https://github.com/chengxiaomingcxm/us-stock-ledger/pull/1>），
 > PR 上的 `checks` 在 `dc17f66`（`35501921553`）与 `ae5bbf9`（`35502286385`）均为 success；
