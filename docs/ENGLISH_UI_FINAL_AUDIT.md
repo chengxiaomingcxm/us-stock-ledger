@@ -66,7 +66,7 @@
 | 套件 | 规模 | 结果 |
 | --- | --- | --- |
 | Vitest（逻辑引擎，`tests/*.test.ts`） | 148 用例 / 13 文件 | **148 passed**（本地与 CI 一致） |
-| 原生 Swift（`tests/native`，`scripts/test-native.sh`） | 固定断言 **397 → 408 → 414 → 413**（P1b → P2a → P2b → V1.0 收尾），见下方说明 | CI `macos-26` **PASS** |
+| 原生 Swift（`tests/native`，`scripts/test-native.sh`） | 固定断言 **397 → 408 → 414 → 413 → 429**（P1b → P2a → P2b → V1.0 收尾 → 合成结单 fixture），见下方说明 | CI `macos-26` **PASS** |
 | Playwright E2E（`e2e/*.spec.ts`） | 26 用例 / 8 文件 | CI `ubuntu-latest` **26 passed**；V1.0 收尾本地也实测 **26 passed (45.8s)** |
 | 质量门禁 `scripts/verify.ps1` | 每个批次都跑过（P0、写入侧/格式边界、P1a、P1b、P2a、P2b、V1.0 收尾） | 全部 **QUALITY GATE PASSED**（V1.0 收尾：13 files / 148 tests passed） |
 
@@ -90,6 +90,7 @@
 > | P2a `ebdd64f` | 453 | 45 | 408（+11）|
 > | P2b `573310d` | 482 | 68 | 414（+6）|
 > | V1.0 收尾 `eb7b054` | 467 | 54 | 413（−1）|
+> | 合成结单 fixture `a5de51f` | 475 | 46 | 429（+16）|
 >
 > 两次增量（+11、+6）与本轮新增断言数**逐条对上**；只看总数会误以为多出了 18 条。
 > V1.0 收尾那行的 −1 同样是逐条对上的：`LanguageTests.generatedNotes()` 删掉一条与 `net` 用例重复的空 `note` 断言，
@@ -244,7 +245,7 @@ CI 在模拟器上真的启动过 App（`scripts/test-screenshots.sh` 渲染 6 �
 | 10 | 新增入口不遮挡任何内容 | ✅ | `006306b`：浮动 FAB 已删除，新增入口是导航栏 `+`（`.toolbar`），不参与列表布局，遮挡问题从根上不存在；P1b 的 `safeAreaInset` 补丁随之作废 |
 | 11 | Settings 不显示新增入口 | ✅ | `006306b`：`+` 只挂在 Holdings / Trades 的导航栏上，Settings 页没有任何新增入口（示例模式下 `+` 也不显示） |
 | 12 | Holdings / Trades / Returns 金融数字互相 reconcile | ✅ | `EngineGoldenTests` 「每日收益之和与曲线一致」（`:230`）；`NativeTests` 「平仓后每日收益 reconcile 到已实现收益」（`:138`） |
-| 13 | Existing tests 全部通过 | ✅ | 148 Vitest / 413+ 原生固定断言（含心跳，见 §3）/ 26 E2E，本地与 CI 一致 |
+| 13 | Existing tests 全部通过 | ✅ | 148 Vitest / 429 固定断言（心跳另计，见 §3）/ 26 E2E，本地与 CI 一致 |
 | 14 | 新 bug fix 有对应 regression tests | ⚠️ 除纯视图层改动外 ✅ | 见表 §3；**P1b 与 `006306b` 的视图层改动只由 `xcodebuild` 覆盖编译、没有行为断言**（§5 第 4 条）；1.0 基线相关的逻辑改动有 `LanguageTests` / `SafetyTests` 的断言与 `.scratch/replay-notes.mjs` 的本地重放 |
 | 15 | English / Chinese smoke test 通过 | ✅ | CI 渲染 6 屏英文截图（`test-screenshots.sh`：每张 PNG 存在且 ≥20KB 防空白，并对日历屏断言 `days>0 months>0`）；中文路径由 `L10n.tr` 在 `.zhHans` 直返键覆盖，`LanguageTests` 两种模式都断言。截图宿主自 V1.0 收尾起改为**非示例模式 + 示例数据**（§7），因此 Holdings / Trades 截图里能直接看到导航栏 `+`，这两屏的视图层改动不再只靠真机确认 |
 | 16 | 没有 unrelated changes | ✅ | 提交范围只含审计书的 P0/P1/P2 项，加上 `LedgerValidation` 默认标签（同属 P0 那条「值没本地化」根因）；两份用户任务书始终未跟踪 |

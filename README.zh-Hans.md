@@ -127,7 +127,7 @@ releases/                  各版本发布说明
 | 结单 | PDFKit（汇丰投资结单）与自写 CSV 解析器 |
 | 网络 | `URLSession` 调 Yahoo Finance、Finnhub 或自定义 HTTPS 接口 |
 | 旧网页引擎 | TypeScript、Vite、Capacitor（仅构建与回归测试） |
-| 测试 | Vitest（148 项 / 13 文件）、Swift 原生套件（413 条断言，另有运行时心跳断言）、模拟器渲染、Playwright（26 项） |
+| 测试 | Vitest（148 项 / 13 文件）、Swift 原生套件（429 条固定断言，另有运行时心跳断言）、模拟器渲染、Playwright（26 项） |
 | CI | GitHub Actions：`checks` 跑 `ubuntu-latest`，iOS 构建跑 `macos-26` |
 | 工具链 | Node 24、pnpm 11、Xcode / `swiftc`、Playwright |
 
@@ -137,14 +137,14 @@ releases/                  各版本发布说明
 
 ```sh
 pnpm test                                # Vitest —— 148 项
-bash scripts/test-native.sh              # macOS —— Swift 原生套件，413 条断言
+bash scripts/test-native.sh              # macOS —— Swift 原生套件，429 条固定断言
 pnpm e2e                                 # Playwright —— 26 项
 ```
 
 | 套件 | 锁住什么 |
 | --- | --- |
 | Vitest（148 项 / 13 文件） | 账本数学、现金账本、交易区间、今日盈亏、CSV 导入规则、存储与恢复、本地化 |
-| Swift 原生（413 条断言） | Swift 引擎对 golden 账本、安全与恢复路径、诊断、示例模式、CSV 导入、错误路径，外加 25,000 收盘价 / 4,000 交易日 / 1,000 笔交易的负载测试 |
+| Swift 原生（429 条固定断言） | Swift 引擎对 golden 账本、安全与恢复路径、诊断、示例模式、CSV 导入、错误路径，外加 25,000 收盘价 / 4,000 交易日 / 1,000 笔交易的负载测试 |
 | 模拟器渲染 | 日历屏与六张 README 截图必须真的渲染出示例数据；空白或空态截图直接判失败 |
 | Playwright（26 项） | 真实用户路径，含 320 / 402 / 430px 下「无横向溢出」 |
 
