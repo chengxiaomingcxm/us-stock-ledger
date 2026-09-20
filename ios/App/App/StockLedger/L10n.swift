@@ -361,8 +361,7 @@ enum L10n {
         "支持": "Support",
         "期初余额与现金记录在「收益 → 现金账本」中维护。": "The opening balance and cash records are managed under Returns → Cash ledger.",
         "账本保存在本机；开启行情刷新时只发送股票代码，不发送交易股数、金额或银行文件。": "The ledger is kept on this device; when quote refresh is on, only stock symbols are sent, never share counts, amounts or bank files.",
-        "载入示例账本？": "Load demo ledger?",
-        "载入示例": "Load demo",
+
         "清空当前账本？": "Clear current ledger?",
         "清空": "Clear",
         "还没有任何记录": "Nothing recorded yet",

@@ -31,7 +31,7 @@ What that means in the app:
 - Statement import with preview and confirmation: broker trade/cash CSVs and HSBC investment-statement PDFs (PDFKit).
 - Backup and restore as a local JSON file, with an export reminder after 30 days.
 - Light/dark mode, "green up / red up" color schemes, Dynamic Type and VoiceOver support.
-- **Demo Mode**: a complete sample ledger you can explore and then clear — it never touches your own data.
+- **Demo Mode**: a complete sample ledger you can explore, and leave again at any time — it never touches your own data.
 
 ## Screenshots
 
@@ -41,7 +41,7 @@ Six screens, rendered on an iPhone simulator from the built-in demo ledger (Engl
 | --- | --- | --- |
 | ![Holdings](docs/screenshots/holdings.png) | ![Returns](docs/screenshots/returns.png) | ![Calendar](docs/screenshots/calendar.png) |
 
-| Trades | Statement import | Settings |
+| Trades | Broker CSV import | Settings |
 | --- | --- | --- |
 | ![Trades](docs/screenshots/trades.png) | ![Import](docs/screenshots/import.png) | ![Settings](docs/screenshots/settings.png) |
 
@@ -51,7 +51,7 @@ No sign-up and no data required. Open **Settings → Support → Demo** and tap 
 
 ### Demo video (planned)
 
-A 60–90 second portfolio showcase video will be recorded and embedded here — launch → Try Demo → dashboard → portfolio → transaction → calendar → import → settings. It is a showcase, not a tutorial.
+A 60–90 second portfolio showcase video will be recorded and embedded here — launch → Demo → dashboard → portfolio → transaction → calendar → import → settings. It is a showcase, not a tutorial.
 
 ## Architecture
 
