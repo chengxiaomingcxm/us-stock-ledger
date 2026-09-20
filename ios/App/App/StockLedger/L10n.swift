@@ -65,10 +65,11 @@ enum L10n {
 
         // 持仓页
         "持有收益": "Holdings return",
-        "浮动收益": "Unrealized",
+        "浮动收益": "Unrealized P&L",
+        "浮动收益率": "Unrealized P&L %",
         "持仓成本": "Cost",
         "已实现收益": "Realized P&L",
-        "累计投资收益": "Total return",
+        "累计投资收益": "Securities return",
         "我的持仓": "My positions",
         "从第一笔投资开始": "Start with your first trade",
         "记录第一笔买入，自动计算成本与收益。": "Record your first buy to see cost and returns.",
@@ -474,7 +475,7 @@ enum L10n {
         "疑似已有记录：请核对金额、手续费和分红净额": "Possible duplicate: check amount, fee and net dividend.",
         "买卖联动现金，关联手续费只计一次；不会新增推算的入金、出金或期初余额。": "Buys and sells update cash and linked fees count once; no deposits, withdrawals or opening balance are inferred.",
         "待补": "—",
-        "最近报价日收益": "Latest quote day return",
+        "最近报价日收益": "Daily P&L",
 
         // P1 localization backfill: previously untranslated strings.
         "收益分析": "Returns",
@@ -492,8 +493,8 @@ enum L10n {
         "收益日历按每个交易日重放账本：当日收益 = 当日收盘市值 − 上一交易日收盘市值 + 当日卖出净额 − 当日买入含费支出。月份用左右箭头切换，格子里直接显示当日收益金额，点按查看按股票的明细；缺少收盘价的交易日显示「待补」且不计入月度合计。累计收益曲线把每日收益逐日累加，横轴最多显示六个日期刻度，虚线是零轴。日历与曲线需要先「同步历史」获取收盘价与交易日历（来自 Yahoo 日线）。": "The returns calendar replays the ledger for each trading day: that day's return = close market value − previous close market value + net sells − buys including fees. Switch months with the arrows; each cell shows that day's amount, and tapping opens the per-symbol detail. Days without a close show 'awaiting' and are excluded from the monthly total. The cumulative curve adds daily returns; the axis shows up to six date ticks and the dashed line is zero. Calendar and curve need 'Sync history' first to fetch closes and the trading calendar (from Yahoo daily).",
         "支持汇丰带文字层的投资服务综合结单 PDF，可多选文件并在本机解锁。在文件列表里先点一下结单让它出现勾选，再点右上角「打开」；选择器会以副本方式交付，读取完成后副本会在离开页面时删除。预览美元股票买卖、关联费用和派付分红，核对后确认；已识别银行编号重复的记录不重复添加，疑似手工重复默认不选。港币基金、扫描件及银行往来账户流水暂不支持。只有分红到账额时不猜测税费；投资结单里没有的入金、出金和期初现金需要另行填写。": "Supports HSBC investment statement PDFs with a text layer; pick several files and unlock them on-device. In the file list tap a statement so it gets a check mark, then tap Open in the top-right. The picker hands over copies, which are deleted when you leave the page. Preview USD stock trades, linked fees and paid dividends, then confirm; rows whose bank ID was already imported are not added again, and likely manual duplicates start unchecked. HKD funds, scans and bank current-account statements are not supported yet. Fees are never guessed from a net dividend; deposits, withdrawals and opening cash that the statement lacks must be entered separately.",
         "分两种类型：成交明细用于补全持仓与已实现收益，资金流水用于补全入金、出金、分红与账户费用。支持逗号、分号或制表符分隔，自动识别中英文列名，也可手动指定列；表头缺少类型列时可指定统一类型。导入前会显示可导入、疑似重复、已导入与无法导入的行数：按编号判定为已导入的行不会重复记账；与账本中关键字段完全相同的行标记为疑似重复，默认不勾选。成交明细在同一天已有该股票交易时，需要选择追加到同日之后或插入到同日之前，因为顺序会影响已实现收益；若出现超卖会整体拒绝，账本保持不变。": "Two kinds: trade details complete positions and realized return, cash flow completes deposits, withdrawals, dividends and account fees. Comma, semicolon or tab separated; column names are auto-detected in Chinese and English, or set them manually; when the header lacks a type column you can force one. Before importing it shows counts for importable, likely-duplicate, already-imported and unusable rows: rows already imported by ID are never booked twice, and rows matching key fields in the ledger are flagged as likely duplicates and start unchecked. When a trade-detail row hits a same-day trade for the same symbol, choose to append after or insert before that day, because order changes realized return; an oversell rejects the whole batch and leaves the ledger untouched.",
-        "最近收盘收益": "Latest close return",
-        "已完成交易日收盘": "completed trading-day close",
+        "最近收盘收益": "Daily P&L",
+        "已完成交易日收盘": "As of market close",
         "最新报价": "latest quote",
         "美东": "ET",
         "正在计算": "Calculating",

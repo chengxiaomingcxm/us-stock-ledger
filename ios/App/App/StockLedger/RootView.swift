@@ -108,9 +108,11 @@ struct RootView: View {
                     .background(.yellow.opacity(0.25))
             }
         }
-        .overlay(alignment: .bottom) {
-            // 示例模式是只读的，不摆一个按下去只会报错的入口。
-            if !state.demo {
+        // 用 safeAreaInset 而不是 overlay：它参与布局，列表会自动留出这块空间，
+        // 最后一行不会再被按钮盖住（overlay 不参与布局，以前只能靠各处手动补底部内边距）。
+        .safeAreaInset(edge: .bottom) {
+            // 示例模式只读；设置页没有可记录的东西——两处都不摆一个按下去只会报错的入口。
+            if !state.demo, tab != 3 {
                 Button(action: presentNewTrade) {
                     Label(L10n.tr("记一笔"), systemImage: "plus")
                         .font(.headline)
@@ -119,7 +121,7 @@ struct RootView: View {
                         .background(.tint, in: Capsule())
                         .foregroundStyle(.white)
                 }
-                .padding(.bottom, 68)
+                .padding(.bottom, 12)
                 .accessibilityLabel(L10n.tr("记一笔"))
             }
         }

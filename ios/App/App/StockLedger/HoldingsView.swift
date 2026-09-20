@@ -28,6 +28,12 @@ struct HoldingsView: View {
             }
             Section(L10n.tr("持有收益")) {
                 ProfitRow(label: L10n.tr("浮动收益"), value: summary.unrealized)
+                // 百分比只在分母站得住时才给：这里分母是持仓成本（不会被入金/出金扰动）。
+                // 已实现收益没有可比的持仓基数，所以不给百分比（见审计书 P1-2）。
+                if summary.cost > 0 {
+                    LabeledContent(L10n.tr("浮动收益率"),
+                                   value: Fmt.percent(summary.unrealized.map { $0 / summary.cost }))
+                }
                 LabeledContent(L10n.tr("持仓成本"), value: Fmt.money(summary.cost))
                 ProfitRow(label: L10n.tr("已实现收益"), value: summary.realized)
                 ProfitRow(label: L10n.tr("累计投资收益"), value: summary.totalProfit)
