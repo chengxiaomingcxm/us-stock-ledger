@@ -1,7 +1,9 @@
 # US Stock Ledger — Portfolio Audit
 
 > Phase 0 交付物。本文件**只记录事实，不修改任何代码**。
-> 审计基准：`deepseek-dev` @ `9489c7b`（原生版 1.0.0 · build 5），审计日 2026-09-19。
+> 审计基准：`deepseek-dev` @ `9489c7b`（当时的原生版 1.0.0 · build 5），审计日 2026-09-19。
+> **本文是 Phase 0 的历史审计记录**：其中的版本号（1.0.0 / build 5）、README 现状与设置结构都属**当时**口径；
+> 当前版本为 **1.0.1（build 6）**，最新要求见 [`docs/ENGLISH_UI_FINAL_AUDIT.md`](ENGLISH_UI_FINAL_AUDIT.md)。
 > 所有结论均以当前仓库的实际代码为依据，并标注 `文件:行号`。凡未经代码验证的推测都会写明「未验证」。
 
 ---

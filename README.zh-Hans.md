@@ -8,9 +8,9 @@
 
 原生 SwiftUI iPhone App。不用注册账号、不连云同步、不埋点统计：账本就是 App 自己 `Documents` 目录下的一个 JSON 文件，行情 API Key 存在 iOS 钥匙串里。
 
-当前版本：**原生版 1.0.1（build 6）**，支持 iOS 16 及以上。账本格式为 `format: 2`，也就是 1.0 起的稳定数据基线。
+**当前版本：1.0.1（build 6）**，支持 iOS 16 及以上。原生 1.0 是产品基线；已下线的旧 Web 版的版本号、标签和发布记录与原生版分开看。
 
-> **English: [README.md](README.md).** 本文件是中文版。
+> **English 主 README：[README.md](README.md)。** This is the Chinese version; see [README.md](README.md) for the English main readme.
 
 ## 功能
 
