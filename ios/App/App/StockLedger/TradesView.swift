@@ -83,6 +83,15 @@ struct TradesView: View {
         }
         .searchable(text: $query, prompt: L10n.tr("搜索代码或备注"))
         .navigationTitle(L10n.tr("交易记录"))
+        // 示例模式只读，不摆一个按下去只会报错的入口。
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !state.demo {
+                    Button(action: onAdd) { Image(systemName: "plus") }
+                        .accessibilityLabel(L10n.tr("记一笔"))
+                }
+            }
+        }
         .sheet(item: $editing) { trade in
             TradeFormView(trade: trade).environmentObject(state)
         }
@@ -91,7 +100,9 @@ struct TradesView: View {
         } message: {
             Text(failure ?? "")
         }
-        .overlay(alignment: .bottom) {
+        // 用 safeAreaInset 而不是 overlay：它参与布局，列表会自动留出这块空间。
+        // 这条撤销提示没有超时，会一直留到用户撤销或删掉那笔交易——用 overlay 会长期盖住最后一行。
+        .safeAreaInset(edge: .bottom) {
             if state.undoTrade != nil {
                 HStack {
                     Text(L10n.tr("交易已保存"))

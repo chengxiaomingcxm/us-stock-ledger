@@ -27,13 +27,11 @@ struct HoldingsView: View {
                 TodayCard()
             }
             Section(L10n.tr("持有收益")) {
-                ProfitRow(label: L10n.tr("浮动收益"), value: summary.unrealized)
+                // V1.0 最后一轮 UI：金额与收益率合并成一行，计算口径未变。
                 // 百分比只在分母站得住时才给：这里分母是持仓成本（不会被入金/出金扰动）。
                 // 已实现收益没有可比的持仓基数，所以不给百分比（见审计书 P1-2）。
-                if summary.cost > 0 {
-                    LabeledContent(L10n.tr("浮动收益率"),
-                                   value: Fmt.percent(summary.unrealized.map { $0 / summary.cost }))
-                }
+                ProfitRow(label: L10n.tr("浮动收益"), value: summary.unrealized,
+                          detail: summary.cost > 0 ? Fmt.percent(summary.unrealized.map { $0 / summary.cost }) : nil)
                 LabeledContent(L10n.tr("持仓成本"), value: Fmt.money(summary.cost))
                 ProfitRow(label: L10n.tr("已实现收益"), value: summary.realized)
                 ProfitRow(label: L10n.tr("累计投资收益"), value: summary.totalProfit)
@@ -69,6 +67,15 @@ struct HoldingsView: View {
             }
         }
         .navigationTitle(L10n.tr("持仓账本"))
+        // 示例模式只读，不摆一个按下去只会报错的入口。
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !state.demo {
+                    Button(action: onAdd) { Image(systemName: "plus") }
+                        .accessibilityLabel(L10n.tr("记一笔"))
+                }
+            }
+        }
         .sheet(item: Binding(get: { detailSymbol.map(SymbolBox.init) }, set: { detailSymbol = $0?.value })) { box in
             PositionDetailView(symbol: box.value, onEditQuote: { quoteSymbol = box.value })
                 .environmentObject(state)

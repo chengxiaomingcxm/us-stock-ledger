@@ -1,6 +1,7 @@
 import SwiftUI
 
-// 2.0 根界面：四个主要页面（持仓 / 交易 / 收益 / 设置）+ 全屏“记一笔”入口。
+// 2.0 根界面：四个主要页面（持仓 / 交易 / 收益 / 设置）。
+// 「记一笔」入口在持仓 / 交易页导航栏右上角的 "+"（V1.0 最后一轮 UI 从悬浮按钮改过来）。
 // 全部使用系统导航、列表、表单和日期选择器，跟随系统文字大小、深浅色与辅助功能。
 
 enum Appearance {
@@ -108,23 +109,6 @@ struct RootView: View {
                     .background(.yellow.opacity(0.25))
             }
         }
-        // 用 safeAreaInset 而不是 overlay：它参与布局，列表会自动留出这块空间，
-        // 最后一行不会再被按钮盖住（overlay 不参与布局，以前只能靠各处手动补底部内边距）。
-        .safeAreaInset(edge: .bottom) {
-            // 示例模式只读；设置页没有可记录的东西——两处都不摆一个按下去只会报错的入口。
-            if !state.demo, tab != 3 {
-                Button(action: presentNewTrade) {
-                    Label(L10n.tr("记一笔"), systemImage: "plus")
-                        .font(.headline)
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 14)
-                        .background(.tint, in: Capsule())
-                        .foregroundStyle(.white)
-                }
-                .padding(.bottom, 12)
-                .accessibilityLabel(L10n.tr("记一笔"))
-            }
-        }
         .sheet(isPresented: $showingTradeForm) {
             TradeFormView(trade: editingTrade)
                 .environmentObject(state)
@@ -160,12 +144,17 @@ struct ProfitRow: View {
     let label: String
     let value: Decimal?
     var signed = true
+    /// 同一行右侧的补充数字（例如收益率）。固定用等宽 + 次级色，与金额形成层次。
+    var detail: String? = nil
 
     var body: some View {
         HStack {
             Text(label)
             Spacer()
             AmountText(value: value, signed: signed)
+            if let detail {
+                Text(detail).monospacedDigit().foregroundStyle(.secondary)
+            }
         }
     }
 }
