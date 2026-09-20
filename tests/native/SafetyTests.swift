@@ -402,10 +402,18 @@ enum SafetyTests {
         // 4) 恢复通道同样受约束：更高格式的备份不得被读进来。
         NativeTests.check((try? LedgerStore.decode(Data(future.utf8))) == nil, "格式边界 — 备份解码也被拒绝")
 
-        // 5) 缺省 format 的旧文件仍可读——这也是「不抬高格式代际」的依据：结构没变。
-        let legacy = #"{"trades":[{"id":"\#(UUID().uuidString)","sequence":0,"symbol":"AAA","side":"buy","date":"2026-01-05","quantity":1,"price":10,"fee":0}]}"#
-        try Data(legacy.utf8).write(to: file)
-        NativeTests.check(isLoaded(LedgerStore.loadResult()), "格式边界 — 缺省 format 的旧文件仍可读")
+        // 5) 缺省 format 的文件仍按当前代际读取——旧文件没有这个键时不得被误判成「更新版本」。
+        //    注意：合成的 Decodable 不会因为属性有默认值就容忍缺键（只有 Optional 才算可选），
+        //    所以这里必须从**完整**文件里摘掉 format，而不能手写一份最小 JSON（那样连正常文件都解不出来）。
+        //    用 JSONSerialization 摘键，避免依赖编码器 prettyPrinted 的具体空格形式。
+        let encoded = try LedgerStore.encoded(Ledger())
+        var withoutFormat = (try JSONSerialization.jsonObject(with: encoded)) as? [String: Any] ?? [:]
+        withoutFormat.removeValue(forKey: "format")
+        let stripped = try JSONSerialization.data(withJSONObject: withoutFormat)
+        NativeTests.check(!String(decoding: stripped, as: UTF8.self).contains("\"format\""),
+                          "格式边界 — 自检：format 键确实被摘掉了")
+        try stripped.write(to: file)
+        NativeTests.check(isLoaded(LedgerStore.loadResult()), "格式边界 — 缺省 format 的文件仍可读")
     }
 
     // MARK: - 入口
