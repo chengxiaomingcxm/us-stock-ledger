@@ -91,38 +91,35 @@ enum LanguageTests {
                              quantity: 1, price: 10, fee: 0)
         imported.source = "hsbc-statement"
         imported.settlementDate = settlement
-        imported.note = "汇丰月结单；交收日 \(settlement)"
+        // 导入只写结构化字段，note 留空；说明在展示时按当前语言生成
+        // （写入侧由 SafetyTests.systemTextNeverEntersNote 守）。
+        imported.note = ""
 
         L10n.current = .en
         let shown = Fmt.tradeNote(imported)
         NativeTests.check(!hasCJK(shown), "结单导入的交易说明按当前语言重建：\(shown)")
         NativeTests.check(shown.contains(settlement), "重建时保留交收日：\(shown)")
 
-        // 新版导入不再把系统文案写进 note（写入侧由 SafetyTests.systemTextNeverEntersNote 守）：
-        // note 为空时仍必须生成同一句。
-        var noNote = imported
-        noNote.note = ""
-        NativeTests.check(Fmt.tradeNote(noNote) == shown, "note 为空时同样生成说明（新版导入的形状）")
+        // 1.0 之前把同一句系统说明写进了 note：那不是兼容目标，原样显示、不重写。
+        var legacyNote = imported
+        legacyNote.note = "汇丰月结单；交收日 \(settlement)"
+        NativeTests.check(Fmt.tradeNote(legacyNote) == legacyNote.note, "1.0 前写进 note 的说明原样显示")
 
         L10n.current = .zhHans
-        NativeTests.check(Fmt.tradeNote(imported) == imported.note, "中文下重建结果与原说明一致")
+        NativeTests.check(Fmt.tradeNote(imported) == "汇丰月结单；交收日 \(settlement)", "中文下生成的说明与模板一致")
 
-        // 用户改过的备注：模板对不上，原样显示，绝不能被系统文案覆盖。
+        // 用户写过的备注：原样显示，绝不能被系统文案覆盖。
         var edited = imported
         edited.note = "我自己的备注"
-        NativeTests.check(Fmt.tradeNote(edited) == "我自己的备注", "用户改过的 note 原样显示")
+        NativeTests.check(Fmt.tradeNote(edited) == "我自己的备注", "用户写过的 note 原样显示")
         // 非结单导入的行不动。
         var manual = imported
         manual.source = "manual"
-        NativeTests.check(Fmt.tradeNote(manual) == imported.note, "手动录入的行不重建")
-        // 有交收日但说明不是系统模板（老版本格式）→ 同样原样显示。
-        var oldFormat = imported
-        oldFormat.note = "别的说明"
-        NativeTests.check(Fmt.tradeNote(oldFormat) == "别的说明", "说明与模板不一致时不重建")
+        manual.note = "手动录入的备注"
+        NativeTests.check(Fmt.tradeNote(manual) == "手动录入的备注", "手动录入的行不重建")
 
         let net = CashRecord(sequence: 1, date: "2026-01-08", kind: .dividend, amount: Decimal(string: "0.88")!,
-                             tax: nil, symbol: "AAPL", note: "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露",
-                             source: "hsbc-statement-net")
+                             tax: nil, symbol: "AAPL", note: "", source: "hsbc-statement-net")
         L10n.current = .en
         let cashShown = Fmt.cashNote(net)
         NativeTests.check(!hasCJK(cashShown), "净额分红的说明按当前语言重建：\(cashShown)")
@@ -130,15 +127,16 @@ enum LanguageTests {
         // 披露了预扣税的记录不是「净额且税额未知」，保留原说明。
         var reported = net
         reported.tax = Decimal(string: "0.12")!
+        reported.note = "税额已披露"
         NativeTests.check(Fmt.cashNote(reported) == reported.note, "披露了预扣税的记录不重建")
-        // 新版导入的净额分红 note 是空的，同样必须生成说明。
-        var noNoteCash = net
-        noNoteCash.note = ""
-        NativeTests.check(Fmt.cashNote(noNoteCash) == Fmt.cashNote(net), "note 为空时同样生成净额说明")
-        // 人工录入的分红不动。
+        // 人工录入的分红不动；1.0 前写进 note 的净额说明也原样显示。
         var manualCash = net
         manualCash.source = "manual"
-        NativeTests.check(Fmt.cashNote(manualCash) == manualCash.note, "手动录入的现金记录不重建")
+        manualCash.note = "手动录入的分红"
+        NativeTests.check(Fmt.cashNote(manualCash) == "手动录入的分红", "手动录入的现金记录不重建")
+        var legacyCash = net
+        legacyCash.note = "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露"
+        NativeTests.check(Fmt.cashNote(legacyCash) == legacyCash.note, "1.0 前写进 note 的净额说明原样显示")
     }
 
     // MARK: - 默认参数也是文案

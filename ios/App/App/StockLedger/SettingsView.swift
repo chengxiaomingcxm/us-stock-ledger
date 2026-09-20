@@ -2,44 +2,21 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+/// 设置首页只做分类与入口：显示 / 行情数据 / 数据 / 支持。
+/// 具体操作与说明都收在二级页里（见本文件下半部分的各个二级页 View）。
 struct SettingsView: View {
     @EnvironmentObject private var state: AppState
-
-    @AppStorage("appearance.theme") private var theme = "system"
-    @AppStorage("appearance.colors") private var colors = "green-up"
-
-    @State private var exportText: String?
-    @State private var exportError: String?
-    @State private var diagnosticsText: String?
-    @State private var showingImporter = false
-    @State private var pendingImport: Ledger?
-    @State private var importError: String?
-    @State private var shareBox: ShareBox?
-    @AppStorage("backup.lastExport") private var lastExport = 0.0
 
     var body: some View {
         List {
             Section(L10n.tr("显示")) {
-                Picker(L10n.tr("语言"), selection: Binding(get: { state.language }, set: { state.setLanguage($0) })) {
-                    ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
-                }
-                Picker(L10n.tr("外观"), selection: $theme) {
-                    Text(L10n.tr("跟随系统")).tag("system")
-                    Text(L10n.tr("浅色")).tag("light")
-                    Text(L10n.tr("深色")).tag("dark")
-                }
-                Picker(L10n.tr("涨跌颜色"), selection: $colors) {
-                    Text(L10n.tr("绿涨红跌")).tag("green-up")
-                    Text(L10n.tr("红涨绿跌")).tag("red-up")
-                }
-                HStack(spacing: 16) {
-                    AmountText(value: 12.34)
-                    AmountText(value: -12.34)
-                }
-                .font(.footnote)
+                NavigationLink(L10n.tr("语言")) { LanguageSettingsView() }
+                NavigationLink(L10n.tr("外观")) { AppearanceSettingsView() }
+                NavigationLink(L10n.tr("涨跌颜色")) { GainColorSettingsView() }
             }
 
-            Section {
+            // 行情数据只有一个入口；说明文字留在行情来源页里，首页不堆说明。
+            Section(L10n.tr("行情数据")) {
                 NavigationLink {
                     QuoteSourceView()
                 } label: {
@@ -50,13 +27,137 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-            } footer: {
-                Text(L10n.tr("收盘价来自 Yahoo 日线；盘中报价接口与 API Key 在行情来源里设置。"))
             }
 
+            Section(L10n.tr("数据")) {
+                NavigationLink(L10n.tr("导入与导出")) { ImportExportView() }
+                NavigationLink(L10n.tr("备份与恢复")) { BackupRestoreView() }
+                NavigationLink(L10n.tr("账本信息")) { LedgerInfoView() }
+            }
+
+            Section(L10n.tr("支持")) {
+                NavigationLink(L10n.tr("示例")) { DemoView() }
+                NavigationLink(L10n.tr("帮助")) { HelpView() }
+                NavigationLink(L10n.tr("关于")) { AboutView() }
+            }
+        }
+        .navigationTitle(L10n.tr("设置"))
+    }
+}
+
+// MARK: - 设置二级页
+//
+// 全部放在本文件内是刻意的：新增 Swift 文件要同时登记
+// `App.xcodeproj/project.pbxproj` 的四处与 `scripts/test-native.sh` 的文件列表，
+// 漏一处就是「本地全绿、CI 报错」。这些页面没有独立复用的价值，不值得付这个成本。
+
+/// 语言：只改界面文字，不动账本与行情数据。
+struct LanguageSettingsView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        List {
+            Picker(L10n.tr("语言"), selection: Binding(get: { state.language }, set: { state.setLanguage($0) })) {
+                ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
+            }
+        }
+        .navigationTitle(L10n.tr("语言"))
+    }
+}
+
+/// 外观：跟随系统 / 浅色 / 深色。
+struct AppearanceSettingsView: View {
+    @AppStorage("appearance.theme") private var theme = "system"
+
+    var body: some View {
+        List {
+            Picker(L10n.tr("外观"), selection: $theme) {
+                Text(L10n.tr("跟随系统")).tag("system")
+                Text(L10n.tr("浅色")).tag("light")
+                Text(L10n.tr("深色")).tag("dark")
+            }
+        }
+        .navigationTitle(L10n.tr("外观"))
+    }
+}
+
+/// 涨跌颜色：两个示例金额就地预览，选完不用退回列表对照。
+struct GainColorSettingsView: View {
+    @AppStorage("appearance.colors") private var colors = "green-up"
+
+    var body: some View {
+        List {
+            Picker(L10n.tr("涨跌颜色"), selection: $colors) {
+                Text(L10n.tr("绿涨红跌")).tag("green-up")
+                Text(L10n.tr("红涨绿跌")).tag("red-up")
+            }
+            HStack(spacing: 16) {
+                AmountText(value: 12.34)
+                AmountText(value: -12.34)
+            }
+            .font(.footnote)
+        }
+        .navigationTitle(L10n.tr("涨跌颜色"))
+    }
+}
+
+/// 导入与导出：券商 CSV、银行月结单 PDF、错误日志。
+struct ImportExportView: View {
+    @EnvironmentObject private var state: AppState
+
+    @State private var diagnosticsText: String?
+    @State private var shareBox: ShareBox?
+
+    var body: some View {
+        List {
             Section {
                 NavigationLink(L10n.tr("券商 CSV 导入")) { ImportView() }
                 NavigationLink(L10n.tr("银行月结单 PDF 导入")) { StatementImportView() }
+            } footer: {
+                Text(L10n.tr("CSV 导入先预览、再写入，重复导入不会重复记账。"))
+            }
+
+            if let diagnostics = diagnosticsText {
+                Section {
+                    Button {
+                        shareBox = ShareBox(value: diagnostics)
+                    } label: {
+                        Label(L10n.tr("导出错误日志"), systemImage: "doc.text.magnifyingglass")
+                    }
+                } footer: {
+                    Text(L10n.tr("错误日志只在本机记录，用于排查导入与同步问题。"))
+                }
+            }
+        }
+        .navigationTitle(L10n.tr("导入与导出"))
+        .task { refreshDiagnostics() }
+        .onChange(of: state.errorMessage) { _ in refreshDiagnostics() }
+        .sheet(item: $shareBox) { box in ShareSheet(items: [box.value]) }
+    }
+
+    /// 只有真的写过日志才显示导出入口，避免让用户分享一个空文件。
+    private func refreshDiagnostics() {
+        let text = Diagnostics.text()
+        diagnosticsText = text.isEmpty ? nil : text
+    }
+}
+
+/// 备份与恢复：导出、恢复、当前账本规模与上次备份时间。
+/// 这里是唯一会替换整份账本的地方，所以确认弹窗与失败提示都留在这。
+struct BackupRestoreView: View {
+    @EnvironmentObject private var state: AppState
+
+    @State private var exportText: String?
+    @State private var exportError: String?
+    @State private var showingImporter = false
+    @State private var pendingImport: Ledger?
+    @State private var importError: String?
+    @State private var shareBox: ShareBox?
+    @AppStorage("backup.lastExport") private var lastExport = 0.0
+
+    var body: some View {
+        List {
+            Section {
                 if exportText != nil {
                     Button {
                         shareBox = ShareBox(value: exportText ?? "")
@@ -71,57 +172,20 @@ struct SettingsView: View {
                 } label: {
                     Label(L10n.tr("从备份恢复"), systemImage: "square.and.arrow.down")
                 }
-                if let diagnostics = diagnosticsText {
-                    Button {
-                        shareBox = ShareBox(value: diagnostics)
-                    } label: {
-                        Label(L10n.tr("导出错误日志"), systemImage: "doc.text.magnifyingglass")
-                    }
-                }
                 LabeledContent(L10n.tr("当前账本"), value: "\(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))")
                 LabeledContent(L10n.tr("上次备份"), value: BackupReminder.text(lastExport))
-            } header: {
-                Text(L10n.tr("数据"))
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.tr("CSV 导入先预览、再写入，重复导入不会重复记账；备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。"))
+                    Text(L10n.tr("备份为 JSON 文本，不含任何密钥。建议每 30 天导出一次。"))
                     // 导出失败以前是静默的：按钮变灰，既没有说明也没有日志。
                     if let exportError {
                         Text(exportError).foregroundStyle(.red)
                     }
                 }
             }
-
-            Section {
-                if state.demo {
-                    Button(L10n.tr("退出示例模式")) { state.exitDemo() }
-                } else {
-                    Button(L10n.tr("试用示例账本")) { state.enterDemo() }
-                }
-            } header: {
-                Text(L10n.tr("示例"))
-            } footer: {
-                Text(L10n.tr("示例包含 5 只持仓、30 多笔历史交易、分红与出入金，全部为虚构数据；只存在于内存中，不会写入或覆盖你的账本，退出后立即回到你自己的数据。"))
-            }
-
-            Section(L10n.tr("帮助")) {
-                NavigationLink(L10n.tr("使用说明")) { HelpView() }
-                LabeledContent(L10n.tr("账本格式"), value: "\(Ledger.currentFormat)")
-            }
-
-            Section {
-                LabeledContent(L10n.tr("版本"), value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
-                LabeledContent(L10n.tr("应用标识"), value: "com.personal.stockledger")
-            } footer: {
-                Text(L10n.tr("原生版 1.0 使用 SwiftUI 界面，账本保存在本机。沿用此前原生 2.0 测试版的数据。"))
-            }
         }
-        .navigationTitle(L10n.tr("设置"))
-        .task {
-            refreshExport()
-            refreshDiagnostics()
-        }
-        .onChange(of: state.errorMessage) { _ in refreshDiagnostics() }
+        .navigationTitle(L10n.tr("备份与恢复"))
+        .task { refreshExport() }
         .onChange(of: state.ledger.trades.count) { _ in refreshExport() }
         .onChange(of: state.ledger.cash.count) { _ in refreshExport() }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
@@ -162,12 +226,6 @@ struct SettingsView: View {
         }
     }
 
-    /// 只有真的写过日志才显示导出入口，避免让用户分享一个空文件。
-    private func refreshDiagnostics() {
-        let text = Diagnostics.text()
-        diagnosticsText = text.isEmpty ? nil : text
-    }
-
     /// 导出失败要能看见：以前 `try?` 把失败吞掉，只表现为按钮变灰。
     private func refreshExport() {
         do {
@@ -178,6 +236,76 @@ struct SettingsView: View {
             Diagnostics.record("EXPORT", error: error)
             exportError = L10n.tr("导出失败，账本数据仍在本机；请稍后重试。")
         }
+    }
+}
+
+/// 账本信息：只读状态。期初余额仍在「收益 → 现金账本」里维护，
+/// 这里不放任何写操作，也不暴露清空账本这类危险动作。
+struct LedgerInfoView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent(L10n.tr("当前账本"), value: "\(state.ledger.trades.count) \(L10n.tr("笔交易")) · \(state.ledger.cash.count) \(L10n.tr("笔现金记录"))")
+                LabeledContent(L10n.tr("账本格式"), value: "\(Ledger.currentFormat)")
+                LabeledContent(L10n.tr("期初余额"), value: openingText)
+                // 期初未设置时现金余额算不出来，就不显示这一行，不用零代替。
+                if let balance = Engine.cashTotals(state.ledger).balance {
+                    LabeledContent(L10n.tr("当前现金余额"), value: Fmt.money(balance))
+                }
+            } footer: {
+                Text(L10n.tr("期初余额与现金记录在「收益 → 现金账本」中维护。"))
+            }
+        }
+        .navigationTitle(L10n.tr("账本信息"))
+    }
+
+    private var openingText: String {
+        guard let opening = state.ledger.opening else { return L10n.tr("未设置") }
+        return "\(opening.date) · \(Fmt.money(opening.amount))"
+    }
+}
+
+/// 示例：进出只读示例账本。
+struct DemoView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        List {
+            Section {
+                if state.demo {
+                    Button(L10n.tr("退出示例模式")) { state.exitDemo() }
+                } else {
+                    Button(L10n.tr("试用示例账本")) { state.enterDemo() }
+                }
+            } footer: {
+                Text(L10n.tr("示例包含 5 只持仓、30 多笔历史交易、分红与出入金，全部为虚构数据；只存在于内存中，不会写入或覆盖你的账本，退出后立即回到你自己的数据。"))
+            }
+        }
+        .navigationTitle(L10n.tr("示例"))
+    }
+}
+
+/// 关于：应用名、版本、标识与数据位置。
+struct AboutView: View {
+    private var version: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(short) (\(build))"
+    }
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent(L10n.tr("应用名称"), value: "Stock Ledger")
+                LabeledContent(L10n.tr("版本"), value: version)
+                LabeledContent(L10n.tr("应用标识"), value: "com.personal.stockledger")
+            } footer: {
+                Text(L10n.tr("账本保存在本机；开启行情刷新时只发送股票代码，不发送交易股数、金额或银行文件。"))
+            }
+        }
+        .navigationTitle(L10n.tr("关于"))
     }
 }
 
@@ -226,8 +354,8 @@ struct HelpView: View {
             Section(L10n.tr("现金账本")) {
                 Text(L10n.tr("期初余额是期初日当天开始前的现金，允许为零，不支持负数。期初日及之后的入金、出金、分红、费用和买卖会联动余额；余额 = 期初 + 入金 − 出金 + 分红（扣税）− 费用 + 卖出收入 − 买入支出。买卖是资产转换，不计入盈亏。"))
             }
-            Section(L10n.tr("版本与备份")) {
-                Text(L10n.tr("原生版从 1.0 重新编号，继续使用此前 2.0 测试版账本和备份，不清空数据。旧 Web 版 1.26 及更早版本不自动迁移。恢复备份会替换当前账本，操作前请另存当前备份。"))
+            Section(L10n.tr("账本格式")) {
+                Text(L10n.tr("账本格式 {} 是 1.0 的数据基线：1.0 起写入的账本和备份在后续版本继续可读；更早的测试版账本与旧 Web 版备份不保证能直接恢复。恢复备份会替换当前账本，操作前请先导出当前备份。", "\(Ledger.currentFormat)"))
             }
             Section(L10n.tr("离线与隐私")) {
                 Text(L10n.tr("账本和银行文件在本机处理。手动同步或开启前台自动刷新时，会向行情服务发送股票代码；不会发送交易股数、金额或银行文件。API Key 存在系统钥匙串，不包含在账本备份中。"))

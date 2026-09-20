@@ -254,22 +254,22 @@ enum Fmt {
 
     /// 归属规则：`note` 只装**用户或银行/券商给的原文**，系统说明一律不写进去。
     /// 系统说明由结构化字段在展示时生成，因此天然跟随语言，也不会把值拼进查表键。
-    /// 三种情况：
-    /// - 新版导入：note 为空 → 用 `settlementDate` 重建；
-    /// - 旧版导入：note 是**逐字相同**的那句系统文案 → 同样重建（存量数据一字不改）；
-    /// - 用户写过东西：原样返回，绝不覆盖。
+    /// 两种情况：
+    /// - 导入的行 note 为空 → 用 `settlementDate` 重建；
+    /// - 用户写过东西 → 原样返回，绝不覆盖。
+    /// 1.0 之前把同一句系统说明写进了 `note`：那不再是兼容目标，原样显示即可。
+    /// 底线不变——系统文案永远不会盖掉已经持久化的值。
     static func tradeNote(_ trade: Trade) -> String {
         guard trade.source == "hsbc-statement", let settlement = trade.settlementDate else { return trade.note }
-        guard trade.note.isEmpty || trade.note == "汇丰月结单；交收日 " + settlement else { return trade.note }
+        guard trade.note.isEmpty else { return trade.note }
         return L10n.tr("汇丰月结单；交收日 {}", settlement)
     }
 
     /// 同上：汇丰净额分红由 `source` + `tax` 表达，说明在展示时生成。
     static func cashNote(_ record: CashRecord) -> String {
-        let legacy = "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露"
         guard record.source == "hsbc-statement-net", record.tax == nil else { return record.note }
-        guard record.note.isEmpty || record.note == legacy else { return record.note }
-        return L10n.tr(legacy)
+        guard record.note.isEmpty else { return record.note }
+        return L10n.tr("汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露")
     }
 
     /// 用于「上次同步」等时间点的简短展示。

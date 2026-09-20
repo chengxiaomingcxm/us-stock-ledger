@@ -143,7 +143,7 @@ struct NativeTests {
             var row = row; row.removeValue(forKey: "settlementAmount"); row.removeValue(forKey: "settlementDate"); return row
         }
         let old = try JSONDecoder().decode(Ledger.self, from: JSONSerialization.data(withJSONObject: oldObject))
-        check(old.trades[0].settlementAmount == nil && old.trades.count == 2, "old 2.0 backup compatible")
+        check(old.trades[0].settlementAmount == nil && old.trades.count == 2, "backup without settlement fields still decodes")
 
         let failing = AppState(ledger: empty, settings: QuoteSettings(), persist: { _ in throw LedgerError.message("disk full") })
         check(!failing.commit(imported) && failing.ledger.trades.isEmpty, "save failure preserves in-memory ledger")

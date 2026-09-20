@@ -328,11 +328,12 @@ enum SafetyTests {
         L10n.current = .zhHans
         NativeTests.check(Fmt.tradeNote(imported) == "汇丰月结单；交收日 2026-01-07", "写入侧 — 中文下生成同样的说明")
 
-        // 旧版写进 note 的同一句：模板逐字匹配才重建（存量数据一字不改）。
+        // 1.0 之前把同一句系统说明写进了 note：那不是兼容目标，原样显示、不重写，
+        // 但「系统文案不得覆盖已持久化的值」这条底线依旧成立。
         var legacy = imported
         legacy.note = "汇丰月结单；交收日 2026-01-07"
         L10n.current = .en
-        NativeTests.check(Fmt.tradeNote(legacy) == shown, "写入侧 — 旧版写的同一句同样重建")
+        NativeTests.check(Fmt.tradeNote(legacy) == "汇丰月结单；交收日 2026-01-07", "写入侧 — 1.0 前写进 note 的说明原样显示")
         L10n.current = .zhHans
 
         // 用户/来源数据绝不能被系统文案盖掉。
@@ -355,7 +356,7 @@ enum SafetyTests {
 
         var legacyCash = net
         legacyCash.note = "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露"
-        NativeTests.check(Fmt.cashNote(legacyCash) == cashShown, "写入侧 — 旧版净额说明同样重建")
+        NativeTests.check(Fmt.cashNote(legacyCash) == legacyCash.note, "写入侧 — 1.0 前写进 note 的净额说明原样显示")
         var userCash = net
         userCash.note = "自己的说明"
         NativeTests.check(Fmt.cashNote(userCash) == "自己的说明", "写入侧 — 用户写的说明不被覆盖")

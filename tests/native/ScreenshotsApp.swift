@@ -34,10 +34,13 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
         L10n.current = .en
         // Keeps `state.language` and `L10n.current` in sync so the Settings picker is English too.
         state.setLanguage(.en)
-        // Go through the real Demo Mode instead of injecting a ledger, so the screenshots
-        // show what a first-time visitor sees: the Phase 1 sample ledger (history and
-        // previous closes, no "Awaiting data") and no backup reminder (suppressed in demo).
-        state.enterDemo()
+        // README screenshots must show the app the way a normal user sees it, not the read-only
+        // demo session: the toolbar "+" only exists outside demo mode. So load the sample ledger
+        // data (history and previous closes, no "Awaiting data") without entering demo mode, and
+        // stamp "just backed up" so the 30-day backup reminder — a personal state, not a product
+        // state — stays out of the picture. Production behaviour is untouched.
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "backup.lastExport")
+        state.replace(with: LedgerStore.demo())
         NSLog("HARNESS state-ready lang=\(L10n.current.rawValue) screen=\(screen)")
         // Only the import screenshot needs it: lets `ImportView` skip the file picker and
         // show the mapping/preview steps with a fictional broker export.
