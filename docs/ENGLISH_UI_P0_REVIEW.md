@@ -115,6 +115,12 @@ Swift 的字典字面量遇到重复键会在**运行时 trap**（等于启动�
 | 纯逻辑本地重放（`.scratch/replay-notes.mjs`） | **PASS 28 / FAIL 0**（含 5 个「不得重建」反例） |
 | 英文模式必然显示中文的条目 | 58 → **15**，且 15 条全部已归因（见上） |
 
+写入侧 + 格式边界这批（`d9651db` → `b06da82`）的最终 CI：`checks` run `35491658829` **success**、
+`build-ios` run `35491658868` **success**（原生测试、模拟器日历渲染、英文界面截图、`xcodebuild`、未签名 IPA 全部走通）。
+中间红过三次，根因各不相同并已分别修正：值类型 `let` 被改写（编译错误）、
+以及「缺 `format` 键的文件仍可读」这条断言前提不成立——`Ledger` 用合成 `Decodable`，
+**所有非 Optional 键都必须存在**（属性有默认值也不容忍缺键），该契约已改成真实成立的版本。
+
 ## 7. 格式代际判定（2026-09-20）
 
 **结论：不构成 Ledger Format breaking schema change，`format` 保持 2。**
