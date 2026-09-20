@@ -53,10 +53,12 @@ Then run on a simulator or your own device. The bundle identifier is `com.person
 
 ```sh
 pnpm test                          # Vitest — 148 cases in 13 files
-bash scripts/test-native.sh        # macOS — native Swift suites (413 assertions)
+bash scripts/test-native.sh        # macOS — native Swift suites (429 fixed assertions)
 bash scripts/test-calendar-rendering.sh   # macOS — renders the calendar on a simulator
 bash scripts/test-screenshots.sh          # macOS — renders all six README screenshots
 ```
+
+The native number is quoted as **fixed assertions**. The harness prints `PASS: N assertions; … main actor heartbeats: K`, and `N` includes one assertion per heartbeat of the 25,000-close reload loop, so `N` moves with machine speed (observed 25–68 across runs). What never varies is `N − K`: 413 for the 1.0.1 build, 429 since the synthetic-statement fixture landed. Per-commit arithmetic lives in `docs/ENGLISH_UI_FINAL_AUDIT.md` §3.
 
 `test-native.sh` compiles `tests/native/*.swift` together with the app sources through `swiftc`. It uses an **explicit file list**, and the native Swift test files live outside the Xcode project, so:
 
