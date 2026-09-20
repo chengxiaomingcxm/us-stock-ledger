@@ -38,3 +38,7 @@ Portfolio Polish。这一版**没有改收益口径、没有新增交易功能**
 仓库新增质量门禁 `scripts/verify.ps1` 与 pre-commit 钩子，提交前自动运行测试与构建。
 
 旧 Web 版和原生测试阶段的记录保存在 [历史更新记录](docs/archive/CHANGELOG.md)，旧标签及 Release 不改写。
+
+本轮验证：源码 `2d8fed3` 的 [GitHub Actions 构建](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35318039958) 全部通过，包括原有测试、原生账本测试、模拟器截图生成和 iPhoneOS 编译。设备包已核验版本 1.0.0、build 5、ARM64 与 ZIP 完整性。SHA-256：`6dc944aad6874073f6e1abede7a3642dead23cfe92b1a9ba8a541fcbd53f1e60`。
+
+原生版基线标签为 `native-v1.0.0`，与旧 Web 版标签区分。IPA 保存在上述构建附件中，未改写旧 Release。
