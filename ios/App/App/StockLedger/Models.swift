@@ -1,7 +1,7 @@
 import Foundation
 
-// 原生版账本：沿用原生 2.0 测试版的格式 2，与旧 Web 版分开存储。
-// 计算口径与旧 Web 版保持一致：移动平均成本、已实现/浮动收益、现金期初边界与买卖联动。
+// 原生版账本：格式 2 是 1.0 起的数据基线（`Ledger.currentFormat`），与旧 Web 版分开存储。
+// 计算口径：移动平均成本、已实现/浮动收益、现金期初边界与买卖联动。
 
 enum TradeSide: String, Codable, CaseIterable, Identifiable {
     case buy, sell

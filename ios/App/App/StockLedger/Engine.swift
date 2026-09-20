@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-// 2.0 计算引擎：口径与 1.x 一致（移动平均成本、期初边界、买卖联动现金）。
+// 计算引擎：移动平均成本、期初边界、买卖联动现金。
 
 struct Position: Identifiable {
     var symbol: String
@@ -424,7 +424,7 @@ enum Engine {
                 if let day = quote.previousCloseDate { dates[quote.symbol] = day }
             }
         }
-        // Recover persisted daily baselines when opening an old 2.0 backup.
+        // 没有 previousClose 时用最近的历史收盘价补上当日基准（行情来源不提供，或从备份恢复后）。
         let history = Dictionary(grouping: ledger.history.closes) { $0.symbol }
         for symbol in symbols where before[symbol] == nil {
             if let close = history[symbol]?.filter({ $0.date < date }).max(by: { $0.date < $1.date }),

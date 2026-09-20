@@ -24,7 +24,8 @@
 | 12 | `573310d` | **P2b**：英文术语统一、诊断日志冒号、`LedgerValidation` 默认标签、曲线金额加 `$`（`Fmt.compactMoney`） |
 | 13 | `c5021b2` | P2 报告 + 本文件（Phase C 最终审计） |
 | 14 | `006306b` | **最终 UI 轮**：删除浮动 FAB，新增入口改为导航栏 `+`；首页 P&L 两行合并为一行 |
-| 15 | 本提交 | **V1.0 收尾**：设置信息架构、原生 1.0 数据基线、README 截图刷新、本文件与 FAB 相关的描述同步（§7） |
+| 15 | `eb7b054` | **V1.0 收尾**：设置信息架构、原生 1.0 数据基线、截图宿主改为非示例模式、本文件与 FAB 相关的描述同步（§7） |
+| 16 | 本提交 | README 截图全部换成本轮 CI 产出的图；README / HELP / issue 模板的导航路径与按钮文案同步到新架构 |
 
 聚合改动量（`git diff --shortstat 62b7b49^..c5021b2`；**不含** §7 的最后两轮）：
 
@@ -45,6 +46,7 @@
 | **P1b**（措辞、百分比、FAB 进安全区） | ✅ 完成 | `33717bf` | PASSED | `checks` `35493290106` / `build-ios` `35493290097` 双绿 |
 | **P2a**（曲线可读性） | ✅ 完成 | `ebdd64f` | PASSED | `checks` `35494951130` / `build-ios` `35494951117` 双绿 |
 | **P2b**（术语统一 + 日志冒号） | ✅ 完成 | `573310d` | PASSED | `checks` `35495603492` / `build-ios` `35495603480` 双绿 |
+| **V1.0 收尾**（设置 IA + 1.0 基线 + 截图，§7） | ✅ 完成 | `eb7b054` | PASSED | `checks` `35499085353` / `build-ios` `35499085355` 双绿 |
 
 单项细节见 `docs/ENGLISH_UI_P0_REVIEW.md` / `_P1_REVIEW.md` / `_P2_REVIEW.md`。
 
@@ -62,8 +64,8 @@
 | --- | --- | --- |
 | Vitest（逻辑引擎，`tests/*.test.ts`） | 148 用例 / 13 文件 | **148 passed**（本地与 CI 一致） |
 | 原生 Swift（`tests/native`，`scripts/test-native.sh`） | 固定断言 **397 → 408 → 414 → 413**（P1b → P2a → P2b → V1.0 收尾），见下方说明 | CI `macos-26` **PASS** |
-| Playwright E2E（`e2e/*.spec.ts`） | 26 用例 / 8 文件 | CI `ubuntu-latest` **26 passed** |
-| 质量门禁 `scripts/verify.ps1` | 每个批次都跑过（P0、写入侧/格式边界、P1a、P1b、P2a、P2b） | 全部 **QUALITY GATE PASSED** |
+| Playwright E2E（`e2e/*.spec.ts`） | 26 用例 / 8 文件 | CI `ubuntu-latest` **26 passed**；V1.0 收尾本地也实测 **26 passed (45.8s)** |
+| 质量门禁 `scripts/verify.ps1` | 每个批次都跑过（P0、写入侧/格式边界、P1a、P1b、P2a、P2b、V1.0 收尾） | 全部 **QUALITY GATE PASSED**（V1.0 收尾：13 files / 148 tests passed） |
 
 > 「原生测试步骤 success」确实等于「断言全过」：`NativeTests.check` 失败会 `fatalError` 直接 trap，
 > 而 `scripts/test-native.sh` 是 `set -euo pipefail`，所以进程非零退出会直接判失败，不存在「打印了 FAIL 还算过」。
@@ -84,7 +86,7 @@
 > | P1b `33717bf` | 447 | 50 | 397 |
 > | P2a `ebdd64f` | 453 | 45 | 408（+11）|
 > | P2b `573310d` | 482 | 68 | 414（+6）|
-> | V1.0 收尾（§7） | 见 CI 输出 | 见 CI 输出 | 413（−1）|
+> | V1.0 收尾 `eb7b054` | 467 | 54 | 413（−1）|
 >
 > 两次增量（+11、+6）与本轮新增断言数**逐条对上**；只看总数会误以为多出了 18 条。
 > V1.0 收尾那行的 −1 同样是逐条对上的：`LanguageTests.generatedNotes()` 删掉一条与 `net` 用例重复的空 `note` 断言，
@@ -192,7 +194,18 @@ CI 在模拟器上真的启动过 App（`scripts/test-screenshots.sh` 渲染 6 �
    作为 1.0 起的稳定边界。界面上的开发历史文案（「沿用此前原生 2.0 测试版的数据」等）一并清掉，口径同步到 `DATA-COMPATIBILITY.md`。
 3. **README 截图**：截图宿主 `tests/native/ScreenshotsApp.swift` 改为「用示例账本数据、但不进入只读示例模式」，
    并把备份提醒按「刚备份过」处理——这样 Holdings / Trades 截图能看到最终设计的导航栏 `+`，又不会拍到属于个人状态的过期提醒；
-   正式业务行为一行未改。旧截图全部替换为这一轮 CI 产出的图。
+   正式业务行为一行未改。旧截图全部替换为这一轮 CI 产出的图（来源：`eb7b054` 的 `build-ios`）。
+
+本轮本地实测：`verify.ps1` **QUALITY GATE PASSED**（Vitest 148 / 13 files ✓、`tsc --noEmit && vite build` ✓）、
+`pnpm e2e` **26 passed (45.8s)**；原生与模拟器检查按既有约定以 CI 为准。
+
+本轮 CI（`eb7b054`）：`checks` `35499085353` 成功；`build-ios` `35499085355` 成功，其中原生测试打印
+`PASS: 467 assertions; … main actor heartbeats: 54` → 固定断言 **413**（与上文推算的 −1 对得上），
+`Render production calendar on iPhone simulator` 与 `Render English UI screenshots` 两步均成功。
+6 张新截图从该 run 的 `App-screenshots` 产物取出，人工核对后落回 `docs/screenshots/`：
+`holdings.png` / `trades.png` 都拍到了导航栏 `+` 且没有备份提醒条，`settings.png` 是新的四组 IA
+（Display / Market data / Data / Support），`import.png` 与旧图逐字节相同（该屏本轮未动）。
+`returns.png` / `calendar.png` 与旧图不同属预期：示例账本按 `now` 生成，两次出图不冸同一天。
 
 由此带来的两处口径变化，必须写清楚，否则会变成新的「过时要求」：
 
@@ -204,7 +217,7 @@ CI 在模拟器上真的启动过 App（`scripts/test-screenshots.sh` 渲染 6 �
 
 | # | 检查项 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 1 | English 模式没有产品自身产生的中文文本 | ✅ | `i18n-scan` 裸字面量 **raw=0**（修复前是 1，见 §3）；`leak-scan` **composed=0**；531 条英文值 0 条含 CJK/全角 |
+| 1 | English 模式没有产品自身产生的中文文本 | ✅ | `i18n-scan` 裸字面量 **raw=0**（修复前是 1，见 §3）；`leak-scan` **composed=0**；538 条英文值 0 条含 CJK/全角（V1.0 收尾后重跑） |
 | 2 | 日期 locale 正确 | ✅ | `RootView.displayLocale` + `.environment(\.locale, …)`；数据层仍用 `DateFormatter.ledgerDate`（`en_US_POSIX`）；`LanguageTests` 覆盖切语言重算 |
 | 3 | Trades Date Range 实际过滤正确 | ✅ | `Engine.range` + `EngineGoldenTests.rangeSummary()` 断言区间外那笔不计入 |
 | 4 | All / Buy / Sell + Date Range 组合正确 | ✅ | 同上；只看卖出时买入侧笔数与金额必须为 0 |

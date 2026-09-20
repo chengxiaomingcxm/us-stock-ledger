@@ -47,7 +47,7 @@ Six screens, rendered on an iPhone simulator from the built-in demo ledger (Engl
 
 ## Demo
 
-No sign-up and no data required. Open **Settings → Load demo ledger** to explore a sample portfolio (trades, dividends, fees and an opening balance), then clear it with **Exit demo and clear ledger** when you are ready to enter your own numbers. Demo Mode is isolated: it never writes into your real ledger.
+No sign-up and no data required. Open **Settings → Support → Demo** and tap **Try demo ledger** to explore a sample portfolio (trades, dividends, fees and an opening balance); tap **Exit demo mode** when you are ready to enter your own numbers. Demo Mode is isolated: it lives in memory only and never writes into your real ledger.
 
 ### Demo video (planned)
 
@@ -174,7 +174,7 @@ The project checklist asked CI to run a linter. This repository has **no ESLint,
 2. Install a free signing tool such as [Sideloadly](https://sideloadly.io/) or [AltStore](https://altstore.io/) on your computer.
 3. Plug in your iPhone, open the tool, drag the IPA in, and sign with your own Apple ID.
 4. Keep the bundle identifier `com.personal.stockledger` and use an **update/overlay install** — do **not** uninstall the old version first, or you will lose your ledger.
-5. Back up regularly from **Settings → Export ledger backup**, and keep the file outside the app.
+5. Back up regularly from **Settings → Data → Backup & Restore → Export ledger backup**, and keep the file outside the app.
 
 The IPA is unsigned because it is built without a paid Apple Developer account; the SHA-256 published next to each release lets you verify the file you downloaded.
 
@@ -203,7 +203,7 @@ Releases follow semantic versioning (`v1.26.0`, …). Each one publishes an unsi
 ### Where your data lives
 
 - Your ledger is **one JSON file in the app's own `Documents` folder** (`ledger-v2.json`). There is no server, no account and no sync.
-- Backups are files **you** export (**Settings → Export ledger backup**) and keep wherever you like.
+- Backups are files **you** export (**Settings → Data → Backup & Restore → Export ledger backup**) and keep wherever you like.
 - Deleting the app deletes the ledger. Export a backup before reinstalling.
 
 ### What leaves the device

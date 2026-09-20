@@ -1,8 +1,8 @@
 import Foundation
 import Combine
 
-// 原生版 1.0 沿用原生 2.0 测试版的 Documents/ledger-v2.json。
-// 不读取旧 Web 版的 Capacitor Preferences；产品重新编号不更改存储位置。
+// 原生版账本固定存在 Documents/ledger-v2.json（1.0 起的存储基线）。
+// 不读取旧 Web 版的 Capacitor Preferences。
 
 enum LedgerStore {
     /// 仅测试使用：把账本读写重定向到临时目录，避免测试碰到真实的 Documents。
