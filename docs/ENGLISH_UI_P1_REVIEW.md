@@ -4,6 +4,10 @@
 前置：`docs/ENGLISH_UI_AUDIT.md`（Phase A）、`docs/ENGLISH_UI_P0_REVIEW.md`（P0 + 写入侧/格式边界）。
 分支：`portfolio/readme`。
 
+> **后续状态（V1.0 收尾轮追加）**：§1 里 `[P1-5]` / `[P1-6]` 的悬浮「记一笔」按钮，中间方案（`safeAreaInset` 进安全区 +
+> 设置页隐藏）后来被**整体删除**——新增入口改为 Holdings / Trades 导航栏右上角的 `+`（提交 `006306b`）。
+> **当前要求以 [`docs/ENGLISH_UI_FINAL_AUDIT.md`](ENGLISH_UI_FINAL_AUDIT.md) 为准，本文只作历史记录。**
+
 P1 的原则：**不夸大数字的含义**。能算的百分比才给，算不了的不给；标签要能被数字本身证实。
 
 ## 1. 逐项

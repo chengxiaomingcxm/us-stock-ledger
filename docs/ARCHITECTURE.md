@@ -103,7 +103,7 @@ Nothing is written before confirmation, which is what makes "import twice by acc
 - quote cache (per symbol: close, previous close, date, source)
 - price history and split events
 
-The **file name carries the format generation** (`ledger-v2.json`), and the file itself also carries `format: 2` (`Ledger.currentFormat`), which `LedgerStore.decode` enforces on both the load path and the backup-restore path: a file declaring a *higher* format is refused (write protection, "update the app") instead of being decoded into a field-dropping ledger and then overwritten. The native app deliberately kept reading the file written by the 2.0 beta, so upgrading does not clear anyone's data; the old web 1.26 format is **not** migrated automatically, and the app documents that plainly.
+The **file name carries the format generation** (`ledger-v2.json`), and the file itself also carries `format: 2` (`Ledger.currentFormat`), which `LedgerStore.decode` enforces on both the load path and the backup-restore path: a file declaring a *higher* format is refused (write protection, "update the app") instead of being decoded into a field-dropping ledger and then overwritten. Format 2 is the **1.0 data baseline**: the format has not changed since, so upgrading never clears anyone's data and ledgers/backups written from 1.0 onwards keep loading. Pre-1.0 beta ledgers and old web-app backups are **not** compatibility targets — they are neither migrated nor specially interpreted — and the app documents that plainly.
 
 `.atomic` writes mean a crash mid-save leaves either the old file or the new one, never a half-written one.
 

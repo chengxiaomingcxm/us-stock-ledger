@@ -53,7 +53,7 @@ Then run on a simulator or your own device. The bundle identifier is `com.person
 
 ```sh
 pnpm test                          # Vitest — 148 cases in 13 files
-bash scripts/test-native.sh        # macOS — native Swift suites (362 assertions)
+bash scripts/test-native.sh        # macOS — native Swift suites (413 assertions)
 bash scripts/test-calendar-rendering.sh   # macOS — renders the calendar on a simulator
 bash scripts/test-screenshots.sh          # macOS — renders all six README screenshots
 ```

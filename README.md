@@ -31,6 +31,7 @@ What that means in the app:
 - Statement import with preview and confirmation: broker trade/cash CSVs and HSBC investment-statement PDFs (PDFKit).
 - Backup and restore as a local JSON file, with an export reminder after 30 days.
 - Light/dark mode, "green up / red up" color schemes, Dynamic Type and VoiceOver support.
+- **Settings**: Display (language, appearance, gain color), Market data (quotes), Data (import & export, backup & restore, ledger info) and Support (demo, help, about) — the home page holds categories and entry points only.
 - **Demo Mode**: a complete sample ledger you can explore, and leave again at any time — it never touches your own data.
 
 ## Screenshots
@@ -124,7 +125,7 @@ releases/                  per-version release notes
 | Statements | PDFKit (HSBC investment statement) and a custom CSV parser |
 | Networking | `URLSession` against Yahoo Finance, Finnhub, or a custom HTTPS endpoint |
 | Legacy web engine | TypeScript, Vite, Capacitor (build and regression tests only) |
-| Tests | Vitest (148 cases / 13 files), native Swift suites (362 assertions), simulator renders, Playwright (26 cases) |
+| Tests | Vitest (148 cases / 13 files), native Swift suites (413 assertions, plus runtime heartbeat assertions), simulator renders, Playwright (26 cases) |
 | CI | GitHub Actions: `checks` on `ubuntu-latest`, iOS build on `macos-26` |
 | Tooling | Node 24, pnpm 11, Xcode / `swiftc`, Playwright |
 
@@ -134,14 +135,14 @@ Three suites, all runnable from a clone:
 
 ```sh
 pnpm test                                # Vitest — 148 cases
-bash scripts/test-native.sh              # macOS — native Swift suites, 362 assertions
+bash scripts/test-native.sh              # macOS — native Swift suites, 413 assertions
 pnpm e2e                                 # Playwright — 26 cases
 ```
 
 | Suite | What it locks down |
 | --- | --- |
 | Vitest (148 cases, 13 files) | Ledger maths, cash ledger, trade ranges, today's P&L, CSV import rules, storage and recovery, localization |
-| Native Swift (362 assertions) | The Swift engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths — plus a 25,000-close / 4,000-session / 1,000-trade load test |
+| Native Swift (413 assertions) | The Swift engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths — plus a 25,000-close / 4,000-session / 1,000-trade load test |
 | Simulator renders | The calendar screen and all six README screenshots must actually render demo data; a blank or empty-state PNG fails the run |
 | Playwright (26 cases) | Full user journeys against the built app, including "no horizontal overflow" at 320 / 402 / 430 px |
 

@@ -111,7 +111,7 @@ The native Swift suites are compiled by `swiftc` from an explicit file list, whi
 | `Decimal`, never `Double`, for money | Financial arithmetic must not accumulate binary-floating-point error |
 | A pure `Engine` with no I/O | The valuable logic is testable against golden ledgers without a simulator or a file system |
 | One `AppState` write path, disk before memory | A single place to validate and persist; a failed write can never be mistaken for a success |
-| One JSON document, atomic writes, no schema field | The file name carries the format generation, so the native 1.0 could keep reading the 2.0-beta file instead of clearing anyone's data |
+| One JSON document, atomic writes, no schema field | The file name carries the format generation, and format 2 is the **1.0 baseline** — so a 1.0 ledger keeps loading across upgrades instead of anyone's data being cleared (pre-1.0 beta files are not compatibility targets) |
 | API keys in the Keychain, never in the ledger or a backup | Secrets belong in the platform secret store, and a backup file is meant to be copied around |
 | Missing data stays missing (`Decimal?`) | "Unknown" and "zero" are different facts, and conflating them produces confidently wrong totals |
 | Demo Mode isolated from day one of any feature work | A finance app must never risk a user's real data to show a sample |
@@ -128,7 +128,7 @@ Four layers, each catching a different class of mistake:
 | Layer | Size | Catches |
 | --- | --- | --- |
 | Vitest (web engine) | 148 cases / 13 files | Ledger maths, cash rules, trade ranges, today's P&L, CSV import rules, storage and recovery, localization |
-| Native Swift suites | 362 assertions | The real engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths, plus a 25,000-close load test |
+| Native Swift suites | 413 assertions | The real engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths, plus a 25,000-close load test |
 | Simulator renders | 6 screens + calendar | Screens that render nothing, empty state shown as if it were data, regressions in the render harness |
 | Playwright | 26 cases | Full user journeys against the built app, including layout overflow at 320 / 402 / 430 px |
 
@@ -150,7 +150,7 @@ Financial data is treated as data that never leaves the device:
 A shipping-quality iOS application, built and maintained by one developer:
 
 - Native SwiftUI app for iOS 16+, 17 source files, with a pure calculation engine, validated mutations, atomic local persistence and Keychain-backed secrets.
-- Three independent test layers plus simulator render guards: 148 unit cases, 362 native assertions, 26 end-to-end cases.
+- Three independent test layers plus simulator render guards: 148 unit cases, 413 native assertions, 26 end-to-end cases.
 - Two CI workflows: a ~1-minute check chain on `ubuntu-latest` for every push and pull request, and a ~14-minute macOS pipeline that runs the native suites, renders the calendar and all README screenshots, and builds an unsigned IPA.
 - A release pipeline that verifies the IPA against a manifest and publishes it with a checksum.
 - Documentation that lets a stranger understand the product, the architecture and the limitations in a few minutes.
