@@ -6,6 +6,12 @@
 前置：`docs/ENGLISH_UI_AUDIT.md`（Phase A）、`docs/ENGLISH_UI_P0_REVIEW.md`、`docs/ENGLISH_UI_P1_REVIEW.md`。
 分支：`portfolio/readme`。
 
+> **阅读提示（V1.0 收尾轮追加）**：本文记录的是 P2 阶段**当时**的状态与证据，里面引用的
+> `SettingsView.swift` 行号属于那版实现。设置信息架构在 V1.0 收尾轮已改为
+> `显示 / 行情数据 / 数据 / 支持` 四组 + 二级页（原「数据」节的操作移入
+> `导入与导出`、`备份与恢复`，末节 footer 移入 `关于`），最新口径见
+> `docs/ENGLISH_UI_FINAL_AUDIT.md` §7。**要求以最终审计文档为准，本文只作历史记录。**
+
 P2 的原则：**先证明再动手**。审计书对 `[P2-2]` 写死了前提（「无法从代码确认就不要写进 UI」），
 本文档对每一项都给出「代码里是什么」的证据；不对的地方改，已经对的地方**不加**。
 
