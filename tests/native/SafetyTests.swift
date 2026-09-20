@@ -346,7 +346,7 @@ enum SafetyTests {
         oldFormat.note = "别的说明"
         NativeTests.check(Fmt.tradeNote(oldFormat) == "别的说明", "写入侧 — 说明与模板不一致时不重建")
 
-        var net = CashRecord(sequence: 1, date: "2026-01-08", kind: .dividend, amount: decimal("0.88"),
+        let net = CashRecord(sequence: 1, date: "2026-01-08", kind: .dividend, amount: decimal("0.88"),
                              tax: nil, symbol: "AAA", source: "hsbc-statement-net")
         L10n.current = .en
         let cashShown = Fmt.cashNote(net)
@@ -402,18 +402,19 @@ enum SafetyTests {
         // 4) 恢复通道同样受约束：更高格式的备份不得被读进来。
         NativeTests.check((try? LedgerStore.decode(Data(future.utf8))) == nil, "格式边界 — 备份解码也被拒绝")
 
-        // 5) 缺省 format 的文件仍按当前代际读取——旧文件没有这个键时不得被误判成「更新版本」。
-        //    注意：合成的 Decodable 不会因为属性有默认值就容忍缺键（只有 Optional 才算可选），
-        //    所以这里必须从**完整**文件里摘掉 format，而不能手写一份最小 JSON（那样连正常文件都解不出来）。
-        //    用 JSONSerialization 摘键，避免依赖编码器 prettyPrinted 的具体空格形式。
-        let encoded = try LedgerStore.encoded(Ledger())
-        var withoutFormat = (try JSONSerialization.jsonObject(with: encoded)) as? [String: Any] ?? [:]
-        withoutFormat.removeValue(forKey: "format")
-        let stripped = try JSONSerialization.data(withJSONObject: withoutFormat)
-        NativeTests.check(!String(decoding: stripped, as: UTF8.self).contains("\"format\""),
-                          "格式边界 — 自检：format 键确实被摘掉了")
-        try stripped.write(to: file)
-        NativeTests.check(isLoaded(LedgerStore.loadResult()), "格式边界 — 缺省 format 的文件仍可读")
+        // 5) 更低代际的文件仍按本版本读取——守卫只拒绝**更新**的格式，不拒绝更老的。
+        //    JSON 必须写全所有非 Optional 键：`Ledger` 用合成 Decodable，
+        //    属性有默认值也**不会**被用来容忍缺键（只有 Optional 才算可选），
+        //    所以缺键的文件根本解不出来 —— 这是既有行为，也正是下面第 6 条要断言的。
+        let older = #"{"format":1,"trades":[],"quotes":[],"cash":[],"history":{"sessions":[],"closes":[],"splits":[]}}"#
+        try Data(older.utf8).write(to: file)
+        NativeTests.check(isLoaded(LedgerStore.loadResult()), "格式边界 — 更低代际的文件仍可读")
+
+        // 6) 缺 format 键的文件读不出来 → 进入写保护（保护原文件）。这不是守卫要覆盖的情形，
+        //    而是「文件被改坏/截断」的既有处置，一并钉住以免将来误以为它能当旧文件读。
+        let partial = #"{"trades":[],"quotes":[],"cash":[],"history":{"sessions":[],"closes":[],"splits":[]}}"#
+        try Data(partial.utf8).write(to: file)
+        NativeTests.check(isFailed(LedgerStore.loadResult()), "格式边界 — 缺 format 键的文件进入写保护")
     }
 
     // MARK: - 入口
