@@ -145,6 +145,59 @@ struct NativeTests {
         let old = try JSONDecoder().decode(Ledger.self, from: JSONSerialization.data(withJSONObject: oldObject))
         check(old.trades[0].settlementAmount == nil && old.trades.count == 2, "backup without settlement fields still decodes")
 
+        // 合成演示结单（`tests/fixtures/hsbc-investment-statement-demo.pdf`，全部为虚构数据）。
+        // 与上面的内联字符串不同，这里走的是**真实文件**路径：PDFKit 打开、按行重建文本层、
+        // 再交给同一个 Parser，确保演示素材与解析器不会各自漂移。素材本身用
+        // `scripts/make-demo-statement.mjs` 生成，该脚本会在写入后按同一套规则自检。
+        let demoStatement = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("fixtures/hsbc-investment-statement-demo.pdf")
+        let demoPages = try StatementImport.pages(from: [demoStatement], password: "")
+        check(demoPages.count == 1, "demo statement is a single page")
+        check(demoPages[0].contains("SAMPLE / DEMONSTRATION ONLY"), "demo marking survives the text layer")
+        let demoReport = try HSBCStatement.parse(pages: demoPages, ledger: empty)
+        check(demoReport.rows.count == 6, "demo statement previews 4 trades and 2 dividends")
+        check(demoReport.rows.filter(\.selected).count == 5, "non-USD fund row is not selected")
+        let demoBuy = demoReport.rows.compactMap(\.trade).first { $0.symbol == "AAPL" && $0.side == .buy }
+        check(demoBuy?.date == "2026-09-14" && demoBuy?.settlementDate == "2026-09-16", "demo buy keeps both dates")
+        check(demoBuy?.quantity == 25 && demoBuy?.price == Decimal(string: "198.4"), "demo buy quantity and unit price")
+        check(demoBuy?.fee == 1 && demoBuy?.settlementAmount == Decimal(string: "4961"), "demo buy links charge to settlement")
+        check(demoBuy?.source == "hsbc-statement" && demoBuy?.externalId?.hasSuffix(":DEMO001AAPL") == true,
+              "demo buy keeps source and bank reference")
+        let demoSell = demoReport.rows.compactMap(\.trade).first { $0.side == .sell }
+        check(demoSell?.symbol == "AAPL" && demoSell?.quantity == 10 && demoSell?.settlementAmount == Decimal(string: "2106.5"),
+              "demo sell keeps quantity and settlement")
+        let demoDividends = demoReport.rows.compactMap(\.cash).filter { $0.kind == .dividend }
+        check(demoDividends.count == 2 && demoDividends.allSatisfy { $0.tax == nil && $0.source == "hsbc-statement-net" },
+              "demo dividends stay net with unknown tax")
+        check(demoDividends.map(\.amount).sorted() == [Decimal(string: "12.2")!, Decimal(string: "24.5")!],
+              "demo dividend net amounts")
+        check(demoReport.rows.contains { $0.trade?.symbol == "DEMOETF" && $0.issue != nil && !$0.selected },
+              "non-USD unit trust is flagged instead of imported")
+        let demoImported = try HSBCStatement.candidate(rows: demoReport.rows, ledger: empty, insertBefore: false)
+        check(demoImported.trades.count == 3 && demoImported.cash.count == 2, "demo batch sizes")
+        check(Engine.summary(demoImported).fees == 2, "each linked charge counted exactly once")
+        check(empty.trades.isEmpty && empty.cash.isEmpty, "preview never mutates the ledger it was given")
+        // 读结单不得写盘：把账本文件重定向到临时目录后逐字节比对（绝不指向真实 Documents）。
+        let demoDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stock-ledger-demo-statement-tests", isDirectory: true)
+        try FileManager.default.createDirectory(at: demoDirectory, withIntermediateDirectories: true)
+        let demoFile = demoDirectory.appendingPathComponent("ledger-v2.json")
+        let outerDemoFile = LedgerStore.fileURLOverride
+        LedgerStore.fileURLOverride = demoFile
+        var demoUserLedger = Ledger()
+        demoUserLedger.trades = [Trade(sequence: 0, symbol: "KEEP", side: .buy, date: "2026-01-02",
+                                       quantity: 1, price: 1, fee: 0)]
+        try LedgerStore.save(demoUserLedger)
+        let beforeDemoRead = try Data(contentsOf: demoFile)
+        _ = try StatementImport.pages(from: [demoStatement], password: "")
+        _ = try HSBCStatement.parse(pages: demoPages, ledger: try LedgerStore.decode(beforeDemoRead))
+        check((try? Data(contentsOf: demoFile)) == beforeDemoRead, "reading a statement never writes the ledger file")
+        LedgerStore.fileURLOverride = outerDemoFile
+        try? FileManager.default.removeItem(at: demoDirectory)
+        print("demo statement fixture: \(demoReport.rows.count) rows, \(demoImported.trades.count) trades, "
+              + "\(demoImported.cash.count) dividends from \(demoStatement.lastPathComponent)")
+
         let failing = AppState(ledger: empty, settings: QuoteSettings(), persist: { _ in throw LedgerError.message("disk full") })
         check(!failing.commit(imported) && failing.ledger.trades.isEmpty, "save failure preserves in-memory ledger")
         let editing = AppState(ledger: imported, settings: QuoteSettings(), persist: { _ in })
