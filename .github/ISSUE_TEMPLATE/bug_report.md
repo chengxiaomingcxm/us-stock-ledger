@@ -18,7 +18,7 @@ Describe the bug. What did you expect, and what actually happened?
 
 ## Device / version
 
-- App version (Settings → Support → About, e.g. `1.0.0 (5)`):
+- App version (Settings → Support → About, e.g. `1.0.1 (6)`):
 - iOS version:
 - iPhone model:
 

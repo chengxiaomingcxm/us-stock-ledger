@@ -197,7 +197,7 @@ open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 
 ### 版本发布
 
-用正式语义化版本号（`v1.26.0`…）。每个版本发布未签名 IPA 与校验和，逐版本说明放在 [`releases/`](releases)，变更历史见 [CHANGELOG.md](CHANGELOG.md)。
+用正式语义化版本号（`v1.0.1`…）。每个版本发布未签名 IPA 与校验和，逐版本说明放在 [`releases/`](releases)，变更历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 数据与隐私
 

@@ -3,6 +3,11 @@
 > 基线：`portfolio/readme`（从 Phase 5 的 `portfolio/error-handling` @ `7ced65e` 切出）。
 > 范围：任务书 §12（README 重构）、§13（截图）、§14（Demo Video 占位）、§16（ARCHITECTURE）、§17（架构图）、§18（DEVELOPMENT）、§19（隐私/安全 + secret 扫描）、§20（免责声明）、§21（限制）、§22（Roadmap）、§25（CASE_STUDY）、§26（Portfolio 定位）。
 > 原则：文档里出现的每个数字都必须可复核；核不到的一律不写（§27 禁止虚构）。
+>
+> **后续状态（V1.0 收尾轮追加）**：本文记录的是 Phase 6 **当时**的状态——其中的原生断言数 **362**、
+> 以及「原生版刻意沿用 2.0 测试版文件」「旧 `note` 里的系统说明仍按模板重建」等口径，
+> 都已被 V1.0 收尾轮取代（现为 **413** 条固定断言；1.0 之前的数据不再是兼容目标）。
+> **当前要求以 [`docs/ENGLISH_UI_FINAL_AUDIT.md`](ENGLISH_UI_FINAL_AUDIT.md) 与 [`DATA-COMPATIBILITY.md`](../DATA-COMPATIBILITY.md) 为准，本文只作历史记录。**
 
 ## §12 要求的结构 vs 实际章节
 

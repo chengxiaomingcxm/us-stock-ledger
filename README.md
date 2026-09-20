@@ -197,7 +197,7 @@ Development happens on `deepseek-dev`, reviewed changes are merged to `main`, an
 
 ### Releases
 
-Releases follow semantic versioning (`v1.26.0`, …). Each one publishes an unsigned IPA with its checksum, and per-version notes live in [`releases/`](releases); the running history is [CHANGELOG.md](CHANGELOG.md).
+Releases follow semantic versioning (`v1.0.1`, …). Each one publishes an unsigned IPA with its checksum, and per-version notes live in [`releases/`](releases); the running history is [CHANGELOG.md](CHANGELOG.md).
 
 ## Data & Privacy
 
