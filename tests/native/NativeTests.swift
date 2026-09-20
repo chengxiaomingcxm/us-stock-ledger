@@ -83,6 +83,18 @@ struct NativeTests {
         check(imported.trades.count == 2 && imported.cash.count == 1, "batch trade and dividend import")
         check(imported.cash[0].tax == nil && imported.cash[0].amount == Decimal(string: "0.88"), "unknown tax stays unknown")
         check(imported.cash.allSatisfy { $0.kind == .dividend }, "no invented deposits or separate trade fees")
+        // note 只留给用户/来源数据：系统说明必须靠结构化字段在展示层生成（见 docs/ENGLISH_UI_AUDIT.md A1）。
+        check(imported.trades.allSatisfy { $0.note.isEmpty } && imported.cash.allSatisfy { $0.note.isEmpty },
+              "imported rows keep note empty")
+        check(imported.trades.allSatisfy { $0.source == "hsbc-statement" && $0.settlementDate != nil },
+              "source and settlement date stay structured")
+        check(imported.cash.allSatisfy { $0.source == "hsbc-statement-net" && $0.externalId != nil },
+              "dividend net amount stays structured")
+        L10n.current = .en
+        check(imported.trades.allSatisfy { Fmt.tradeNote($0).hasPrefix("HSBC statement; settlement ") },
+              "english note is generated from structured fields")
+        check(!Fmt.cashNote(imported.cash[0]).isEmpty, "english dividend note is generated too")
+        L10n.current = .zhHans
         check(imported.trades[0].price == Decimal(string: "10.125"), "original price preserved")
         check(imported.trades[0].gross == Decimal(string: "10.13"), "bank-rounded buy cost")
         check(Engine.summary(imported).realized == Decimal(string: "2.21"), "bank settlement realized profit")

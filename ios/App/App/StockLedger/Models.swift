@@ -116,7 +116,11 @@ struct LedgerHistory: Codable {
 }
 
 struct Ledger: Codable {
-    var format: Int = 2
+    /// 持久化格式代际。**结构没变就不要动这个数字**——抬高它等于声明与旧文件不兼容。
+    /// 载入时会拒绝「比本版本更新」的文件（`LedgerStore.decode`），所以它同时是
+    /// 「本版本能理解的上限」。见 DATA-COMPATIBILITY.md。
+    static let currentFormat = 2
+    var format: Int = Ledger.currentFormat
     var trades: [Trade] = []
     var quotes: [Quote] = []
     var cash: [CashRecord] = []
@@ -246,22 +250,24 @@ enum Fmt {
 
     static var today: String { MarketClock.date() }
 
-    /// 结单导入的行会带上一段**系统生成**的说明（模板固定，如「汇丰月结单；交收日 X」）。
-    /// 展示时按结构化字段重建为当前语言，**不改动已持久化的 note**（存量数据不做迁移）；
-    /// 用户自己改过的 note 不匹配模板，原样返回。见 docs/ENGLISH_UI_AUDIT.md A1 根因 2。
+    /// 归属规则：`note` 只装**用户或银行/券商给的原文**，系统说明一律不写进去。
+    /// 系统说明由结构化字段在展示时生成，因此天然跟随语言，也不会把值拼进查表键。
+    /// 三种情况：
+    /// - 新版导入：note 为空 → 用 `settlementDate` 重建；
+    /// - 旧版导入：note 是**逐字相同**的那句系统文案 → 同样重建（存量数据一字不改）；
+    /// - 用户写过东西：原样返回，绝不覆盖。
     static func tradeNote(_ trade: Trade) -> String {
         guard trade.source == "hsbc-statement", let settlement = trade.settlementDate else { return trade.note }
-        let prefix = "汇丰月结单；交收日 "
-        guard trade.note.hasPrefix(prefix), String(trade.note.dropFirst(prefix.count)) == settlement else { return trade.note }
+        guard trade.note.isEmpty || trade.note == "汇丰月结单；交收日 " + settlement else { return trade.note }
         return L10n.tr("汇丰月结单；交收日 {}", settlement)
     }
 
-    /// 汇丰净额分红的说明同样是系统生成的，按结构化字段（source + tax）重建。
+    /// 同上：汇丰净额分红由 `source` + `tax` 表达，说明在展示时生成。
     static func cashNote(_ record: CashRecord) -> String {
-        if record.source == "hsbc-statement-net", record.tax == nil {
-            return L10n.tr("汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露")
-        }
-        return record.note
+        let legacy = "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露"
+        guard record.source == "hsbc-statement-net", record.tax == nil else { return record.note }
+        guard record.note.isEmpty || record.note == legacy else { return record.note }
+        return L10n.tr(legacy)
     }
 
     /// 用于「上次同步」等时间点的简短展示。

@@ -133,9 +133,10 @@ enum HSBCStatement {
                         }
                         consumed.insert(ref)
                         let excluded = r[3].uppercased() != "USD" || symbol[2].uppercased() != "SHS"
+                        // note 只留给用户/来源数据：交收日已结构化保存，说明在展示层生成。
                         let trade = Trade(sequence: 0, symbol: symbol[1].uppercased(), side: side, date: tradeDate,
                                           quantity: quantity, price: price, fee: fee,
-                                          note: "汇丰月结单；交收日 \(settlementDate)", source: "hsbc-statement", externalId: id,
+                                          source: "hsbc-statement", externalId: id,
                                           settlementAmount: settlement, settlementDate: settlementDate)
                         report.rows.append(Row(id: id, trade: trade, currency: r[3].uppercased(),
                                                issue: excluded ? "非美元股票，不写入美元账本" : nil, selected: !excluded))
@@ -155,9 +156,9 @@ enum HSBCStatement {
             guard seen.insert(id).inserted else { throw LedgerError.message("文件内分红编号重复。") }
             let net = try amount(d[5])
             guard net > 0 else { throw LedgerError.message("分红派付金额必须大于零。") }
+            // 同上：净额分红由 source + tax 表达，说明在展示层生成，不写进 note。
             let cash = CashRecord(sequence: 0, date: try date(d[1]), kind: .dividend, amount: net, tax: nil,
-                                  symbol: d[2].uppercased(), note: "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露",
-                                  source: "hsbc-statement-net", externalId: id)
+                                  symbol: d[2].uppercased(), source: "hsbc-statement-net", externalId: id)
             let excluded = d[4].uppercased() != "USD"
             report.rows.append(Row(id: id, cash: cash, currency: d[4].uppercased(),
                                    issue: excluded ? "非美元分红，不写入美元账本" : nil, selected: !excluded))

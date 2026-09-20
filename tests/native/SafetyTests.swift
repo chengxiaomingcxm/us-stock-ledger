@@ -309,6 +309,105 @@ enum SafetyTests {
                           "P0-2/历史脏数据 — 不阻塞用户修正账本")
     }
 
+    // MARK: - 写入侧（note 归属）
+
+    /// note 只装用户/来源数据；系统说明一律由结构化字段在展示层生成。
+    /// 这里守的是「系统文案绝不得覆盖用户写的东西」，所以它属于数据安全。
+    private static func systemTextNeverEntersNote() {
+        let imported = Trade(sequence: 1, symbol: "AAA", side: .buy, date: "2026-01-05",
+                             quantity: 1, price: 10, fee: 0)
+        imported.source = "hsbc-statement"
+        imported.settlementDate = "2026-01-07"
+
+        L10n.current = .en
+        let shown = Fmt.tradeNote(imported)
+        NativeTests.check(imported.note.isEmpty, "写入侧 — 导入不把系统说明写进 note")
+        NativeTests.check(!hasCJKText(shown), "写入侧 — 说明按当前语言生成：\(shown)")
+        NativeTests.check(shown.contains("2026-01-07"), "写入侧 — 生成时保留交收日：\(shown)")
+
+        L10n.current = .zhHans
+        NativeTests.check(Fmt.tradeNote(imported) == "汇丰月结单；交收日 2026-01-07", "写入侧 — 中文下生成同样的说明")
+
+        // 旧版写进 note 的同一句：模板逐字匹配才重建（存量数据一字不改）。
+        var legacy = imported
+        legacy.note = "汇丰月结单；交收日 2026-01-07"
+        L10n.current = .en
+        NativeTests.check(Fmt.tradeNote(legacy) == shown, "写入侧 — 旧版写的同一句同样重建")
+        L10n.current = .zhHans
+
+        // 用户/来源数据绝不能被系统文案盖掉。
+        var edited = imported
+        edited.note = "我自己的备注"
+        NativeTests.check(Fmt.tradeNote(edited) == "我自己的备注", "写入侧 — 用户写的 note 原样显示")
+        var manual = imported
+        manual.source = "manual"
+        NativeTests.check(Fmt.tradeNote(manual) == "", "写入侧 — 手动录入的行不重建")
+        var oldFormat = imported
+        oldFormat.note = "别的说明"
+        NativeTests.check(Fmt.tradeNote(oldFormat) == "别的说明", "写入侧 — 说明与模板不一致时不重建")
+
+        var net = CashRecord(sequence: 1, date: "2026-01-08", kind: .dividend, amount: decimal("0.88"),
+                             tax: nil, symbol: "AAA", source: "hsbc-statement-net")
+        L10n.current = .en
+        let cashShown = Fmt.cashNote(net)
+        NativeTests.check(net.note.isEmpty, "写入侧 — 净额分红的说明也不写进 note")
+        NativeTests.check(!hasCJKText(cashShown), "写入侧 — 净额说明按当前语言生成：\(cashShown)")
+
+        var legacyCash = net
+        legacyCash.note = "汇丰 PAID BENEFITS 净额；税前金额与预扣税未披露"
+        NativeTests.check(Fmt.cashNote(legacyCash) == cashShown, "写入侧 — 旧版净额说明同样重建")
+        var userCash = net
+        userCash.note = "自己的说明"
+        NativeTests.check(Fmt.cashNote(userCash) == "自己的说明", "写入侧 — 用户写的说明不被覆盖")
+        var reported = net
+        reported.tax = decimal("0.12")
+        reported.note = "税额已披露"
+        NativeTests.check(Fmt.cashNote(reported) == "税额已披露", "写入侧 — 披露了预扣税就不生成净额说明")
+        L10n.current = .zhHans
+    }
+
+    /// 英文界面里不应该出现中日韩字符或全角标点。
+    private static func hasCJKText(_ text: String) -> Bool {
+        text.unicodeScalars.contains {
+            (0x4E00 ... 0x9FFF).contains($0.value) || (0x3000 ... 0x303F).contains($0.value)
+                || (0xFF00 ... 0xFFEF).contains($0.value)
+        }
+    }
+
+    // MARK: - 格式边界
+
+    /// 比本版本更新的格式必须被**拒绝**，而不是被「成功解码」成丢字段的账本。
+    /// 旧行为会把它读成字段缺失的账本，而下一次原子写入就覆盖了原文件 = 静默数据丢失
+    /// （`docs/PHASE_0_5_REVIEW.md` P2-1 记的欠账）。
+    private static func newerFormatIsRefusedNotSilentlyDowngraded(_ file: URL) throws {
+        // 1) 本版本的正常文件照常读取。
+        try LedgerStore.save(ledger([trade(0, .buy, "1", "2026-01-05")]))
+        NativeTests.check(isLoaded(LedgerStore.loadResult()), "格式边界 — 当前格式正常读取")
+
+        // 2) 声明更高的格式：必须读不出来，且原文件一字不动。
+        let future = #"{"format":\#(Ledger.currentFormat + 1),"trades":[],"quotes":[],"cash":[],"history":{}}"#
+        try Data(future.utf8).write(to: file)
+        NativeTests.check(isFailed(LedgerStore.loadResult()), "格式边界 — 更高格式被拒绝")
+        let protected = AppState(settings: QuoteSettings())
+        NativeTests.check(protected.loadFailure != nil, "格式边界 — 进入写保护")
+        let before = try Data(contentsOf: file)
+        NativeTests.check(!protected.saveTrade(trade(0, .buy, "1", "2026-01-05")), "格式边界 — 写保护阻止保存")
+        let after = try Data(contentsOf: file)
+        NativeTests.check(after == before, "格式边界 — 原文件未被覆盖")
+
+        // 3) 横幅给出「更新 App」而不是「从备份恢复」——后者会用旧备份盖掉更新的账本。
+        NativeTests.check(LedgerStore.bannerText(for: protected.loadFailure ?? "") != L10n.tr(LedgerStore.unreadableMessage),
+                          "格式边界 — 横幅给的是正确处置")
+
+        // 4) 恢复通道同样受约束：更高格式的备份不得被读进来。
+        NativeTests.check((try? LedgerStore.decode(Data(future.utf8))) == nil, "格式边界 — 备份解码也被拒绝")
+
+        // 5) 缺省 format 的旧文件仍可读——这也是「不抬高格式代际」的依据：结构没变。
+        let legacy = #"{"trades":[{"id":"\#(UUID().uuidString)","sequence":0,"symbol":"AAA","side":"buy","date":"2026-01-05","quantity":1,"price":10,"fee":0}]}"#
+        try Data(legacy.utf8).write(to: file)
+        NativeTests.check(isLoaded(LedgerStore.loadResult()), "格式边界 — 缺省 format 的旧文件仍可读")
+    }
+
     // MARK: - 入口
 
     static func run() throws {
@@ -322,6 +421,8 @@ enum SafetyTests {
         }
         try unreadableLedgerIsNotAnEmptyLedger(file)
         try restoreFailureKeepsTheProtection(file)
+        try newerFormatIsRefusedNotSilentlyDowngraded(file)
+        systemTextNeverEntersNote()
         manualTradesRespectThePositionInvariant()
         legacyOversellStillGuardsNewDamage()
         sameDayOrderIsEnforced()

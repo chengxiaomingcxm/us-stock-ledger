@@ -534,6 +534,7 @@ enum L10n {
         "大于 0": "greater than 0",
         "{}最多 500 字。": "{} is at most 500 characters.",
         "账本文件无法读取，已暂停写入以保护原文件；请到「设置 → 从备份恢复」。": "The ledger file could not be read. Writing is paused to protect the original file — restore from a backup in Settings.",
+        "账本由更新版本的 App 写入，本版本无法安全读取；请更新 App。不要用旧备份覆盖它。": "The ledger was written by a newer version of the app and cannot be read safely. Update the app; do not overwrite it with an older backup.",
         "{} 在 {} 的卖出超过当时持仓，账本未改动。": "The sale of {} on {} exceeds the holding at that time. The ledger was not changed.",
         "操作未完成": "Operation not completed",
         "操作失败，账本未改变。": "The operation failed. The ledger was not changed.",

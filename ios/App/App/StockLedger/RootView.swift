@@ -99,8 +99,8 @@ struct RootView: View {
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
                 .background(.orange.opacity(0.22))
-            } else if state.loadFailure != nil {
-                Text(L10n.tr(LedgerStore.unreadableMessage))
+            } else if let failure = state.loadFailure {
+                Text(LedgerStore.bannerText(for: failure))
                     .font(.footnote)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)

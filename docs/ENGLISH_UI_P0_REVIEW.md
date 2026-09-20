@@ -95,8 +95,10 @@ Swift 的字典字面量遇到重复键会在**运行时 trap**（等于启动�
 1. **存量数据里的旧语言说明**：早期版本导入的记录，`note` 里存的中文说明若与当前模板不一致
    （或来自更早的格式），展示时仍会原样显示中文。这是「不改持久化数据」的直接代价，
    不做迁移。
-2. **是否要让新的导入不再把文案写进 `note`**：改写入侧属于改变持久化数据语义，
-   按审计书要求**暂停该项并汇报**，等你决策（详见汇报）。
+2. **写入侧已改（2026-09-20 决策）**：`Trade.note` / `CashRecord.note` 现在只装用户或银行/券商给的原文；
+   系统说明改由结构化字段（`source`+`settlementDate` / `source`+`tax`）在展示层生成。
+   旧 App 不再兼容也不需要兼容，所以不保留「把系统文案写进数据」这条老路。
+   判定为**非 breaking schema change**，因此 `format` 仍为 2；同时补上了此前缺失的格式边界守卫，详见 §7。
 3. `Diagnostics.record` 有 8 处用 `"\(type(of: error))：\(error.localizedDescription)"`：
    只进本机诊断日志、不进界面，归到 **P2**。
 4. `CsvImport.swift` 的解析别名（`说明` / `买` / `卖`）与 CSV 模板表头是**输入约定**，
@@ -106,9 +108,34 @@ Swift 的字典字面量遇到重复键会在**运行时 trap**（等于启动�
 
 | 项目 | 结果 |
 | --- | --- |
-| `scripts/verify.ps1` | **QUALITY GATE PASSED**（148/148 Vitest + `tsc --noEmit && vite build`） |
-| 词典不变量（本地脚本扫描） | 526 条、0 重复、0 空值、0 条英文值残留 CJK/全角 |
+| `scripts/verify.ps1`（本地） | **QUALITY GATE PASSED**（148/148 Vitest + `tsc --noEmit && vite build`） |
+| 远端 `checks`（ubuntu-latest） | run `35489771077` **success**（单元测试、构建、26 个 Playwright E2E） |
+| 远端 `build-ios`（macos-26） | run `35489770981` **success**（`test-native.sh` 含新增 `LanguageTests`、模拟器日历渲染、模拟器截图、`xcodebuild` 编译全部 Swift 源） |
+| 词典不变量（本地扫描） | 527 条、0 重复、0 空值、0 条英文值残留 CJK/全角 |
+| 纯逻辑本地重放（`.scratch/replay-notes.mjs`） | **PASS 28 / FAIL 0**（含 5 个「不得重建」反例） |
 | 英文模式必然显示中文的条目 | 58 → **15**，且 15 条全部已归因（见上） |
-| 原生 Swift 测试 / 模拟器渲染 / 截图 | macOS-only，由本次 commit 的 `build-ios.yml` 执行 |
+
+## 7. 格式代际判定（2026-09-20）
+
+**结论：不构成 Ledger Format breaking schema change，`format` 保持 2。**
+
+依据：本次没有增删字段、没有改字段类型，也没有改到让旧文件被误读——
+业务语义（`settlementDate` / `source` / `externalId` / `settlementAmount` / `tax`）本来就已经结构化，
+`note` 里那段只是冗余的系统文案。按要求逐条核对：
+
+| 检查项 | 结论 |
+| --- | --- |
+| backup / restore | 导出仍是同一个 `Ledger` JSON；**新增守卫**：恢复通道与载入共用 `LedgerStore.decode` |
+| CSV / PDF(HSBC) import | 写入侧改完：系统文案不再进 `note`；CSV 里用户填的「备注/说明」列照旧原样保存 |
+| demo ledger | 示例数据不落盘，但它的 `note` 是生成时定语言的 → 语言切换时重建示例账本 |
+| fixtures | `tests/fixtures/*` 属旧 Web 引擎（v1/v11），与原生 schema 无关，未触碰 |
+| schema validation | **新增**：声明 `format > Ledger.currentFormat` 的文件在载入与恢复两条路径上都被拒绝 |
+| migration / decoder fallback | 无需迁移：缺省字段走默认值；旧版 `note` 里的同一句系统说明仍按模板重建 |
+| tests | `SafetyTests.systemTextNeverEntersNote` + `newerFormatIsRefusedNotSilentlyDowngraded`；`LanguageTests` 补空 `note` 路径；`NativeTests` 导入块断言 note 为空且结构化字段齐全 |
+
+顺带修正：`SettingsView` 里硬编码的账本格式「2」改为读 `Ledger.currentFormat`；
+`docs/ARCHITECTURE.md` 原先写「版本只由文件名承载、没有 in-file 版本字段」，与代码不符，已改正。
+
+新值：格式真的变了才抬高 `Ledger.currentFormat`，并同步 `Ledger` 字段、`SafetyTests` 的格式用例与 `DATA-COMPATIBILITY.md`。
 
 后续：P1（收益页术语与百分比、交易页汇总口径、FAB 遮挡）→ P2（累计曲线可读性、数据与隐私说明、诊断日志标点）→ 终审。

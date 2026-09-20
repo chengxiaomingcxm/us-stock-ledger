@@ -27,7 +27,7 @@ enum LedgerStore {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return .missing }
         do {
             let data = try Data(contentsOf: fileURL)
-            return .loaded(try JSONDecoder().decode(Ledger.self, from: data))
+            return .loaded(try decode(data))
         } catch {
             return .failed(error.localizedDescription)
         }
@@ -35,6 +35,29 @@ enum LedgerStore {
 
     /// 账本读不出来时给用户看的一句话（也是暂停写入的说明）。
     static let unreadableMessage = "账本文件无法读取，已暂停写入以保护原文件；请到「设置 → 从备份恢复」。"
+    /// 文件由更新版本的 App 写入：处置与「损坏」不同——不能建议「从备份恢复」，
+    /// 那会用旧备份覆盖掉更完整的账本。
+    static let newerFormatMessage = "账本由更新版本的 App 写入，本版本无法安全读取；请更新 App。不要用旧备份覆盖它。"
+
+    /// 只读一眼文件里的格式代际；缺失或根本读不出来就交给完整解码去报错。
+    private struct FormatProbe: Decodable { var format: Int? }
+
+    /// 唯一解码入口：载入与「从备份恢复」共用，避免只守住一条路径。
+    /// 拒绝比本版本更新的格式——否则会被「成功解码」成丢字段的账本，而下一次原子写入
+    /// 就把它覆盖了，属于静默数据丢失（docs/PHASE_0_5_REVIEW.md P2-1 记的欠账）。
+    static func decode(_ data: Data) throws -> Ledger {
+        let decoder = JSONDecoder()
+        if let found = (try? decoder.decode(FormatProbe.self, from: data))?.format,
+           found > Ledger.currentFormat {
+            throw LedgerError.message(newerFormatMessage)
+        }
+        return try decoder.decode(Ledger.self, from: data)
+    }
+
+    /// 读不出来时的横幅：格式代际问题给出它自己的处置建议，其余仍是通用那一句。
+    static func bannerText(for failure: String) -> String {
+        failure == L10n.tr(newerFormatMessage) ? L10n.tr(newerFormatMessage) : L10n.tr(unreadableMessage)
+    }
 
     static func save(_ ledger: Ledger) throws {
         try write(encoded(ledger))
@@ -81,7 +104,11 @@ final class AppState: ObservableObject {
             // （Engine.displayedReturn → LedgerDerived.displayReturn），而缓存的失效键是账本与历史，不含语言。
             // 只重绘视图不足以修正它们，必须让缓存重算，否则界面会停在旧语言。
             // 见 docs/ENGLISH_UI_AUDIT.md A1。
-            if oldValue != language { rebuild(ledger) }
+            // 示例账本还要多一步：它的文案（note）在生成时就已本地化，只重算派生缓存
+            // 不够，得按新语言重建示例数据本身；示例是只读沙盒，重建不会丢用户输入。
+            if oldValue != language {
+                if demo { enterDemo() } else { rebuild(ledger) }
+            }
         }
     }
     /// 各股票上一交易日收盘价与日期，由行情同步填入；手动报价不参与今日盈亏基准。

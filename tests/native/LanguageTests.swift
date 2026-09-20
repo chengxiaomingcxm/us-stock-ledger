@@ -97,6 +97,12 @@ enum LanguageTests {
         NativeTests.check(!hasCJK(shown), "结单导入的交易说明按当前语言重建：\(shown)")
         NativeTests.check(shown.contains(settlement), "重建时保留交收日：\(shown)")
 
+        // 新版导入不再把系统文案写进 note（写入侧由 SafetyTests.systemTextNeverEntersNote 守）：
+        // note 为空时仍必须生成同一句。
+        var noNote = imported
+        noNote.note = ""
+        NativeTests.check(Fmt.tradeNote(noNote) == shown, "note 为空时同样生成说明（新版导入的形状）")
+
         L10n.current = .zhHans
         NativeTests.check(Fmt.tradeNote(imported) == imported.note, "中文下重建结果与原说明一致")
 
@@ -124,6 +130,10 @@ enum LanguageTests {
         var reported = net
         reported.tax = Decimal(string: "0.12")!
         NativeTests.check(Fmt.cashNote(reported) == reported.note, "披露了预扣税的记录不重建")
+        // 新版导入的净额分红 note 是空的，同样必须生成说明。
+        var noNoteCash = net
+        noNoteCash.note = ""
+        NativeTests.check(Fmt.cashNote(noNoteCash) == Fmt.cashNote(net), "note 为空时同样生成净额说明")
         // 人工录入的分红不动。
         var manualCash = net
         manualCash.source = "manual"

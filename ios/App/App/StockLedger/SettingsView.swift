@@ -106,7 +106,7 @@ struct SettingsView: View {
 
             Section(L10n.tr("帮助")) {
                 NavigationLink(L10n.tr("使用说明")) { HelpView() }
-                LabeledContent(L10n.tr("账本格式"), value: "2")
+                LabeledContent(L10n.tr("账本格式"), value: "\(Ledger.currentFormat)")
             }
 
             Section {
@@ -129,7 +129,7 @@ struct SettingsView: View {
             case .success(let url):
                 do {
                     let data = try Data(contentsOf: url)
-                    pendingImport = try JSONDecoder().decode(Ledger.self, from: data)
+                    pendingImport = try LedgerStore.decode(data)
                 } catch {
                     Diagnostics.record("RESTORE", "\(type(of: error))：\(error.localizedDescription)")
                     importError = L10n.tr("这不是本应用的账本备份文件，未做任何改动。请选择由「导出账本备份」生成的文件。")
