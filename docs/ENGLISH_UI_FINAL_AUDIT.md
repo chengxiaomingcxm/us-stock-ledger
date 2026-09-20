@@ -123,12 +123,17 @@
 没有一条是渲染出来的界面文案。
 `en-values` 536 条（V1.0 收尾删掉 2 个已无引用的旧 demo 文案键后的值；本轮刚开始时是 538）、0 重复、0 空值、0 条英文值含 CJK/全角。
 
-> 提交 16 以后只动了文档 / 注释 / 用户可见文案（`c171e73`、`f031d0c`、`e72a57b`、`1017ed7`、`6ef18e9`），
-> 其中带 `.swift` 的 `e72a57b` 已经跑过 CI：`checks` `35500279164` / `build-ios` `35500279299` **双绿**；
-> 之后的 `1017ed7`、`6ef18e9` 只改 `*.md`，按两个 workflow 的 `paths-ignore` 本来就不触发 CI，
-> 其 pre-commit 门禁各自打印 `QUALITY GATE PASSED`。每一步都重跑了词典一致性扫描
-> （`swift-scan` OK、`check-l10n` 0 条缺译、只有 1 条已知的 `期初前有 {} 笔交易。`）；
-> 代码与截图的首次 CI 证据是 §3 `build-ios` `35499085355`（对应 `eb7b054`）。
+> 提交 16 以后只动了文档 / 注释 / 用户可见文案（`c171e73`、`f031d0c`、`e72a57b`、`1017ed7`、`6ef18e9`，
+> 以及封版提交 `77081e5`（把 `main` 合入本分支，仅 `AGENTS.md` / `CHANGELOG.md` 受影响）、`dc17f66`、`ae5bbf9`、`3890b44`），
+> 其中带 `.swift` 的 `e72a57b` 跑过完整 CI：`checks` `35500279164` / `build-ios` `35500279299` **双绿**。
+> 封版方式：`main` ← `portfolio/readme` 的 **PR #1**（<https://github.com/chengxiaomingcxm/us-stock-ledger/pull/1>），
+> PR 上的 `checks` 在 `dc17f66`（`35501921553`）与 `ae5bbf9`（`35502286385`）均为 success；
+> 合并后的树另手动 dispatch 了一次 `build-ios`（`35501934875`，head `dc17f66`），覆盖原生测试、
+> 模拟器日历渲染、英文截图渲染与未签名 IPA 打包。纯 `.md` 提交不会触发 `build-ios`（`paths-ignore`），
+> 但作为 PR 事件仍会跑 `checks`；每次提交的 pre-commit 门禁都打印 `QUALITY GATE PASSED`。
+> 每一步都重跑了词典一致性扫描（`swift-scan` OK、`check-l10n` 0 条缺译、只有 1 条已知的 `期初前有 {} 笔交易。`）。
+> 代码与截图的首次 CI 证据是 §3 `build-ios` `35499085355`（对应 `eb7b054`）；
+> **本文所在提交自身的 PR checks 结果见 PR #1 页面**（不在此记录，避免自引用过期）。
 `swift-balance` 会报 `PROBLEMS=1`（`L10n.swift` 圆括号净差 +1）：这是该脚本的已知误报——
 `"报价较早（": "Quote is stale ("` 这类键把半个全角括号放在中文侧、另一半在下一行英文侧，
 ASCII 括号计数跨行不配平；HEAD 版本同样 `net=1`，与本轮改动无关。
