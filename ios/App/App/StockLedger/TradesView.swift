@@ -46,10 +46,13 @@ struct TradesView: View {
 
             Section {
                 let summary = result
+                // 口径（产品定义）：金额是 Σ(股数 × 成交价)，不含手续费；手续费单独一行，不重复计入金额。
                 LabeledContent(L10n.tr("范围内"), value: "\(summary.list.count) \(L10n.tr("笔"))")
-                LabeledContent(L10n.tr("买入"), value: "\(Fmt.quantity(summary.buyQuantity)) \(L10n.tr("股"))")
-                LabeledContent(L10n.tr("卖出"), value: "\(Fmt.quantity(summary.sellQuantity)) \(L10n.tr("股"))")
-                LabeledContent(L10n.tr("手续费"), value: Fmt.money(summary.fees))
+                LabeledContent(L10n.tr("买入"), value: "\(summary.buyCount) \(L10n.tr("笔"))")
+                LabeledContent(L10n.tr("卖出"), value: "\(summary.sellCount) \(L10n.tr("笔"))")
+                LabeledContent(L10n.tr("买入金额"), value: Fmt.money(summary.buyAmount))
+                LabeledContent(L10n.tr("卖出金额"), value: Fmt.money(summary.sellAmount))
+                LabeledContent(L10n.tr("手续费合计"), value: Fmt.money(summary.fees))
                 ProfitRow(label: L10n.tr("已实现收益"), value: summary.hasRealized ? summary.realized : nil)
             } header: {
                 Text(L10n.tr("汇总"))

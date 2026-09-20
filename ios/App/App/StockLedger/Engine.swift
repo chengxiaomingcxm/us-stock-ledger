@@ -343,8 +343,11 @@ enum Engine {
     /// 交易区间筛选与汇总（日期区间、买卖类型、关键字）。
     struct RangeResult {
         var list: [Trade] = []
-        var buyQuantity: Decimal = 0
-        var sellQuantity: Decimal = 0
+        var buyCount = 0
+        var sellCount = 0
+        /// 成交金额 = Σ(股数 × 成交价)，**不含手续费**；手续费单独列示，不混进金额。
+        var buyAmount: Decimal = 0
+        var sellAmount: Decimal = 0
         var fees: Decimal = 0
         var realized: Decimal = 0
         var hasRealized = false
@@ -366,7 +369,16 @@ enum Engine {
             }
             result.list.append(trade)
             result.fees += trade.fee
-            if trade.side == .buy { result.buyQuantity += trade.quantity } else { result.sellQuantity += trade.quantity }
+            // 金额口径按产品定义：股数 × 成交价，不含手续费。
+            // 不用 `gross`：那个在结单导入的行上等于银行舍入后的整笔交收额，
+            // 会让同一个数同时表达「成交额」与「银行现金流」两种含义。
+            if trade.side == .buy {
+                result.buyCount += 1
+                result.buyAmount += trade.quantity * trade.price
+            } else {
+                result.sellCount += 1
+                result.sellAmount += trade.quantity * trade.price
+            }
             if trade.side == .sell, let gain = gains[trade.id] {
                 result.realized += gain
                 result.hasRealized = true

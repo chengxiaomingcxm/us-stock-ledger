@@ -349,6 +349,34 @@ enum EngineGoldenTests {
         expectNil(result.pnl, "todayPnl/基准日期异常 — 待补全")
     }
 
+    // MARK: - Engine.range
+
+    /// 区间汇总口径（交易页）：金额 = Σ(股数 × 成交价)，**不含手续费**；手续费单独列示。
+    /// 期望值人工推导：买入 10×100 + 5×200 = 2000；卖出 4×120 = 480；手续费 1+2+1 = 4。
+    private static func rangeSummary() {
+        var ledger = Ledger()
+        ledger.trades = [
+            trade(0, "AAPL", .buy, "2026-01-05", "10", "100", "1"),
+            trade(1, "MSFT", .buy, "2026-01-06", "5", "200", "2"),
+            trade(2, "AAPL", .sell, "2026-01-07", "4", "120", "1"),
+            trade(3, "AAPL", .buy, "2025-12-30", "1", "90", "0"),
+        ]
+        let inRange = Engine.range(ledger, from: "2026-01-01", to: "2026-01-31", side: nil, query: "")
+        NativeTests.check(inRange.list.count == 3, "区间汇总 — 区间内 3 笔（区间外那笔不计）")
+        NativeTests.check(inRange.buyCount == 2 && inRange.sellCount == 1, "区间汇总 — 买 2 笔、卖 1 笔")
+        // 若把手续费并进金额，这两个数会变成 2003 / 481：断言本身就把「不含费」钉住了。
+        expect(inRange.buyAmount, "2000", "区间汇总 — 买入金额 = 10×100 + 5×200，不含费")
+        expect(inRange.sellAmount, "480", "区间汇总 — 卖出金额 = 4×120，不含费")
+        expect(inRange.fees, "4", "区间汇总 — 手续费 1 + 2 + 1")
+        NativeTests.check(inRange.hasRealized, "区间汇总 — 区间内有平仓交易，已实现收益应可显示")
+
+        // 只看卖出侧：买入侧的笔数与金额必须是 0，而不是残留累计值。
+        let sellsOnly = Engine.range(ledger, from: "", to: "", side: .sell, query: "")
+        NativeTests.check(sellsOnly.buyCount == 0 && sellsOnly.sellCount == 1, "区间汇总 — 只看卖出时买入侧为 0 笔")
+        expect(sellsOnly.buyAmount, "0", "区间汇总 — 只看卖出时买入金额为 0")
+        expect(sellsOnly.sellAmount, "480", "区间汇总 — 只看卖出时卖出金额不变")
+    }
+
     // MARK: - 入口
 
     static func run() {
@@ -366,5 +394,6 @@ enum EngineGoldenTests {
         todayPnlPositionChange()
         todayPnlSameDaySell()
         todayPnlStaleBaseline()
+        rangeSummary()
     }
 }
