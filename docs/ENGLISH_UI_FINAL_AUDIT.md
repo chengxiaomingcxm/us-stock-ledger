@@ -25,7 +25,9 @@
 | 13 | `c5021b2` | P2 报告 + 本文件（Phase C 最终审计） |
 | 14 | `006306b` | **最终 UI 轮**：删除浮动 FAB，新增入口改为导航栏 `+`；首页 P&L 两行合并为一行 |
 | 15 | `eb7b054` | **V1.0 收尾**：设置信息架构、原生 1.0 数据基线、截图宿主改为非示例模式、本文件与 FAB 相关的描述同步（§7） |
-| 16 | 本提交 | README 截图全部换成本轮 CI 产出的图；README / HELP / issue 模板的导航路径与按钮文案同步到新架构 |
+| 16 | `c171e73` | README 截图全部换成本轮 CI 产出的图；README / HELP / issue 模板的导航路径与按钮文案同步到新架构 |
+| 17 | `f031d0c` | README 文案与实际 App 对齐（去掉不存在的「清空」、修正 `import.png` 的截图标题与 Demo 标签）；删两个无引用的旧 demo 文案键 |
+| 18 | 本提交 | Help 的账本格式说明去掉「测试版 / 旧 Web 版」措辞（只留兼容边界）；§3 的词条数同步为 536 |
 
 聚合改动量（`git diff --shortstat 62b7b49^..c5021b2`；**不含** §7 的最后两轮）：
 
@@ -118,7 +120,11 @@
 （原第 6 条是 `Models.swift` 里用于**比对**历史 note 的 `"汇丰月结单；交收日 "` 常量，
 本轮删除 1.0 前的兼容分支后它一并消失。）
 没有一条是渲染出来的界面文案。
-`en-values` 538 条、0 重复、0 空值、0 条英文值含 CJK/全角。
+`en-values` 536 条（V1.0 收尾删掉 2 个已无引用的旧 demo 文案键后的值；本轮刚开始时是 538）、0 重复、0 空值、0 条英文值含 CJK/全角。
+
+> 提交 16以后只动了文档 / 注释 / 用户可见文案（`c171e73`、`f031d0c`、本提交），
+> 每一步都重跑了本地门禁与词典一致性扫描（`swift-scan` OK、`check-l10n` 报告 0 条缺译、
+> 只有 1 条已知的 `期初前有 {} 笔交易。`）；代码逻辑与截图的 CI 证据是 §3 `build-ios` `35499085355`（对应 `eb7b054`）。
 `swift-balance` 会报 `PROBLEMS=1`（`L10n.swift` 圆括号净差 +1）：这是该脚本的已知误报——
 `"报价较早（": "Quote is stale ("` 这类键把半个全角括号放在中文侧、另一半在下一行英文侧，
 ASCII 括号计数跨行不配平；HEAD 版本同样 `net=1`，与本轮改动无关。
@@ -217,7 +223,7 @@ CI 在模拟器上真的启动过 App（`scripts/test-screenshots.sh` 渲染 6 �
 
 | # | 检查项 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 1 | English 模式没有产品自身产生的中文文本 | ✅ | `i18n-scan` 裸字面量 **raw=0**（修复前是 1，见 §3）；`leak-scan` **composed=0**；538 条英文值 0 条含 CJK/全角（V1.0 收尾后重跑） |
+| 1 | English 模式没有产品自身产生的中文文本 | ✅ | `i18n-scan` 裸字面量 **raw=0**（修复前是 1，见 §3）；`leak-scan` **composed=0**；536 条英文值 0 条含 CJK/全角（V1.0 收尾后重跑），且 396 个代码引用键全部命中词典（独立复核，0 缺译） |
 | 2 | 日期 locale 正确 | ✅ | `RootView.displayLocale` + `.environment(\.locale, …)`；数据层仍用 `DateFormatter.ledgerDate`（`en_US_POSIX`）；`LanguageTests` 覆盖切语言重算 |
 | 3 | Trades Date Range 实际过滤正确 | ✅ | `Engine.range` + `EngineGoldenTests.rangeSummary()` 断言区间外那笔不计入 |
 | 4 | All / Buy / Sell + Date Range 组合正确 | ✅ | 同上；只看卖出时买入侧笔数与金额必须为 0 |
