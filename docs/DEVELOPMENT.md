@@ -112,6 +112,8 @@ python3 scripts/publish-release.py
 
 The script reads `releases/vX.Y.Z.json`, compares it with the tag and the uploaded assets, calls `scripts/verify-ipa.py` to validate the IPA, and publishes the release. `releases/vX.Y.Z.md` holds the human-readable notes (highlights, improvements, known limitations); `CHANGELOG.md` holds the running history.
 
+`releases/*.json` is the pipeline's input list, and every manifest is walked on each run: one entry whose tag, assets or digest do not match a published release stops the whole run. `v1.0.0` predates the pipeline (published by hand, so its release carries no `UPGRADE-` asset and its tag sits at the commit that added the manifest), which is why it keeps its notes file and has no manifest.
+
 `.github/workflows/publish-release.yml` runs the same script on dispatch, or on a push to `main` that touches `releases/**` or the release script itself. Versioning is semantic and follows the existing tags — do not renumber an existing release.
 
 ## Repository Conventions
