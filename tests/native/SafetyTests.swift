@@ -314,7 +314,7 @@ enum SafetyTests {
     /// note 只装用户/来源数据；系统说明一律由结构化字段在展示层生成。
     /// 这里守的是「系统文案绝不得覆盖用户写的东西」，所以它属于数据安全。
     private static func systemTextNeverEntersNote() {
-        let imported = Trade(sequence: 1, symbol: "AAA", side: .buy, date: "2026-01-05",
+        var imported = Trade(sequence: 1, symbol: "AAA", side: .buy, date: "2026-01-05",
                              quantity: 1, price: 10, fee: 0)
         imported.source = "hsbc-statement"
         imported.settlementDate = "2026-01-07"
