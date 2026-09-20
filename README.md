@@ -8,7 +8,7 @@
 
 A native SwiftUI app for iPhone. No account, no cloud sync, no analytics: your ledger is one JSON file inside the app's own `Documents` folder, and quote API keys live in the iOS Keychain.
 
-**Current version: 1.0.1 (build 6)** — iOS 16+. The native 1.0 line is the product baseline; the retired web app's version numbers, tags and release notes are kept separate from it.
+**Current version: native 1.0.1 (build 6)** — iOS 16+. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
 
 > **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
