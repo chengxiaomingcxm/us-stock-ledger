@@ -3,6 +3,10 @@
 > 任务：Portfolio Polish Phase — English Version UI/UX & Functional Audit
 > 本文件是 **Phase A（AUDIT）产物：只审计，未改任何代码**。
 > 结论全部带 `文件:行号`，可用文末两个扫描脚本复现。基线：`portfolio/readme` @ `40daee3`。
+>
+> **后续状态（V1.0 收尾轮追加）**：文中 `[P1-5]` / `[P1-6]` 的浮动 FAB 遮挡问题，最终以**删除该 FAB** 解决——
+> 新增入口改为 Holdings / Trades 导航栏右上角的 `+`（提交 `006306b`）。
+> **当前要求以 [`docs/ENGLISH_UI_FINAL_AUDIT.md`](ENGLISH_UI_FINAL_AUDIT.md) 为准，本文只作历史记录。**
 
 ## 0. 审计工具（可复现）
 
