@@ -12,6 +12,14 @@ A native SwiftUI app for iPhone. No account, no cloud sync, no analytics: your l
 
 > **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
+## Demo Video
+
+A short walkthrough: the sample ledger (holdings, returns, daily-return calendar, trades), the HSBC investment-statement import — PDF selection → parser → import preview — and settings.
+
+https://github.com/user-attachments/assets/74133eae-a0a3-4f36-99aa-370a8caa8923
+
+All portfolio data and the HSBC investment statement shown in this demo are synthetic and contain no real customer or account information.
+
 ## Features
 
 Broker apps answer "what do I hold?". This one answers the questions an individual investor actually asks:
@@ -52,9 +60,7 @@ Six screens, rendered on an iPhone simulator from the built-in demo ledger (Engl
 
 No sign-up and no data required. Open **Settings → Support → Demo** and tap **Try demo ledger** to explore a sample portfolio (trades, dividends, fees and an opening balance); tap **Exit demo mode** when you are ready to enter your own numbers. Demo Mode is isolated: it lives in memory only and never writes into your real ledger.
 
-### Demo video (planned)
-
-A 60–90 second portfolio showcase video will be recorded and embedded here — launch → Demo → dashboard → portfolio → transaction → calendar → import → settings. It is a showcase, not a tutorial.
+The demo video is at the top of this README: [Demo Video](#demo-video).
 
 ## Architecture
 
@@ -253,7 +259,7 @@ None of these are bugs — they are the current scope.
 - [x] Demo Mode
 - [x] Screenshot showcase
 - [x] Architecture, development and case-study documentation
-- [ ] Demo video (60–90 seconds)
+- [x] Demo video
 - [ ] Release hardening
 
 **Future / optional**
