@@ -42,6 +42,20 @@ enum ErrorPathTests {
         NativeTests.check(text.contains("SAVE"), "写盘失败：技术原文进了诊断日志（SAVE）")
         NativeTests.check(text.contains("Boom"), "写盘失败：日志里带异常类型，便于定位")
 
+        // 同数量恢复后，点击导出使用的序列化入口必须读取恢复后的账本。
+        let restored = AppState(ledger: ledger, settings: QuoteSettings(), persist: { _ in })
+        let firstExport = try LedgerStore.exportText(restored.ledger)
+        var backup = ledger
+        backup.trades[0].price = 20
+        backup.opening = CashOpening(amount: 1234, date: "2026-01-01")
+        NativeTests.check(restored.replaceFromBackup(backup), "备份导出：恢复同数量账本成功")
+        let latestExport = try LedgerStore.exportText(restored.ledger)
+        let roundtrip = try LedgerStore.decode(Data(latestExport.utf8))
+        NativeTests.check(firstExport != latestExport && roundtrip.trades.count == ledger.trades.count,
+                          "备份导出：数量相同但内容更新")
+        NativeTests.check(roundtrip.trades[0].price == 20 && roundtrip.opening?.amount == 1234,
+                          "备份导出：交易与期初使用恢复后内容")
+
         // 示例模式与读取失败保护的文案契约由 SafetyTests / DemoModeTests 覆盖，这里不重复。
     }
 }

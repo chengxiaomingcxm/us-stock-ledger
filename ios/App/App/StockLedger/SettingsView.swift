@@ -147,7 +147,6 @@ struct ImportExportView: View {
 struct BackupRestoreView: View {
     @EnvironmentObject private var state: AppState
 
-    @State private var exportText: String?
     @State private var exportError: String?
     @State private var showingImporter = false
     @State private var pendingImport: Ledger?
@@ -158,14 +157,8 @@ struct BackupRestoreView: View {
     var body: some View {
         List {
             Section {
-                if exportText != nil {
-                    Button {
-                        shareBox = ShareBox(value: exportText ?? "")
-                    } label: {
-                        Label(L10n.tr("导出账本备份"), systemImage: "square.and.arrow.up")
-                    }
-                } else {
-                    Label(L10n.tr("导出账本备份"), systemImage: "square.and.arrow.up").foregroundStyle(.secondary)
+                Button(action: exportBackup) {
+                    Label(L10n.tr("导出账本备份"), systemImage: "square.and.arrow.up")
                 }
                 Button {
                     showingImporter = true
@@ -185,9 +178,6 @@ struct BackupRestoreView: View {
             }
         }
         .navigationTitle(L10n.tr("备份与恢复"))
-        .task { refreshExport() }
-        .onChange(of: state.ledger.trades.count) { _ in refreshExport() }
-        .onChange(of: state.ledger.cash.count) { _ in refreshExport() }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
             switch result {
             case .success(let url):
@@ -226,13 +216,13 @@ struct BackupRestoreView: View {
         }
     }
 
-    /// 导出失败要能看见：以前 `try?` 把失败吞掉，只表现为按钮变灰。
-    private func refreshExport() {
+    /// 点击时生成当前账本快照；记录数量不变的恢复、编辑和报价更新也包含在内。
+    private func exportBackup() {
         do {
-            exportText = try LedgerStore.exportText(state.ledger)
+            shareBox = ShareBox(value: try LedgerStore.exportText(state.ledger))
             exportError = nil
         } catch {
-            exportText = nil
+            shareBox = nil
             Diagnostics.record("EXPORT", error: error)
             exportError = L10n.tr("导出失败，账本数据仍在本机；请稍后重试。")
         }

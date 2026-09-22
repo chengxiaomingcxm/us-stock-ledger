@@ -26,6 +26,7 @@ enum CsvImportTests {
         try invalidFile()
         try duplicates()
         try oversellBatch()
+        try sameDayBatchOrder()
         try messages()
     }
 
@@ -145,6 +146,34 @@ enum CsvImportTests {
         let fits = try CsvImport.analyze(text: "Date,Symbol,Side,Quantity,Price,Fee\n2026-09-10,AAPL,SELL,5,120,0",
                                          ledger: holding)
         NativeTests.check(fits.batchError == nil, "超卖：卖满持仓不算超卖")
+    }
+
+    /// 独立手算：100@10 + 100@20 后卖 100@30，已实现 1500，余成本 1500。
+    /// 之后原有的 1@10 加入，最终成本 1510、股数 101。反转买卖会错误算成 2000/2010。
+    private static func sameDayBatchOrder() throws {
+        let old = Ledger(trades: [
+            Trade(sequence: 0, symbol: "AAA", side: .buy, date: "2026-01-01", quantity: 100, price: 10, fee: 0),
+            Trade(sequence: 1, symbol: "AAA", side: .buy, date: "2026-01-02", quantity: 1, price: 10, fee: 0),
+        ])
+        let report = try CsvImport.analyze(text: "Date,Symbol,Side,Quantity,Price,Fee\n2026-01-02,AAA,BUY,100,20,0\n2026-01-02,AAA,SELL,100,30,0", ledger: old)
+        let incoming = report.rows.compactMap(\.trade)
+        let before = CsvImport.candidate(ledger: old, rows: report.rows, insertBeforeSameDay: true)
+        NativeTests.check(before.orderedTrades.map(\.id) == [old.trades[0].id, incoming[0].id, incoming[1].id, old.trades[1].id], "插前：保留批次买卖顺序")
+        NativeTests.check(CsvImport.validate(before) == nil, "插前：历史持仓合法")
+        let summary = Engine.summary(before)
+        NativeTests.check(summary.realized == 1500 && summary.cost == 1510 && summary.open.first?.quantity == 101,
+                          "插前：已实现1500、剩余成本1510、股数101")
+        let after = CsvImport.candidate(ledger: old, rows: report.rows, insertBeforeSameDay: false)
+        NativeTests.check(after.orderedTrades.map(\.id) == [old.trades[0].id, old.trades[1].id, incoming[0].id, incoming[1].id], "追加：原有顺序不变")
+        let empty = CsvImport.merge([], incoming, insertBeforeSameDay: true)
+        NativeTests.check(empty.map(\.id) == incoming.map(\.id), "空账本插前：先买后卖不反转")
+        NativeTests.check(CsvImport.validate(Ledger(trades: empty)) == nil, "空账本插前：不制造超卖")
+        let mixed = CsvImport.merge([], [incoming[0], old.trades[0], incoming[1]], insertBeforeSameDay: true)
+        NativeTests.check(mixed.map(\.id) == [old.trades[0].id, incoming[0].id, incoming[1].id], "跨日期插前：日期升序、同日原顺序")
+        NativeTests.check(before.trades.map(\.sequence) == Array(0..<4), "插前：sequence 唯一连续")
+        let rows = incoming.map { HSBCStatement.Row(id: $0.id.uuidString, trade: $0, currency: "USD") }
+        let pdf = try HSBCStatement.candidate(rows: rows, ledger: old, insertBefore: true)
+        NativeTests.check(pdf.orderedTrades.map(\.id) == before.orderedTrades.map(\.id), "PDF：共用合并路径保留买卖顺序")
     }
 
     // MARK: - 错误文案可翻译（Phase 3 的契约）

@@ -416,7 +416,8 @@ enum CsvImport {
     /// 合并后统一按数组顺序重排 sequence，保持 (日期, sequence) 排序语义。
     static func merge(_ existing: [Trade], _ imported: [Trade], insertBeforeSameDay: Bool) -> [Trade] {
         var result = Ledger.sortedTrades(existing)
-        for trade in imported {
+        // 插入同日首位时倒序遍历，才能保留批次原有的买卖顺序。
+        for trade in insertBeforeSameDay ? Array(imported.reversed()) : imported {
             if insertBeforeSameDay {
                 if let index = result.firstIndex(where: { $0.date >= trade.date }) { result.insert(trade, at: index) }
                 else { result.append(trade) }
