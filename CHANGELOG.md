@@ -6,11 +6,11 @@
 - 备份在点击导出时生成当前账本快照，恢复记录数量相同的备份后也不会导出旧内容。
 - 增加原生回归断言和备份按钮接线检查。格式 2、存储路径、应用标识和密钥设置不变。
 
-修复及验证说明见 [build 7 修复记录](docs/BUILD_7_P1_FIXES.md)。旧 `v1.0.1` 标签与 build 6 Release 资产保留；build 7 从 main 的 Actions 构建获取。
+修复及验证说明见 [build 7 修复记录](docs/BUILD_7_P1_FIXES.md)，最终发布信息见 [1.0.1 build 7](releases/v1.0.1-build7.md)。
 
 ## 原生版 1.0.1 · build 6 · 2026-09-19
 
-Portfolio Polish。这一版**没有改收益口径、没有新增交易功能**，重心是首次体验、错误可读性与工程闭环。完整的对外说明见 [releases/v1.0.1.md](releases/v1.0.1.md)。
+Portfolio Polish。这一版**没有改收益口径、没有新增交易功能**，重心是首次体验、错误可读性与工程闭环。
 
 这一版包含：
 

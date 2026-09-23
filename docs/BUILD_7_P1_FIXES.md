@@ -23,7 +23,7 @@ CSV 和汇丰 PDF 共用 `CsvImport.merge`。插入已有同日记录之前时�
 - MARKETING_VERSION / package.json：1.0.1。
 - CURRENT_PROJECT_VERSION：7（Debug、Release 同步）。
 - `com.personal.stockledger`、`Documents/ledger-v2.json`、format 2 与 Keychain 键不变。
-- 不改写旧 `v1.0.1` 标签或 build 6 Release 资产，也不修改旧发布清单。
+- 最终 GitHub Release 使用新标签 `v1.0.1-build7`，旧标签和 Git 历史不改写。旧 Release 及资产已清理。
 - 审计报告保留原审计日期与原结论，本文件记录后续修复。
 
 ## 验证

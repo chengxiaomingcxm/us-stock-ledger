@@ -91,7 +91,7 @@ pnpm build                              # type check + production build of the w
 bash scripts/build-unsigned-ios.sh      # macOS — the unsigned IPA, with a .sha256 next to it
 ```
 
-`build-unsigned-ios.sh` produces `build/StockLedger-unsigned.ipa`. `scripts/verify-ipa.py` checks that IPA's structure (Mach-O / ARM64, bundle id, embedded `public/index.html`) and compares it with the `.sha256` written next to it; matching an IPA against `releases/*.json` is `scripts/publish-release.py`'s job.
+`build-unsigned-ios.sh` produces `build/StockLedger-unsigned.ipa`. `scripts/verify-ipa.py` checks that IPA's structure (Mach-O / ARM64, bundle id, embedded `public/index.html`) and compares it with the `.sha256` written next to it.
 
 ## Quality Gate
 
@@ -108,15 +108,7 @@ There is deliberately no `--no-verify` escape hatch documented here: if the gate
 
 ## Release
 
-```sh
-python3 scripts/publish-release.py
-```
-
-The script reads `releases/vX.Y.Z.json`, compares it with the tag and the uploaded assets, calls `scripts/verify-ipa.py` to validate the IPA, and publishes the release. `releases/vX.Y.Z.md` holds the human-readable notes (highlights, improvements, known limitations); `CHANGELOG.md` holds the running history.
-
-`releases/*.json` is the pipeline's input list, and every manifest is walked on each run: one entry whose tag, assets or digest do not match a published release stops the whole run. `v1.0.0` predates the pipeline (published by hand, so its release carries no `UPGRADE-` asset and its tag sits at the commit that added the manifest), which is why it keeps its notes file and has no manifest.
-
-`.github/workflows/publish-release.yml` runs the same script on dispatch, or on a push to `main` that touches `releases/**` or the release script itself. Versioning is semantic and follows the existing tags — do not renumber an existing release.
+The project is sealed at **1.0.1 build 7**. [`releases/v1.0.1-build7.md`](../releases/v1.0.1-build7.md) is the only retained release note. The published IPA is the verified artifact from main commit `97c36ee`; old release manifests and assets are intentionally not retained. `CHANGELOG.md` remains the source history.
 
 ## Repository Conventions
 

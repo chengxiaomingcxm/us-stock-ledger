@@ -1,8 +1,0 @@
-{
-  "version": "1.25.0",
-  "build": "8",
-  "commit": "d1cc68bc458388354d876747c214d8938eed65f4",
-  "run_id": 35166691394,
-  "artifact": "StockLedger-unsigned-IPA",
-  "sha256": "045c3f8604e458d7a04cf3e8e882c50d2e8928bfd72777fd9175e29296de60b6"
-}
