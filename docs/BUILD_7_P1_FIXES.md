@@ -28,4 +28,10 @@ CSV 和汇丰 PDF 共用 `CsvImport.merge`。插入已有同日记录之前时�
 
 ## 验证
 
-本地质量门禁通过：Vitest 149 项 / 14 文件，TypeScript 类型检查与 Vite 构建通过。Windows 不直接编译 Swift；原生测试、模拟器渲染和设备 IPA 由 macOS Actions 验证，完成后补记结果。
+本地质量门禁通过：Vitest 149 项 / 14 文件，TypeScript 类型检查与 Vite 构建通过。
+
+main 提交 `97c36ee` 的 [Checks](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35732783809) 通过：Vitest 149 项、Playwright 26 项、类型检查及构建全部成功。[Build unsigned iOS IPA](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/35732783834) 也已通过：原生 Swift 测试、日历渲染、英文界面截图、设备构建和 IPA 上传均成功。
+
+下载后使用 `scripts/verify-ipa.py` 校验：版本 1.0.1、build 7、bundle id `com.personal.stockledger`、iPhoneOS ARM64、最低 iOS 16.0，不依赖外部开发服务器。IPA 未签名，需自行签名安装。
+
+SHA-256：`705ee38a7597471c25174ffc4b873ecd5650e3b96822f8188a49cc8fb9b41648`。
