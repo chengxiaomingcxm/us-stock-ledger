@@ -1,12 +1,12 @@
 import Foundation
 import Security
 
-// 原生版行情：来源设置与 API Key 存入系统钥匙串，报价按来源解析后写入账本。
-// Tiingo / Yahoo / Nasdaq 只提供已完成交易日的收盘价，Finnhub / 自定义接口提供最新报价。
+// 原生版行情：来源设置与 API Key 存入系统钥匙串，校验后的报价写入账本。
+// Tiingo 提供 IEX 当前参考价和 EOD 日线；Yahoo / Nasdaq 提供收盘兜底。
 // 任何解析失败都抛出明确原因，绝不用 0 或旧价格替代。
 
 enum QuoteProvider: String, Codable, CaseIterable, Identifiable {
-    case yahoo, finnhub, custom
+    case yahoo, finnhub, custom, tiingo
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum QuoteProvider: String, Codable, CaseIterable, Identifiable {
         case .yahoo: return L10n.tr("Yahoo 收盘价")
         case .finnhub: return L10n.tr("Finnhub 最新报价")
         case .custom: return L10n.tr("自定义 HTTPS 接口")
+        case .tiingo: return L10n.tr("Tiingo 最新报价")
         }
     }
 
@@ -23,6 +24,7 @@ enum QuoteProvider: String, Codable, CaseIterable, Identifiable {
         case .yahoo: return L10n.tr("免密钥，取已完成交易日的收盘价，盘中不提供当日最新价。")
         case .finnhub: return L10n.tr("需 API Key，提供盘中最新报价与上一交易日收盘。")
         case .custom: return L10n.tr("地址必须为 HTTPS 且包含 {symbol} 占位符。")
+        case .tiingo: return L10n.tr("使用 Tiingo IEX 参考报价；行情权限取决于账户。")
         }
     }
 }
@@ -41,13 +43,21 @@ struct QuoteSettings: Codable, Equatable {
     var priceMode: String? = nil // nil/auto: completed close outside regular hours; close/live: explicit choice
 }
 
-struct LiveQuote {
+struct MarketQuote {
     var price: Decimal
     var date: String
     var previousClose: Decimal?
     var previousCloseDate: String?
     var source: String
+    var open: Decimal? = nil
+    var high: Decimal? = nil
+    var low: Decimal? = nil
+    var volume: Int64? = nil
+    var fetchedAt: Date? = nil
+    var isStale = false
 }
+
+typealias LiveQuote = MarketQuote
 
 // MARK: - 美东交易日
 
@@ -185,6 +195,8 @@ enum QuoteService {
                   url.fragment == nil else {
                 throw QuoteError.message("接口必须为 HTTPS，包含 {symbol}，且不含账号、密码或片段。")
             }
+        case .tiingo:
+            break // The Tiingo key is optional until this provider is requested.
         }
         return clean
     }
@@ -210,11 +222,19 @@ enum QuoteService {
             return try await fetchFinnhub(symbol: symbol, key: clean.key, now: now)
         case .custom:
             return try await fetchCustom(symbol: symbol, template: clean.url, key: clean.key, now: now)
+        case .tiingo:
+            let result = await MarketDataService.shared.quotes(for: [symbol], key: clean.tiingoKey ?? "", now: now)
+            if let quote = result.quotes[symbol.uppercased()] { return quote }
+            throw MarketDataError(kind: clean.tiingoKey?.isEmpty == false ? .noData : .missingAPIKey)
         }
     }
 
     /// 每次刷新最多同时发起 2 个请求，避免触发免费档限流。
-    static func fetchAll(symbols: [String], settings: QuoteSettings) async -> (quotes: [String: LiveQuote], errors: [String: String]) {
+    static func fetchAll(symbols: [String], settings: QuoteSettings, marketDataService: MarketDataService = .shared) async -> (quotes: [String: LiveQuote], errors: [String: String]) {
+        if settings.provider == .tiingo, !usesClosingPrices(settings) {
+            let result = await marketDataService.quotes(for: symbols, key: settings.tiingoKey ?? "")
+            return (result.quotes, result.errors)
+        }
         var quotes: [String: LiveQuote] = [:]
         var errors: [String: String] = [:]
         var index = 0
@@ -444,17 +464,9 @@ enum QuoteService {
     // MARK: Tiingo 日线
 
     private static func fetchTiingoSeries(symbol: String, key: String, now: Date = Date()) async throws -> DailySeries {
-        let provider = providerSymbol(symbol)
-        let escaped = provider.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? provider
-        let end = MarketClock.date(now)
-        let start = MarketClock.date(now.addingTimeInterval(-100 * 86_400))
-        guard var components = URLComponents(string: "https://api.tiingo.com/tiingo/daily/\(escaped)/prices") else {
-            throw QuoteError.message("接口地址无效。")
-        }
-        components.queryItems = [URLQueryItem(name: "startDate", value: start), URLQueryItem(name: "endDate", value: end)]
-        guard let url = components.url else { throw QuoteError.message("接口地址无效。") }
-        let raw = try await get(url, headers: ["Authorization": "Token \(key)"])
-        return try parseTiingo(raw, symbol: symbol, now: now)
+        try await TiingoMarketDataProvider().historicalSeries(for: symbol,
+                                                              from: now.addingTimeInterval(-100 * 86_400),
+                                                              to: now, key: key, now: now)
     }
 
     static func parseTiingo(_ raw: Any, symbol: String, now: Date = Date()) throws -> DailySeries {
@@ -660,7 +672,7 @@ enum QuoteService {
 }
 
 /// 行情请求不跟随跳转、不保存 Cookie，避免把密钥带到其他主机。
-private final class NoRedirectSession: NSObject, URLSessionTaskDelegate {
+final class NoRedirectSession: NSObject, URLSessionTaskDelegate {
     static let shared = NoRedirectSession()
 
     private lazy var session: URLSession = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)

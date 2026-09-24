@@ -35,7 +35,7 @@ struct Quote: Identifiable, Codable, Hashable {
     var symbol: String
     var price: Decimal
     var date: String
-    var source: String?      // manual / manual-close / yahoo-close / finnhub-live / custom-live
+    var source: String?      // manual / manual-close / yahoo-close / tiingo-live / finnhub-live / custom-live
     var fetchedAt: Date?
     var previousClose: Decimal? = nil
     var previousCloseDate: String? = nil
@@ -46,13 +46,15 @@ struct Quote: Identifiable, Codable, Hashable {
         switch source {
         case "yahoo-close": return L10n.tr("美股收盘")
         case "manual-close": return L10n.tr("手动收盘价")
+        case "tiingo-live": return L10n.tr("Tiingo 报价")
         case "finnhub-live": return L10n.tr("Finnhub 报价")
         case "custom-live": return L10n.tr("接口报价")
         default: return L10n.tr("手动报价")
         }
     }
 
-    var isLive: Bool { source == "finnhub-live" || source == "custom-live" }
+    var isLive: Bool { source == "tiingo-live" || source == "finnhub-live" || source == "custom-live" }
+    var isStale: Bool { source == "tiingo-live" && (fetchedAt.map { Date().timeIntervalSince($0) >= 60 } ?? true) }
 }
 
 enum CashKind: String, Codable, CaseIterable, Identifiable {

@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/74133eae-a0a3-4f36-99aa-370a8caa8923
 - 今日盈亏：上一收盘 + 当前价格 + 当日买卖和手续费；缺行情显示「待补全」，不以零代替。
 - 现金账本：期初余额、入金、出金、手动分红（含税费）和账户费用。
 - 每日收益日历和累计收益曲线（每周刻度 + 零轴）。
-- 历史收盘配置后优先使用 Tiingo，并由 Yahoo、Nasdaq 兜底；盘中报价使用 Yahoo、Finnhub 或自定义 HTTPS 接口。
+- 历史收盘配置后优先使用 Tiingo，并由 Yahoo、Nasdaq 兜底；也可选用 Tiingo IEX 参考报价计算当前持仓市值。
 - 导入带预览确认：券商交易/资金 CSV 和汇丰投资结单 PDF（PDFKit）。
 - 本地 JSON 备份与恢复；超过 30 天未备份有提醒。
 - 深/浅色、红涨绿跌／绿涨红跌、动态字体和 VoiceOver。
@@ -72,7 +72,7 @@ flowchart TD
     State["AppState（ObservableObject）<br/>持有 Ledger，发布变更"]
     Engine["Engine —— 纯计算<br/>成本价 · 已实现 / 浮动<br/>现金汇总 · 今日盈亏 · 每日收益"]
     Store["LedgerStore —— 持久化<br/>Documents/ledger-v2.json"]
-    Quotes["QuoteService<br/>Yahoo · Finnhub · 自定义 HTTPS"]
+    Quotes["MarketDataService → MarketDataProvider<br/>Tiingo IEX · QuoteService 历史兜底"]
     Import["CsvImport / StatementImport<br/>CSV · PDFKit（汇丰）"]
     Diag["Diagnostics —— 本机日志"]
 
@@ -90,7 +90,7 @@ flowchart TD
 - **`AppState`**：持有 `Ledger`，校验修改，并触发持久化。
 - **`Engine`**：纯函数、无副作用 —— 加权平均成本、已实现与浮动收益、现金汇总、今日盈亏、每日收益率、收益快照。
 - **`LedgerStore`**：读写单一带版本号的 JSON 文件；`Models.swift` 放 Codable 模型与校验规则。
-- **`QuoteService`**：拉收盘价、归一化、写回账本缓存。网络出错时降级成「待补全」，而不是把界面弄崩；API Key 从钥匙串读。
+- **`MarketDataService` / `MarketDataProvider`**：请求 Tiingo IEX 当前参考价、合并重复代码并短暂缓存。`QuoteService` 保留现有日线和 Yahoo/Nasdaq 兜底；持仓仍由账本报价和现有计算引擎估值。
 - **`CsvImport` / `HSBCStatement`**：先解析校验，产出一份可复核的 `ImportReport`，之后才写入。
 - **`Diagnostics`**：把系统原始错误文本挡在用户可见文案之外，同时在本机记录下来。
 
@@ -100,7 +100,8 @@ flowchart TD
 用户 → SwiftUI 视图 → AppState → Ledger（已校验）→ LedgerStore → Documents/ledger-v2.json
                                  ↘ Engine → 派生快照 → SwiftUI 视图
 
-AppState → QuoteService → Tiingo / Yahoo / Nasdaq / Finnhub / 自定义 HTTPS → 归一化 → Ledger（缓存收盘价）
+AppState → MarketDataService → MarketDataProvider → Tiingo IEX → 校验报价 → Ledger → Engine
+AppState → QuoteService → Tiingo 日线 / Yahoo / Nasdaq → 归一化历史 → Ledger
 
 CSV 或 PDF → CsvImport / HSBCStatement → 逐行校验 → 预览 → AppState → Ledger
 ```
@@ -203,6 +204,12 @@ open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 
 开发在 `deepseek-dev` 上进行；审核通过后合并到 `main`，正式 IPA 只从 `main` 构建。只能在 macOS 上跑的步骤和发布流程写在 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
+### 行情数据
+
+可用 Tiingo 获取当前 IEX 参考报价和历史日线。注册 Tiingo 并创建 API Key，然后在 **设置 → 行情数据 → API 设置** 中填写。App 将密钥保存在 iOS 钥匙串，仅放入请求授权头。当前报价、可用字段和更新时间取决于 Tiingo 账户权限，不保证实时。未填写 Tiingo Key 时，仍可使用现有 Yahoo 与 Nasdaq 收盘价备用来源。
+
+应用源码许可不包含 Tiingo 行情数据的再分发权。Tiingo Basic / Power 数据用于个人或内部用途；将价格展示或再分发到 App、网站等产品前，应取得相应许可。
+
 ### 版本发布
 
 当前版本为 **1.0.2 build 9**。未签名 IPA、校验和及说明见[发布文档](releases/v1.0.2-build9.md)，变更历史保留在 [CHANGELOG.md](CHANGELOG.md)。
@@ -237,7 +244,7 @@ open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 - **不支持期权、期货、做空。** 只支持现金多头持仓。
 - **不连接券商同步。** 交易与资金记录来自手动录入或结单导入，没有实时券商 API 对接。
 - **不自动处理公司行动。** 拆股通过拆股事件模型录入；分红手动录入或导入。
-- **行情以收盘价为主。** 日线收盘是第一等数据；支持手动录入盘中价，但不是实时行情流。
+- **行情依赖数据源与账户权限。** Tiingo IEX REST 报价通过轮询获取，不是行情流；数据可能延迟、不可用或受套餐限制。Yahoo / Nasdaq 提供收盘价兜底。
 - **只支持 iOS 16+。**
 - 界面文案**英文与简体中文**，个别边角文案仍只有英文。
 
@@ -279,3 +286,5 @@ open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 ## 许可
 
 [MIT](LICENSE) © 2026 chengxiaomingcxm
+
+MIT 许可适用于本应用源码，不授予第三方行情数据的再分发权；请遵守对应数据供应商的许可与账户条款。

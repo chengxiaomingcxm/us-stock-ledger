@@ -177,14 +177,14 @@ enum Engine {
 
     // MARK: - 收益日历
 
-    struct Contribution: Identifiable {
+    struct Contribution: Identifiable, Equatable {
         var symbol: String
         var profit: Decimal?
         var reason: String?
         var id: String { symbol }
     }
 
-    struct DayReturn: Identifiable {
+    struct DayReturn: Identifiable, Equatable {
         var date: String
         var previous: String?
         var profit: Decimal?
@@ -322,6 +322,40 @@ enum Engine {
             ))
         }
         return output
+    }
+
+    /// Latest API marks replace only the most recent market-session row; prior days remain close-based.
+    static func applyingLiveQuotes(_ days: [DayReturn], to ledger: Ledger, now: Date = Date()) -> [DayReturn] {
+        let today = MarketClock.date(now)
+        let liveQuotes = ledger.quotes.filter { $0.isLive && $0.date <= today && !isStaleQuote($0, now: now) }
+        guard let date = liveQuotes.map(\.date).max(),
+              days.last.map({ date >= $0.date }) ?? true else { return days }
+
+        var previousClose: [String: Decimal] = [:]
+        var previousCloseDates: [String: String] = [:]
+        for quote in liveQuotes where quote.date == date {
+            if let price = quote.previousClose, let previousDate = quote.previousCloseDate, previousDate < date {
+                previousClose[quote.symbol] = price
+                previousCloseDates[quote.symbol] = previousDate
+            }
+        }
+        for symbol in Set(ledger.trades.map(\.symbol)) where previousClose[symbol] == nil {
+            if let close = ledger.history.closes.filter({ $0.symbol == symbol && $0.date < date }).max(by: { $0.date < $1.date }) {
+                previousClose[symbol] = close.price
+                previousCloseDates[symbol] = close.date
+            }
+        }
+
+        let result = todayPnl(ledger, previousClose: previousClose, previousCloseDates: previousCloseDates, today: date)
+        let contributions = result.rows.map { Contribution(symbol: $0.symbol, profit: $0.pnl, reason: $0.reason) }
+        let previous = days.last(where: { $0.date < date })
+        let row = DayReturn(date: date, previous: previousCloseDates.values.min() ?? previous?.date,
+                            profit: result.pnl, cumulative: result.pnl.flatMap { profit in previous?.cumulative.map { $0 + profit } },
+                            contributions: contributions, missing: result.missing)
+        var updated = days
+        if let index = updated.firstIndex(where: { $0.date == date }) { updated[index] = row }
+        else { updated.append(row); updated.sort { $0.date < $1.date } }
+        return updated
     }
 
     struct MonthStats {
@@ -625,12 +659,12 @@ struct LedgerDerived {
         value.trades = ledger.orderedTrades
         value.cashRecords = ledger.orderedCash
         value.symbols = value.summary.open.map(\.symbol)
-        if historyUnchanged, let cached {
-            value.days = cached.days
+        let historicalDays = historyUnchanged ? (cached?.days ?? Engine.dailyReturns(ledger)) : Engine.dailyReturns(ledger)
+        value.days = Engine.applyingLiveQuotes(historicalDays, to: ledger)
+        if historyUnchanged, let cached, value.days == cached.days {
             value.insights = cached.insights
-        } else {
-            value.days = Engine.dailyReturns(ledger)
-            if !Task.isCancelled { value.insights = InsightsPresentation(days: value.days) }
+        } else if !Task.isCancelled {
+            value.insights = InsightsPresentation(days: value.days)
         }
         return value
     }

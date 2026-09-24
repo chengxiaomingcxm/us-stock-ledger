@@ -34,6 +34,7 @@
 		AB2600010000000000000011 /* HSBCStatement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2600010000000000000001 /* HSBCStatement.swift */; };
 		AC2600010000000000000011 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2600010000000000000001 /* Diagnostics.swift */; };
 		AD2600010000000000000011 /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2600010000000000000001 /* DemoData.swift */; };
+		AF2600010000000000000011 /* MarketData.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2600010000000000000001 /* MarketData.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +67,7 @@
 		AB2600010000000000000001 /* HSBCStatement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/HSBCStatement.swift; sourceTree = "<group>"; };
 		AC2600010000000000000001 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/Diagnostics.swift; sourceTree = "<group>"; };
 		AD2600010000000000000001 /* DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/DemoData.swift; sourceTree = "<group>"; };
+		AF2600010000000000000001 /* MarketData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockLedger/MarketData.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,6 +129,7 @@
 				AB2600010000000000000001 /* HSBCStatement.swift */,
 				AC2600010000000000000001 /* Diagnostics.swift */,
 				AD2600010000000000000001 /* DemoData.swift */,
+				AF2600010000000000000001 /* MarketData.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -232,6 +235,7 @@
 				AB2600010000000000000011 /* HSBCStatement.swift in Sources */,
 				AC2600010000000000000011 /* Diagnostics.swift in Sources */,
 				AD2600010000000000000011 /* DemoData.swift in Sources */,
+				AF2600010000000000000011 /* MarketData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

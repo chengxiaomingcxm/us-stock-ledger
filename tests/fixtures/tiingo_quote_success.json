@@ -1,0 +1,13 @@
+[
+  {
+    "ticker": "AAPL",
+    "timestamp": "2020-09-24T14:00:00.000Z",
+    "tngoLast": 233.12,
+    "last": null,
+    "prevClose": 232.5,
+    "open": 232.7,
+    "high": 233.4,
+    "low": 232.1,
+    "volume": 1234567
+  }
+]

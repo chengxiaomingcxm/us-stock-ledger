@@ -140,6 +140,7 @@ final class AppState: ObservableObject {
     private var lastQuoteFailure = ""
     private var lastHistoryFailure = ""
     private let persist: (Ledger) throws -> Void
+    private let marketDataService: MarketDataService
 
     /// 「磁盘读取结果 → 初始状态」只在这里定义一次：启动与退出示例模式共用。
     private static func restore(_ result: LedgerStore.LoadResult) -> (ledger: Ledger, failure: String?) {
@@ -152,12 +153,14 @@ final class AppState: ObservableObject {
 
     /// `ledger` 为 nil 时从磁盘读取；显式传入账本（测试 / 示例 / 截图工具）时完全不碰磁盘。
     init(ledger: Ledger? = nil, settings: QuoteSettings = QuoteService.load(),
-         persist: @escaping (Ledger) throws -> Void = LedgerStore.save) {
+         persist: @escaping (Ledger) throws -> Void = LedgerStore.save,
+         marketDataService: MarketDataService = .shared) {
         let restored = Self.restore(ledger.map(LedgerStore.LoadResult.loaded) ?? LedgerStore.loadResult())
         self.ledger = restored.ledger
         self.loadFailure = restored.failure
         self.quoteSettings = settings
         self.persist = persist
+        self.marketDataService = marketDataService
         let saved = AppLanguage(rawValue: UserDefaults.standard.string(forKey: "app.language") ?? "") ?? .zhHans
         self.language = saved
         L10n.current = saved
@@ -350,6 +353,7 @@ final class AppState: ObservableObject {
         let clean = try QuoteService.validate(settings)
         try QuoteService.save(clean)
         quoteSettings = clean
+        Task { await marketDataService.clear() }
         rebuild(ledger) // Invalidate a snapshot being prepared under the previous provider settings.
     }
 
@@ -367,12 +371,12 @@ final class AppState: ObservableObject {
         // Recently closed positions still contribute to the displayed session's return.
         let symbols = Set(Engine.summary(ledger).open.map(\.symbol))
             .union(ledger.trades.filter { $0.date >= recent }.map(\.symbol)).sorted()
-        guard !symbols.isEmpty, !syncingQuotes else { return }
+        guard !symbols.isEmpty, !syncingQuotes, !demo else { return }
         let settings = quoteSettings
         syncingQuotes = true
         defer { syncingQuotes = false }
 
-        let result = await QuoteService.fetchAll(symbols: symbols, settings: settings)
+        let result = await QuoteService.fetchAll(symbols: symbols, settings: settings, marketDataService: marketDataService)
         guard !Task.isCancelled, settings == quoteSettings else { return }
         quoteErrors = result.errors
         lastQuoteFailure = logFailures(result.errors, kind: "QUOTE", last: lastQuoteFailure)
@@ -388,7 +392,7 @@ final class AppState: ObservableObject {
             } ?? false
             let previous = useHistory ? history?.price : live.previousClose
             let previousDate = useHistory ? history?.date : live.previousCloseDate
-            incoming.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date(), previousClose: previous, previousCloseDate: previousDate))
+            incoming.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: live.fetchedAt ?? Date(), previousClose: previous, previousCloseDate: previousDate))
             if let previous, previousDate != live.date {
                 previousClose[symbol] = previous
                 if let date = previousDate { previousCloseDates[symbol] = date }
@@ -404,7 +408,7 @@ final class AppState: ObservableObject {
 
     /// 同步历史收盘价与交易日历：收益日历、月度统计和上一收盘价都基于这些数据。
     func syncHistory() async {
-        guard !syncingHistory else { return }
+        guard !syncingHistory, !demo else { return }
         let cutoff = MarketClock.date(Date().addingTimeInterval(-100 * 86_400))
         var symbols = Set(Engine.summary(ledger).open.map(\.symbol)).union(ledger.trades.filter { $0.date >= cutoff }.map(\.symbol))
         symbols.insert("SPY") // 交易日历基准

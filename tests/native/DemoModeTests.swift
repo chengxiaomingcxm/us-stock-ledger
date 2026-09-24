@@ -116,11 +116,18 @@ enum DemoModeTests {
         try? LedgerStore.save(real)
         let before = (try? Data(contentsOf: file)) ?? Data()
 
-        let state = AppState(settings: QuoteSettings())
+        let provider = MockMarketDataProvider()
+        let marketDataService = MarketDataService(provider: provider)
+        let state = AppState(settings: QuoteSettings(provider: .tiingo, tiingoKey: "EXAMPLE_CREDENTIAL", priceMode: "live"),
+                             marketDataService: marketDataService)
         NativeTests.check(state.ledger.trades.count == 1 && !state.demo, "启动时读到的是真实账本")
 
         state.enterDemo()
         await settle(state)
+        await state.refreshQuotes()
+        await state.syncHistory()
+        let demoProviderRequests = await provider.requestCount
+        NativeTests.check(demoProviderRequests == 0 && state.historySyncedAt == nil, "demo mode never invokes quote or history providers")
         NativeTests.check(state.demo, "示例模式已开启")
         NativeTests.check((30 ... 50).contains(state.ledger.trades.count), "示例账本加载成功")
         NativeTests.check(state.summary.open.count == 5, "示例加载后有 5 个持仓")

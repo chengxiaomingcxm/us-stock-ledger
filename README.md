@@ -37,7 +37,7 @@ What that means in the app:
 - Today's P&L: previous close + current price + today's trades and fees. Shows "waiting for data" instead of a fake zero when a quote is missing.
 - Cash ledger: opening balance, deposits, withdrawals, manual dividends (with tax) and account fees.
 - Daily-return calendar and cumulative-return curve (weekly axis marks and a zero line).
-- Historical closes prefer Tiingo when configured, with Yahoo and Nasdaq fallbacks; intraday quotes use Yahoo, Finnhub, or a custom HTTPS endpoint.
+- Historical closes prefer Tiingo when configured, with Yahoo and Nasdaq fallbacks; optional Tiingo IEX reference quotes can also value current holdings.
 - Statement import with preview and confirmation: broker trade/cash CSVs and HSBC investment-statement PDFs (PDFKit).
 - Backup and restore as a local JSON file, with an export reminder after 30 days.
 - Light/dark mode, "green up / red up" color schemes, Dynamic Type and VoiceOver support.
@@ -72,7 +72,7 @@ flowchart TD
     State["AppState (ObservableObject)<br/>owns the Ledger, publishes changes"]
     Engine["Engine — pure calculation<br/>cost basis · realized / unrealized<br/>cash totals · today's P&L · daily returns"]
     Store["LedgerStore — persistence<br/>Documents/ledger-v2.json"]
-    Quotes["QuoteService<br/>Tiingo · Yahoo · Nasdaq · Finnhub · custom HTTPS"]
+    Quotes["MarketDataService → MarketDataProvider<br/>Tiingo IEX · QuoteService history fallbacks"]
     Import["CsvImport / StatementImport<br/>CSV · PDFKit (HSBC)"]
     Diag["Diagnostics — on-device log"]
 
@@ -90,7 +90,7 @@ flowchart TD
 - **`AppState`** owns the `Ledger`, validates mutations, and triggers persistence.
 - **`Engine`** is a pure, side-effect-free calculator: weighted-average cost, realized and unrealized gains, cash totals, today's P&L, daily returns and the insights snapshot.
 - **`LedgerStore`** reads and writes one versioned JSON file; `Models.swift` holds the Codable model and its validation rules.
-- **`QuoteService`** fetches closes, normalizes them and caches them in the ledger. Network failures degrade to "waiting for data" instead of breaking the UI, and API keys are read from the Keychain.
+- **`MarketDataService` / `MarketDataProvider`** fetch current Tiingo IEX reference quotes, deduplicate batch requests and cache them briefly. `QuoteService` keeps the existing EOD chain and Yahoo/Nasdaq fallbacks; the calculation engine still values positions from the ledger's saved quote.
 - **`CsvImport` / `HSBCStatement`** parse and validate first, and produce a reviewable `ImportReport` before anything is written.
 - **`Diagnostics`** keeps raw system error text out of user-facing messages while still recording it locally.
 
@@ -100,7 +100,8 @@ The three non-obvious data flows:
 User → SwiftUI view → AppState → Ledger (validated) → LedgerStore → Documents/ledger-v2.json
                                  ↘ Engine → derived snapshot → SwiftUI view
 
-AppState → QuoteService → Tiingo / Yahoo / Nasdaq / Finnhub / custom HTTPS → normalization → Ledger (cached closes)
+AppState → MarketDataService → MarketDataProvider → Tiingo IEX → validated quote → Ledger → Engine
+AppState → QuoteService → Tiingo EOD / Yahoo / Nasdaq → normalized history → Ledger
 
 CSV or PDF → CsvImport / HSBCStatement → per-row validation → preview → AppState → Ledger
 ```
@@ -203,6 +204,12 @@ open ios/App/App.xcodeproj   # then run on a simulator or your own device
 
 Development happens on `deepseek-dev`, reviewed changes are merged to `main`, and official IPA builds run from `main` only. The macOS-only steps and the release process are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
+### Market data
+
+The app can use Tiingo for current IEX reference prices and daily history. Register for Tiingo, create an API key, then enter it under **Settings → Market data → API settings**. The app stores it in iOS Keychain and sends it only in the request authorization header. Current quote access, fields and timing depend on the account's Tiingo entitlements; quotes are not guaranteed real-time. Without a Tiingo key, existing Yahoo and Nasdaq close fallbacks remain available.
+
+The application source license does not grant rights to redistribute Tiingo market data. Tiingo's basic and power data terms are for personal/internal use; obtain separate permission before redistributing prices in an app, website or other product.
+
 ### Releases
 
 The current version is **1.0.2 build 9**. The unsigned IPA, checksum and notes are published in [the release](releases/v1.0.2-build9.md); the running history remains in [CHANGELOG.md](CHANGELOG.md).
@@ -237,7 +244,7 @@ Stated plainly, so nobody has to discover them:
 - **No options, futures or short selling.** Long cash positions only.
 - **No broker synchronisation.** Trades and cash records come from manual entry or statement import; there is no live brokerage API connection.
 - **No automatic corporate-action processing.** Splits are recorded through the split-event model; dividends are entered manually or imported.
-- **Quotes are end-of-day oriented.** Daily closes are the first-class data; intraday manual quotes are supported but this is not a streaming feed.
+- **Market data depends on providers and account entitlements.** Tiingo IEX REST quotes are polled, not streamed, and may be delayed, unavailable or limited by plan. Yahoo/Nasdaq are close-price fallbacks.
 - **iOS 16+ only.**
 - **English and Simplified Chinese** UI strings; some edge-case strings are still English-only.
 
@@ -279,3 +286,5 @@ Prices come from third-party providers and can be wrong, delayed or missing; alw
 ## License
 
 [MIT](LICENSE) © 2026 chengxiaomingcxm
+
+The MIT license covers this application's source code. It does not grant rights to redistribute third-party market data; follow the relevant provider's license and account terms.

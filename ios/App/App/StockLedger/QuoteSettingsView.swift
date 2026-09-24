@@ -96,21 +96,23 @@ struct ApiSettingsView: View {
     var body: some View {
         List {
             Section {
-                SecureField(L10n.tr("Tiingo 日线 API Key（建议填写）"), text: $tiingoKey)
+                SecureField(L10n.tr("Tiingo API Key（用于最新报价和日线）"), text: $tiingoKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 if let destination = URL(string: "https://api.tiingo.com/account/token") {
                     Link(L10n.tr("获取 Tiingo API Key"), destination: destination)
                 }
             } header: {
-                Text(L10n.tr("历史收盘价"))
+                Text(L10n.tr("Tiingo 行情"))
             } footer: {
-                Text(L10n.tr("填写后优先使用 Tiingo 日线；失败时自动改用 Yahoo，再用 Nasdaq 补明确缺口。未填写也可继续使用免费备用来源。"))
+                Text(L10n.tr("该密钥保存在系统钥匙串。启用 Tiingo 最新报价时使用 IEX 参考价；历史收盘优先使用 Tiingo，失败时改用 Yahoo，再由 Nasdaq 补明确缺口。"))
             }
 
             Section {
                 if provider == .yahoo {
                     Text(L10n.tr("Yahoo 收盘价不需要 API Key。"))
+                } else if provider == .tiingo {
+                    Text(L10n.tr("最新报价和历史收盘共用上方的 Tiingo API Key。行情字段是否可用取决于账户权限。"))
                 } else {
                     if provider == .custom {
                         TextField(L10n.tr("接口地址，例如 https://api.example.com/quote/{symbol}"), text: $url)

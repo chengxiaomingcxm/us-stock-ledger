@@ -111,8 +111,9 @@ struct HoldingsView: View {
 
     private func quoteLabel(_ position: Position) -> String {
         guard let quote = position.quote else { return L10n.tr("待报价") }
-        let stale = Engine.isStaleQuote(quote) ? " · \(L10n.tr("较早"))" : ""
-        return "\(quote.date)\(stale)"
+        let stale = (Engine.isStaleQuote(quote) || quote.isStale) ? " · \(L10n.tr("较早"))" : ""
+        let updated = quote.isLive ? quote.fetchedAt.map { " · \(L10n.tr("更新时间")) \(Fmt.clock($0))" } ?? "" : ""
+        return "\(quote.date)\(updated)\(stale)"
     }
 }
 
