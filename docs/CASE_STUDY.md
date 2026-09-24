@@ -36,7 +36,7 @@ A native SwiftUI app for iPhone with a deliberately boring architecture: four la
 - **`LedgerStore`** persists one versioned JSON document in the app's own `Documents` folder, written atomically.
 - **Views** render a cached derived snapshot and dispatch intents. They never compute money.
 
-Statements are handled by two importers (broker CSV and HSBC investment-statement PDF) that parse, normalize and validate a whole batch before the user confirms it. Quotes come from Yahoo Finance, Finnhub or a user-supplied HTTPS endpoint, with API keys in the iOS Keychain.
+Statements are handled by two importers (broker CSV and HSBC investment-statement PDF) that parse, normalize and validate a whole batch before the user confirms it. Historical closes prefer Tiingo with Yahoo and Nasdaq fallbacks; intraday quotes use Yahoo Finance, Finnhub or a user-supplied HTTPS endpoint. API keys stay in the iOS Keychain.
 
 ## Key Features
 
@@ -128,7 +128,7 @@ Four layers, each catching a different class of mistake:
 | Layer | Size | Catches |
 | --- | --- | --- |
 | Vitest (web engine) | 148 cases / 13 files | Ledger maths, cash rules, trade ranges, today's P&L, CSV import rules, storage and recovery, localization |
-| Native Swift suites | 429 fixed assertions | The real engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths, plus a 25,000-close load test |
+| Native Swift suites | 452 fixed assertions | The real engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths, plus a 25,000-close load test |
 | Simulator renders | 6 screens + calendar | Screens that render nothing, empty state shown as if it were data, regressions in the render harness |
 | Playwright | 26 cases | Full user journeys against the built app, including layout overflow at 320 / 402 / 430 px |
 
@@ -139,7 +139,7 @@ This layering is not theoretical — each layer has caught something real: the n
 Financial data is treated as data that never leaves the device:
 
 - The ledger is a single JSON file in the app's own `Documents` folder. There is no server component and no account.
-- Quote requests send **only ticker symbols** to Yahoo Finance, Finnhub or a user-supplied endpoint — never quantities, cost basis, cash records, manual prices or backups.
+- Quote requests send **only ticker symbols** to Tiingo, Yahoo Finance, Nasdaq, Finnhub or a user-supplied endpoint — never quantities, cost basis, cash records, manual prices or backups.
 - No analytics, no crash reporting, no advertising SDK, no third-party tracking.
 - Technical failures are recorded in a **local** diagnostics log; nothing is uploaded.
 - API keys live in the iOS Keychain and are excluded from backups.
@@ -150,7 +150,7 @@ Financial data is treated as data that never leaves the device:
 A shipping-quality iOS application, built and maintained by one developer:
 
 - Native SwiftUI app for iOS 16+, 17 source files, with a pure calculation engine, validated mutations, atomic local persistence and Keychain-backed secrets.
-- Three independent test layers plus simulator render guards: 148 unit cases, 429 native assertions, 26 end-to-end cases.
+- Three independent test layers plus simulator render guards: 149 unit cases, 452 fixed native assertions, 26 end-to-end cases.
 - Two CI workflows: a ~1-minute check chain on `ubuntu-latest` for every push and pull request, and a ~14-minute macOS pipeline that runs the native suites, renders the calendar and all README screenshots, and builds an unsigned IPA.
 - A release pipeline that verifies the IPA against a manifest and publishes it with a checksum.
 - Documentation that lets a stranger understand the product, the architecture and the limitations in a few minutes.

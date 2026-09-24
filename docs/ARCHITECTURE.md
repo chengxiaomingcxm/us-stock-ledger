@@ -71,7 +71,7 @@ flowchart TD
 ### Market data
 
 ```text
-AppState → QuoteService → Yahoo Finance / Finnhub / custom HTTPS
+AppState → QuoteService → Tiingo / Yahoo Finance / Nasdaq / Finnhub / custom HTTPS
                         → normalization (close, previous close, currency)
                         → cached in the ledger → Engine → UI
 ```

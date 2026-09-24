@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 // 原生版行情：来源设置与 API Key 存入系统钥匙串，报价按来源解析后写入账本。
-// 口径与 1.x 一致：Yahoo 只提供“已完成交易日”的收盘价，Finnhub / 自定义接口提供最新报价。
+// Tiingo / Yahoo / Nasdaq 只提供已完成交易日的收盘价，Finnhub / 自定义接口提供最新报价。
 // 任何解析失败都抛出明确原因，绝不用 0 或旧价格替代。
 
 enum QuoteProvider: String, Codable, CaseIterable, Identifiable {
@@ -36,6 +36,7 @@ struct QuoteSettings: Codable, Equatable {
     var provider: QuoteProvider = .yahoo
     var url: String = ""
     var key: String = ""
+    var tiingoKey: String? = nil
     var interval: Int = 60
     var priceMode: String? = nil // nil/auto: completed close outside regular hours; close/live: explicit choice
 }
@@ -163,7 +164,9 @@ enum QuoteService {
         var clean = raw
         clean.url = raw.url.trimmingCharacters(in: .whitespacesAndNewlines)
         clean.key = raw.key.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.key.count > 2048 || clean.key.contains("\n") || clean.key.contains("\r") {
+        clean.tiingoKey = raw.tiingoKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.tiingoKey?.isEmpty == true { clean.tiingoKey = nil }
+        if [clean.key, clean.tiingoKey ?? ""].contains(where: { $0.count > 2048 || $0.contains("\n") || $0.contains("\r") }) {
             throw QuoteError.message("API Key 格式无效。")
         }
         switch clean.provider {
@@ -298,7 +301,7 @@ enum QuoteService {
     }
 
     /// 逐只获取日线；SPY 用于交易日历。失败只影响该股票，其他股票照常写入。
-    static func fetchSeriesAll(symbols: [String]) async -> (series: [String: DailySeries], errors: [String: String]) {
+    static func fetchSeriesAll(symbols: [String], settings: QuoteSettings = QuoteSettings()) async -> (series: [String: DailySeries], errors: [String: String]) {
         var series: [String: DailySeries] = [:]
         var errors: [String: String] = [:]
         var index = 0
@@ -309,10 +312,15 @@ enum QuoteService {
                 for symbol in chunk {
                     group.addTask {
                         do {
-                            let yahoo = try await fetchSeries(symbol: symbol)
-                            guard !yahoo.missingDates.isEmpty else { return (symbol, yahoo, nil) }
-                            do { return (symbol, try await fillMissingCloses(yahoo, symbol: symbol), nil) }
-                            catch { return (symbol, yahoo, (error as? QuoteError)?.errorDescription ?? error.localizedDescription) }
+                            let history = try await fetchHistoricalSeries(symbol: symbol, tiingoKey: settings.tiingoKey)
+                            var combined = history.series
+                            guard !combined.missingDates.isEmpty else { return (symbol, combined, history.warning) }
+                            do {
+                                combined = try await fillMissingCloses(combined, symbol: symbol)
+                                return (symbol, combined, history.warning)
+                            } catch {
+                                return (symbol, combined, (error as? QuoteError)?.errorDescription ?? error.localizedDescription)
+                            }
                         }
                         catch { return (symbol, nil, (error as? QuoteError)?.errorDescription ?? error.localizedDescription) }
                     }
@@ -324,6 +332,49 @@ enum QuoteService {
             }
         }
         return (series, errors)
+    }
+
+    /// Tiingo 日线优先；Yahoo 同时作为无密钥备用并负责指出明确的 null 缺口。
+    private static func fetchHistoricalSeries(symbol: String, tiingoKey: String?) async throws -> (series: DailySeries, warning: String?) {
+        guard let key = tiingoKey, !key.isEmpty else { return (try await fetchSeries(symbol: symbol), nil) }
+        async let yahoo = seriesResult(symbol: symbol)
+        async let tiingo = tiingoResult(symbol: symbol, key: key)
+        let (fallback, primary) = await (yahoo, tiingo)
+        if let primary = primary.value, let fallback = fallback.value {
+            return (mergeSeries(primary: primary, fallback: fallback), nil)
+        }
+        if let primary = primary.value { return (primary, nil) }
+        if let fallback = fallback.value {
+            return (fallback, L10n.tr("Tiingo 不可用，已改用 Yahoo：{}", primary.error ?? L10n.tr("未知错误")))
+        }
+        throw QuoteError.message(primary.error ?? fallback.error ?? "行情服务未返回有效数据。")
+    }
+
+    private static func seriesResult(symbol: String) async -> (value: DailySeries?, error: String?) {
+        do { return (try await fetchSeries(symbol: symbol), nil) }
+        catch { return (nil, (error as? QuoteError)?.errorDescription ?? error.localizedDescription) }
+    }
+
+    private static func tiingoResult(symbol: String, key: String) async -> (value: DailySeries?, error: String?) {
+        do { return (try await fetchTiingoSeries(symbol: symbol, key: key), nil) }
+        catch { return (nil, (error as? QuoteError)?.errorDescription ?? error.localizedDescription) }
+    }
+
+    static func mergeSeries(primary: DailySeries, fallback: DailySeries) -> DailySeries {
+        var closes: [String: PricePoint] = [:]
+        for point in fallback.closes { closes[point.date] = point }
+        for point in primary.closes { closes[point.date] = point }
+        let known = Set(closes.keys)
+        var splits: [String: SplitEvent] = [:]
+        for event in fallback.splits { splits[event.date] = event }
+        for event in primary.splits { splits[event.date] = event }
+        return DailySeries(
+            closes: closes.values.sorted { $0.date < $1.date },
+            splits: splits.values.sorted { $0.date < $1.date },
+            sessions: Array(Set(primary.sessions).union(fallback.sessions)).sorted(),
+            missingDates: Array(Set(primary.missingDates).union(fallback.missingDates).subtracting(known)).sorted(),
+            instrumentType: fallback.instrumentType.isEmpty ? primary.instrumentType : fallback.instrumentType
+        )
     }
 
     static func parseSeries(_ raw: Any, symbol: String, provider: String, now: Date = Date()) throws -> DailySeries {
@@ -372,7 +423,7 @@ enum QuoteService {
                       now >= Date(timeIntervalSince1970: end + 900) else { continue }
             }
             guard let value = price(closes[index]) else { missingDates.append(date); continue }
-            points.append(PricePoint(symbol: symbol, date: date, price: round(value, scale: precision)))
+            points.append(PricePoint(symbol: symbol, date: date, price: round(value, scale: precision), source: "yahoo"))
         }
         points.sort { $0.date < $1.date }
         guard let last = points.last, last.price > 0, last.price < Decimal(1_000_000_000_000) else {
@@ -390,7 +441,50 @@ enum QuoteService {
                            missingDates: missingDates, instrumentType: instrument)
     }
 
-    /// Yahoo 的某天 close 为 null 时，用 Nasdaq 明确标注日期的日收盘价补洞；原有 Yahoo 价格优先。
+    // MARK: Tiingo 日线
+
+    private static func fetchTiingoSeries(symbol: String, key: String, now: Date = Date()) async throws -> DailySeries {
+        let provider = providerSymbol(symbol)
+        let escaped = provider.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? provider
+        let end = MarketClock.date(now)
+        let start = MarketClock.date(now.addingTimeInterval(-100 * 86_400))
+        guard var components = URLComponents(string: "https://api.tiingo.com/tiingo/daily/\(escaped)/prices") else {
+            throw QuoteError.message("接口地址无效。")
+        }
+        components.queryItems = [URLQueryItem(name: "startDate", value: start), URLQueryItem(name: "endDate", value: end)]
+        guard let url = components.url else { throw QuoteError.message("接口地址无效。") }
+        let raw = try await get(url, headers: ["Authorization": "Token \(key)"])
+        return try parseTiingo(raw, symbol: symbol, now: now)
+    }
+
+    static func parseTiingo(_ raw: Any, symbol: String, now: Date = Date()) throws -> DailySeries {
+        guard let rows = raw as? [[String: Any]], !rows.isEmpty else {
+            throw QuoteError.message("Tiingo 未返回有效日线。")
+        }
+        let today = MarketClock.date(now)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = MarketClock.timeZone
+        let minutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+        var closes: [PricePoint] = []
+        var splits: [SplitEvent] = []
+        var seen: Set<String> = []
+        for row in rows {
+            guard let stamp = row["date"] as? String, stamp.count >= 10 else { continue }
+            let date = String(stamp.prefix(10))
+            guard let parsed = MarketClock.day(date), MarketClock.date(parsed) == date,
+                  date < today || (date == today && minutes >= 1_050), seen.insert(date).inserted,
+                  let value = price(row["close"]), value > 0, value < Decimal(1_000_000_000_000) else { continue }
+            closes.append(PricePoint(symbol: symbol, date: date, price: round(value, scale: 8), source: "tiingo"))
+            if let factor = strictDouble(row["splitFactor"]), factor.isFinite, factor > 0, factor != 1 {
+                splits.append(SplitEvent(symbol: symbol, date: date))
+            }
+        }
+        closes.sort { $0.date < $1.date }
+        guard !closes.isEmpty else { throw QuoteError.message("Tiingo 暂时没有已完成交易日的收盘价。") }
+        return DailySeries(closes: closes, splits: splits, sessions: closes.map(\.date))
+    }
+
+    /// Tiingo 与 Yahoo 都未补上的明确 null 日期，用 Nasdaq 同日收盘价补洞；已有价格优先。
     private static func fillMissingCloses(_ series: DailySeries, symbol: String) async throws -> DailySeries {
         guard let first = series.missingDates.min(), let last = series.missingDates.max(),
               let lastDay = MarketClock.day(last) else { return series }
@@ -417,6 +511,7 @@ enum QuoteService {
         result.closes.append(contentsOf: recovered.filter { !known.contains($0.date) })
         result.closes.sort { $0.date < $1.date }
         result.sessions = result.closes.map(\.date)
+        result.missingDates.removeAll { date in recovered.contains { $0.date == date } }
         return result
     }
 
@@ -444,7 +539,7 @@ enum QuoteService {
                   let rawPrice = row["close"] as? String else { return nil }
             let clean = rawPrice.replacingOccurrences(of: "$", with: "").replacingOccurrences(of: ",", with: "")
             guard let value = price(clean), value > 0, value < Decimal(1_000_000_000_000) else { return nil }
-            return PricePoint(symbol: symbol, date: date, price: value)
+            return PricePoint(symbol: symbol, date: date, price: value, source: "nasdaq")
         }
     }
 

@@ -8,7 +8,7 @@
 
 A native SwiftUI app for iPhone. No account, no cloud sync, no analytics: your ledger is one JSON file inside the app's own `Documents` folder, and quote API keys live in the iOS Keychain.
 
-**Current version: native 1.0.2 (build 8)** — iOS 16+. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
+**Current version: native 1.0.2 (build 9)** — iOS 16+. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
 
 > **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
@@ -37,7 +37,7 @@ What that means in the app:
 - Today's P&L: previous close + current price + today's trades and fees. Shows "waiting for data" instead of a fake zero when a quote is missing.
 - Cash ledger: opening balance, deposits, withdrawals, manual dividends (with tax) and account fees.
 - Daily-return calendar and cumulative-return curve (weekly axis marks and a zero line).
-- Quotes from Yahoo daily closes, Finnhub, or a custom HTTPS endpoint.
+- Historical closes prefer Tiingo when configured, with Yahoo and Nasdaq fallbacks; intraday quotes use Yahoo, Finnhub, or a custom HTTPS endpoint.
 - Statement import with preview and confirmation: broker trade/cash CSVs and HSBC investment-statement PDFs (PDFKit).
 - Backup and restore as a local JSON file, with an export reminder after 30 days.
 - Light/dark mode, "green up / red up" color schemes, Dynamic Type and VoiceOver support.
@@ -72,7 +72,7 @@ flowchart TD
     State["AppState (ObservableObject)<br/>owns the Ledger, publishes changes"]
     Engine["Engine — pure calculation<br/>cost basis · realized / unrealized<br/>cash totals · today's P&L · daily returns"]
     Store["LedgerStore — persistence<br/>Documents/ledger-v2.json"]
-    Quotes["QuoteService<br/>Yahoo · Finnhub · custom HTTPS"]
+    Quotes["QuoteService<br/>Tiingo · Yahoo · Nasdaq · Finnhub · custom HTTPS"]
     Import["CsvImport / StatementImport<br/>CSV · PDFKit (HSBC)"]
     Diag["Diagnostics — on-device log"]
 
@@ -100,7 +100,7 @@ The three non-obvious data flows:
 User → SwiftUI view → AppState → Ledger (validated) → LedgerStore → Documents/ledger-v2.json
                                  ↘ Engine → derived snapshot → SwiftUI view
 
-AppState → QuoteService → Yahoo / Finnhub / custom HTTPS → normalization → Ledger (cached closes)
+AppState → QuoteService → Tiingo / Yahoo / Nasdaq / Finnhub / custom HTTPS → normalization → Ledger (cached closes)
 
 CSV or PDF → CsvImport / HSBCStatement → per-row validation → preview → AppState → Ledger
 ```
@@ -131,9 +131,9 @@ releases/                  per-version release notes
 | App | Swift 5, SwiftUI, iOS 16+ |
 | Storage | Local JSON in `Documents` (`ledger-v2.json`); API keys in the iOS Keychain |
 | Statements | PDFKit (HSBC investment statement) and a custom CSV parser |
-| Networking | `URLSession` against Yahoo Finance, Finnhub, or a custom HTTPS endpoint |
+| Networking | `URLSession` against Tiingo, Yahoo Finance, Nasdaq, Finnhub, or a custom HTTPS endpoint |
 | Legacy web engine | TypeScript, Vite, Capacitor (build and regression tests only) |
-| Tests | Vitest (149 cases / 14 files), native Swift suites (445 fixed assertions, plus runtime heartbeat assertions), simulator renders, Playwright (26 cases) |
+| Tests | Vitest (149 cases / 14 files), native Swift suites (452 fixed assertions, plus runtime heartbeat assertions), simulator renders, Playwright (26 cases) |
 | CI | GitHub Actions: `checks` on `ubuntu-latest`, iOS build on `macos-26` |
 | Tooling | Node 24, pnpm 11, Xcode / `swiftc`, Playwright |
 
@@ -143,14 +143,14 @@ Three suites — two cross-platform, the native one macOS-only:
 
 ```sh
 pnpm test                                # Vitest — 149 cases
-bash scripts/test-native.sh              # macOS — native Swift suites, 445 fixed assertions
+bash scripts/test-native.sh              # macOS — native Swift suites, 452 fixed assertions
 pnpm e2e                                 # Playwright — 26 cases
 ```
 
 | Suite | What it locks down |
 | --- | --- |
 | Vitest (149 cases, 14 files) | Ledger maths, cash ledger, trade ranges, today's P&L, CSV import rules, storage and recovery, localization |
-| Native Swift (445 fixed assertions) | The Swift engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths — plus a 25,000-close / 4,000-session / 1,000-trade load test |
+| Native Swift (452 fixed assertions) | The Swift engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths — plus a 25,000-close / 4,000-session / 1,000-trade load test |
 | Simulator renders | The calendar screen and all six README screenshots must actually render demo data; a blank or empty-state PNG fails the run |
 | Playwright (26 cases) | Full user journeys against the built app, including "no horizontal overflow" at 320 / 402 / 430 px |
 
@@ -205,7 +205,7 @@ Development happens on `deepseek-dev`, reviewed changes are merged to `main`, an
 
 ### Releases
 
-The current version is **1.0.2 build 8**. The unsigned IPA, checksum and notes are published in [the release](releases/v1.0.2-build8.md); the running history remains in [CHANGELOG.md](CHANGELOG.md).
+The current version is **1.0.2 build 9**. The unsigned IPA, checksum and notes are published in [the release](releases/v1.0.2-build9.md); the running history remains in [CHANGELOG.md](CHANGELOG.md).
 
 ## Data & Privacy
 
@@ -219,7 +219,7 @@ The current version is **1.0.2 build 8**. The unsigned IPA, checksum and notes a
 
 Only quote requests, and only what they need:
 
-- **Yahoo Finance, Finnhub or your own HTTPS endpoint** receive the **ticker symbols** you hold or ask about, so they can return prices. They never receive quantities, cost basis, cash records, prices you entered manually, or backups.
+- **Tiingo, Yahoo Finance, Nasdaq, Finnhub or your own HTTPS endpoint** receive the **ticker symbols** you hold or ask about, so they can return prices. They never receive quantities, cost basis, cash records, prices you entered manually, or backups.
 - No analytics, no crash reporting, no advertising SDK, no third-party tracking.
 - Technical failures are recorded in a **local** diagnostics log on the device, so the app can show a readable message plus detail you can inspect. It is never uploaded.
 

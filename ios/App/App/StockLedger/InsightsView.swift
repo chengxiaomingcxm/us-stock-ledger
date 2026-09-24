@@ -117,7 +117,7 @@ struct InsightsView: View {
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.tr("按上一交易日收盘与当日收盘计算每日收益，重放当前账本；缺少收盘价的交易日标记为待补全，不以零代替。历史行情来自 Yahoo 日线，与最新报价来源设置独立。"))
+                    Text(L10n.tr("按上一交易日收盘与当日收盘计算每日收益，重放当前账本；缺少收盘价的交易日标记为待补全，不以零代替。历史行情优先使用 Tiingo，并由 Yahoo、Nasdaq 和手工录入兜底。"))
                     if let synced = state.historySyncedAt {
                         Text(L10n.tr("上次同步：{}", Fmt.clock(synced)))
                     }
@@ -326,6 +326,7 @@ struct CashFormView: View {
 struct ReturnCalendar: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.data.revision == rhs.data.revision }
     @Environment(\.colorScheme) private var scheme
+    @EnvironmentObject private var state: AppState
     @AppStorage("appearance.colors") private var colorPreference = "green-up"
 
     let data: InsightsPresentation
@@ -425,6 +426,7 @@ struct ReturnCalendar: View, Equatable {
         .onChange(of: months) { value in if !value.contains(month) { month = value.last ?? "" } }
         .sheet(item: $selected) { row in
             DayReturnDetail(row: row)
+                .environmentObject(state)
         }
     }
 
@@ -497,6 +499,8 @@ struct ReturnCalendar: View, Equatable {
 
 struct DayReturnDetail: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var state: AppState
+    @State private var enteringClose = false
     let row: Engine.DayReturn
 
     var body: some View {
@@ -524,11 +528,69 @@ struct DayReturnDetail: View {
                         ForEach(row.missing, id: \.self) { text in
                             Text(text).font(.footnote).foregroundStyle(.secondary)
                         }
+                        Button(L10n.tr("手动补录收盘价")) { enteringClose = true }
+                            .disabled(state.demo)
                     }
                 }
             }
             .navigationTitle(row.date)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.tr("完成")) { dismiss() } } }
+            .sheet(isPresented: $enteringClose) {
+                HistoricalCloseForm(symbol: row.contributions.first(where: { $0.profit == nil })?.symbol ?? "", date: row.date)
+                    .environmentObject(state)
+            }
+        }
+    }
+}
+
+struct HistoricalCloseForm: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var state: AppState
+    @State var symbol: String
+    @State var date: String
+    @State private var price = ""
+    @State private var failure: String?
+
+    init(symbol: String, date: String) {
+        _symbol = State(initialValue: symbol)
+        _date = State(initialValue: date)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(L10n.tr("股票代码"), text: $symbol)
+                        .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    TextField(L10n.tr("日期（YYYY-MM-DD）"), text: $date)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField(L10n.tr("收盘价"), text: $price).keyboardType(.decimalPad)
+                } footer: {
+                    Text(L10n.tr("请按券商结单或可靠行情核对。手工值会保留，并优先于之后的自动同步。若缺少的是上一交易日，请把日期改为详情中的“上一交易日”。"))
+                }
+                if let failure { Text(failure).foregroundStyle(.red) }
+            }
+            .navigationTitle(L10n.tr("补录收盘价"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("取消")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(L10n.tr("保存")) { save() } }
+            }
+        }
+    }
+
+    private func save() {
+        do {
+            let cleanSymbol = try LedgerValidation.symbol(symbol)
+            let cleanDate = try LedgerValidation.date(date)
+            guard let value = Decimal(string: price, locale: Locale(identifier: "en_US")) else {
+                throw LedgerError.message("价格格式无效。")
+            }
+            let cleanPrice = try LedgerValidation.positive(value, L10n.tr("价格"))
+            guard cleanPrice < Decimal(1_000_000_000_000) else { throw LedgerError.message("价格格式无效。") }
+            if state.setHistoricalClose(symbol: cleanSymbol, price: cleanPrice, date: cleanDate) { dismiss() }
+            else { failure = state.errorMessage ?? L10n.tr("保存失败。") }
+        } catch {
+            failure = error.localizedDescription
         }
     }
 }

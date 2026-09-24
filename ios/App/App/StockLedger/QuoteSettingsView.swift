@@ -31,7 +31,7 @@ struct QuoteSourceView: View {
             } header: {
                 Text(L10n.tr("显示与来源"))
             } footer: {
-                Text(L10n.tr("收盘价使用 Yahoo 已完成日线；盘中报价使用所选接口。更改会立即保存。"))
+                Text(L10n.tr("收盘价使用专用日线与备用来源；盘中报价使用所选接口。更改会立即保存。"))
             }
 
             Section {
@@ -86,6 +86,7 @@ struct ApiSettingsView: View {
 
     @State private var url = ""
     @State private var key = ""
+    @State private var tiingoKey = ""
     @State private var interval = 60
     @State private var failure: String?
     @State private var saved = false
@@ -94,6 +95,19 @@ struct ApiSettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                SecureField(L10n.tr("Tiingo 日线 API Key（建议填写）"), text: $tiingoKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if let destination = URL(string: "https://api.tiingo.com/account/token") {
+                    Link(L10n.tr("获取 Tiingo API Key"), destination: destination)
+                }
+            } header: {
+                Text(L10n.tr("历史收盘价"))
+            } footer: {
+                Text(L10n.tr("填写后优先使用 Tiingo 日线；失败时自动改用 Yahoo，再用 Nasdaq 补明确缺口。未填写也可继续使用免费备用来源。"))
+            }
+
             Section {
                 if provider == .yahoo {
                     Text(L10n.tr("Yahoo 收盘价不需要 API Key。"))
@@ -133,6 +147,7 @@ struct ApiSettingsView: View {
         let settings = state.quoteSettings
         url = settings.url
         key = settings.key
+        tiingoKey = settings.tiingoKey ?? ""
         interval = settings.interval
     }
 
@@ -143,6 +158,7 @@ struct ApiSettingsView: View {
             var settings = state.quoteSettings
             settings.url = url
             settings.key = key
+            settings.tiingoKey = tiingoKey
             settings.interval = interval
             try state.saveQuoteSettings(settings)
             saved = true

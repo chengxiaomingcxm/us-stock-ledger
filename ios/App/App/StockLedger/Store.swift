@@ -308,6 +308,42 @@ final class AppState: ObservableObject {
         commit(next)
     }
 
+    /// 最终兜底：只允许给账本已有标的、已有交易日补收盘价；手工值不会被后续接口覆盖。
+    @discardableResult
+    func setHistoricalClose(symbol: String, price: Decimal, date: String) -> Bool {
+        errorMessage = nil
+        guard price > 0, price < Decimal(1_000_000_000_000) else {
+            errorMessage = L10n.tr("价格格式无效。")
+            return false
+        }
+        guard ledger.trades.contains(where: { $0.symbol == symbol }), ledger.history.sessions.contains(date) else {
+            errorMessage = L10n.tr("只能补录账本已有股票和收益日历中的交易日。")
+            return false
+        }
+        var next = ledger
+        next.history.closes.removeAll { $0.symbol == symbol && $0.date == date }
+        next.history.closes.append(PricePoint(symbol: symbol, date: date, price: price, source: "manual"))
+        next.history.closes.sort { $0.date == $1.date ? $0.symbol < $1.symbol : $0.date < $1.date }
+        if next.quote(for: symbol).map({ $0.date <= date }) ?? true {
+            let previous = next.history.closes.filter { $0.symbol == symbol && $0.date < date }.max { $0.date < $1.date }
+            next.quotes.removeAll { $0.symbol == symbol }
+            next.quotes.append(Quote(symbol: symbol, price: price, date: date, source: "manual-close", fetchedAt: Date(),
+                                     previousClose: previous?.price, previousCloseDate: previous?.date))
+        }
+        guard commit(next) else { return false }
+        if let quote = ledger.quote(for: symbol), quote.source == "manual-close" {
+            if let previous = quote.previousClose, let previousDate = quote.previousCloseDate {
+                previousClose[symbol] = previous
+                previousCloseDates[symbol] = previousDate
+            }
+        } else if let quote = ledger.quote(for: symbol), date < quote.date,
+                  ledger.history.closes.filter({ $0.symbol == symbol && $0.date < quote.date }).max(by: { $0.date < $1.date })?.date == date {
+            previousClose[symbol] = price
+            previousCloseDates[symbol] = date
+        }
+        return true
+    }
+
     // MARK: - 行情
 
     func saveQuoteSettings(_ settings: QuoteSettings) throws {
@@ -344,7 +380,7 @@ final class AppState: ObservableObject {
 
         var incoming: [Quote] = []
         for (symbol, live) in result.quotes {
-            // Yahoo 日线若跳过了一个空值日期，保留已从历史同步补齐的更近收盘基准。
+            // 当前报价若跳过了一个日线缺口，保留历史同步已补齐的更近收盘基准。
             let history = ledger.history.closes.filter { $0.symbol == symbol && $0.date < live.date }.max { $0.date < $1.date }
             let useHistory = history.map { point in
                 guard let previousDate = live.previousCloseDate else { return true }
@@ -375,7 +411,7 @@ final class AppState: ObservableObject {
         syncingHistory = true
         defer { syncingHistory = false }
 
-        let result = await QuoteService.fetchSeriesAll(symbols: symbols.sorted())
+        let result = await QuoteService.fetchSeriesAll(symbols: symbols.sorted(), settings: quoteSettings)
         historyErrors = result.errors
         lastHistoryFailure = logFailures(result.errors, kind: "HISTORY", last: lastHistoryFailure)
         guard !result.series.isEmpty else { return }
@@ -389,13 +425,19 @@ final class AppState: ObservableObject {
         var incoming: [Quote] = []
         for (symbol, series) in result.series {
             if symbol == "SPY" { sessions.formUnion(series.sessions) }
-            for point in series.closes where symbol != "SPY" { closes[point.symbol + "|" + point.date] = point }
+            for point in series.closes where symbol != "SPY" {
+                let key = point.symbol + "|" + point.date
+                if closes[key]?.source != "manual" { closes[key] = point }
+            }
             for event in series.splits { splits[event.symbol + "|" + event.date] = event }
-            guard symbol != "SPY", let latest = series.closes.last else { continue }
-            let previous = series.closes.dropLast().last
-            incoming.append(Quote(symbol: symbol, price: latest.price, date: latest.date, source: "yahoo-close", fetchedAt: Date(), previousClose: previous?.price, previousCloseDate: previous?.date))
-            if series.closes.count > 1 {
-                let previous = series.closes[series.closes.count - 2]
+            guard symbol != "SPY" else { continue }
+            let retained = closes.values.filter { $0.symbol == symbol }.sorted { $0.date < $1.date }
+            guard let latest = retained.last else { continue }
+            let previous = retained.dropLast().last
+            let source = latest.source == "manual" ? "manual-close" : "yahoo-close"
+            incoming.append(Quote(symbol: symbol, price: latest.price, date: latest.date, source: source, fetchedAt: Date(), previousClose: previous?.price, previousCloseDate: previous?.date))
+            if retained.count > 1 {
+                let previous = retained[retained.count - 2]
                 if previous.date < latest.date {
                     previousClose[symbol] = previous.price
                     previousCloseDates[symbol] = previous.date
@@ -417,7 +459,8 @@ final class AppState: ObservableObject {
         let open = Set(Engine.summary(next).open.map(\.symbol))
         for quote in incoming where open.contains(quote.symbol) {
             if let existing = next.quote(for: quote.symbol),
-               (existing.source == nil && existing.date >= quote.date) || (existing.date > quote.date && !(quote.source == "yahoo-close" && QuoteService.usesClosingPrices(quoteSettings))) { continue }
+               (existing.source == nil && existing.date >= quote.date) || (existing.source == "manual-close" && existing.date >= quote.date)
+                || (existing.date > quote.date && !(quote.source == "yahoo-close" && QuoteService.usesClosingPrices(quoteSettings))) { continue }
             next.quotes.removeAll { $0.symbol == quote.symbol }
             next.quotes.append(quote)
         }
@@ -433,7 +476,8 @@ final class AppState: ObservableObject {
         var changed = false
         for quote in incoming where open.contains(quote.symbol) {
             if let existing = next.quote(for: quote.symbol),
-               (existing.source == nil && existing.date >= quote.date) || (existing.date > quote.date && !(quote.source == "yahoo-close" && QuoteService.usesClosingPrices(quoteSettings))) { continue }
+               (existing.source == nil && existing.date >= quote.date) || (existing.source == "manual-close" && existing.date >= quote.date)
+                || (existing.date > quote.date && !(quote.source == "yahoo-close" && QuoteService.usesClosingPrices(quoteSettings))) { continue }
             next.quotes.removeAll { $0.symbol == quote.symbol }
             next.quotes.append(quote)
             changed = true

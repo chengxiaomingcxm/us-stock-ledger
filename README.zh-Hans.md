@@ -8,7 +8,7 @@
 
 原生 SwiftUI iPhone App。不用注册账号、不连云同步、不埋点统计：账本就是 App 自己 `Documents` 目录下的一个 JSON 文件，行情 API Key 存在 iOS 钥匙串里。
 
-当前版本：**原生版 1.0.2（build 8）**，支持 iOS 16 及以上。账本格式为 `format: 2`，也就是 1.0 起的稳定数据基线；旧 Web 版的版本号、标签和发布记录与原生版分开看。
+当前版本：**原生版 1.0.2（build 9）**，支持 iOS 16 及以上。账本格式为 `format: 2`，也就是 1.0 起的稳定数据基线；旧 Web 版的版本号、标签和发布记录与原生版分开看。
 
 > **English: [README.md](README.md).** 本文件是中文版。
 
@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/74133eae-a0a3-4f36-99aa-370a8caa8923
 - 今日盈亏：上一收盘 + 当前价格 + 当日买卖和手续费；缺行情显示「待补全」，不以零代替。
 - 现金账本：期初余额、入金、出金、手动分红（含税费）和账户费用。
 - 每日收益日历和累计收益曲线（每周刻度 + 零轴）。
-- 行情来源：Yahoo 日线收盘、Finnhub 或自定义 HTTPS 接口。
+- 历史收盘配置后优先使用 Tiingo，并由 Yahoo、Nasdaq 兜底；盘中报价使用 Yahoo、Finnhub 或自定义 HTTPS 接口。
 - 导入带预览确认：券商交易/资金 CSV 和汇丰投资结单 PDF（PDFKit）。
 - 本地 JSON 备份与恢复；超过 30 天未备份有提醒。
 - 深/浅色、红涨绿跌／绿涨红跌、动态字体和 VoiceOver。
@@ -100,7 +100,7 @@ flowchart TD
 用户 → SwiftUI 视图 → AppState → Ledger（已校验）→ LedgerStore → Documents/ledger-v2.json
                                  ↘ Engine → 派生快照 → SwiftUI 视图
 
-AppState → QuoteService → Yahoo / Finnhub / 自定义 HTTPS → 归一化 → Ledger（缓存收盘价）
+AppState → QuoteService → Tiingo / Yahoo / Nasdaq / Finnhub / 自定义 HTTPS → 归一化 → Ledger（缓存收盘价）
 
 CSV 或 PDF → CsvImport / HSBCStatement → 逐行校验 → 预览 → AppState → Ledger
 ```
@@ -131,9 +131,9 @@ releases/                  各版本发布说明
 | App | Swift 5、SwiftUI、iOS 16+ |
 | 存储 | `Documents` 本地 JSON（`ledger-v2.json`）；API Key 存 iOS 钥匙串 |
 | 结单 | PDFKit（汇丰投资结单）与自写 CSV 解析器 |
-| 网络 | `URLSession` 调 Yahoo Finance、Finnhub 或自定义 HTTPS 接口 |
+| 网络 | `URLSession` 调 Tiingo、Yahoo Finance、Nasdaq、Finnhub 或自定义 HTTPS 接口 |
 | 旧网页引擎 | TypeScript、Vite、Capacitor（仅构建与回归测试） |
-| 测试 | Vitest（149 项 / 14 文件）、Swift 原生套件（445 条固定断言，另有运行时心跳断言）、模拟器渲染、Playwright（26 项） |
+| 测试 | Vitest（149 项 / 14 文件）、Swift 原生套件（452 条固定断言，另有运行时心跳断言）、模拟器渲染、Playwright（26 项） |
 | CI | GitHub Actions：`checks` 跑 `ubuntu-latest`，iOS 构建跑 `macos-26` |
 | 工具链 | Node 24、pnpm 11、Xcode / `swiftc`、Playwright |
 
@@ -143,14 +143,14 @@ releases/                  各版本发布说明
 
 ```sh
 pnpm test                                # Vitest —— 149 项
-bash scripts/test-native.sh              # macOS —— Swift 原生套件，445 条固定断言
+bash scripts/test-native.sh              # macOS —— Swift 原生套件，452 条固定断言
 pnpm e2e                                 # Playwright —— 26 项
 ```
 
 | 套件 | 锁住什么 |
 | --- | --- |
 | Vitest（149 项 / 14 文件） | 账本数学、现金账本、交易区间、今日盈亏、CSV 导入规则、存储与恢复、本地化 |
-| Swift 原生（445 条固定断言） | Swift 引擎对 golden 账本、安全与恢复路径、诊断、示例模式、CSV 导入、错误路径，外加 25,000 收盘价 / 4,000 交易日 / 1,000 笔交易的负载测试 |
+| Swift 原生（452 条固定断言） | Swift 引擎对 golden 账本、安全与恢复路径、诊断、示例模式、CSV 导入、错误路径，外加 25,000 收盘价 / 4,000 交易日 / 1,000 笔交易的负载测试 |
 | 模拟器渲染 | 日历屏与六张 README 截图必须真的渲染出示例数据；空白或空态截图直接判失败 |
 | Playwright（26 项） | 真实用户路径，含 320 / 402 / 430px 下「无横向溢出」 |
 
@@ -205,7 +205,7 @@ open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 
 ### 版本发布
 
-当前版本为 **1.0.2 build 8**。未签名 IPA、校验和及说明见[发布文档](releases/v1.0.2-build8.md)，变更历史保留在 [CHANGELOG.md](CHANGELOG.md)。
+当前版本为 **1.0.2 build 9**。未签名 IPA、校验和及说明见[发布文档](releases/v1.0.2-build9.md)，变更历史保留在 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 数据与隐私
 
@@ -219,7 +219,7 @@ open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 
 只有行情请求，而且只带它必需的东西：
 
-- **Yahoo Finance、Finnhub 或你自己的 HTTPS 接口**只会收到你持有（或你主动查询）的**股票代码**，用来返回价格。它们不会收到数量、成本、现金记录、手动录入的价格，也不会收到备份。
+- **Tiingo、Yahoo Finance、Nasdaq、Finnhub 或你自己的 HTTPS 接口**只会收到你持有（或你主动查询）的**股票代码**，用来返回价格。它们不会收到数量、成本、现金记录、手动录入的价格，也不会收到备份。
 - 没有埋点统计、没有崩溃上报、没有广告 SDK、没有第三方追踪。
 - 技术失败会记在**设备本地**的诊断日志里，这样界面能给出可读文案，同时保留你能查的细节。日志不会上传。
 

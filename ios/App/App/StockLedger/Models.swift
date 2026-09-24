@@ -35,7 +35,7 @@ struct Quote: Identifiable, Codable, Hashable {
     var symbol: String
     var price: Decimal
     var date: String
-    var source: String?      // manual / yahoo-close / finnhub-live / custom-live
+    var source: String?      // manual / manual-close / yahoo-close / finnhub-live / custom-live
     var fetchedAt: Date?
     var previousClose: Decimal? = nil
     var previousCloseDate: String? = nil
@@ -45,6 +45,7 @@ struct Quote: Identifiable, Codable, Hashable {
     var sourceLabel: String {
         switch source {
         case "yahoo-close": return L10n.tr("美股收盘")
+        case "manual-close": return L10n.tr("手动收盘价")
         case "finnhub-live": return L10n.tr("Finnhub 报价")
         case "custom-live": return L10n.tr("接口报价")
         default: return L10n.tr("手动报价")
@@ -101,6 +102,7 @@ struct PricePoint: Codable, Hashable {
     var symbol: String
     var date: String
     var price: Decimal
+    var source: String? = nil // yahoo / tiingo / nasdaq / manual；旧账本缺失时保持兼容
 }
 
 struct SplitEvent: Codable, Hashable {

@@ -53,12 +53,12 @@ Then run on a simulator or your own device. The bundle identifier is `com.person
 
 ```sh
 pnpm test                          # Vitest — 148 cases in 13 files
-bash scripts/test-native.sh        # macOS — native Swift suites (429 fixed assertions)
+bash scripts/test-native.sh        # macOS — native Swift suites (452 fixed assertions)
 bash scripts/test-calendar-rendering.sh   # macOS — renders the calendar on a simulator
 bash scripts/test-screenshots.sh          # macOS — renders all six README screenshots
 ```
 
-The native number is quoted as **fixed assertions**. The harness prints `PASS: N assertions; … main actor heartbeats: K`, and `N` includes one assertion per heartbeat of the 25,000-close reload loop, so `N` moves with machine speed (observed 25–68 across runs). What never varies is `N − K`: 413 for the 1.0.1 build, 429 since the synthetic-statement fixture landed. Per-commit arithmetic lives in `docs/ENGLISH_UI_FINAL_AUDIT.md` §3.
+The native number is quoted as **fixed assertions**. The harness prints `PASS: N assertions; … main actor heartbeats: K`, and `N` includes one assertion per heartbeat of the 25,000-close reload loop, so `N` moves with machine speed. For build 9, `N − K` is 452; older per-commit arithmetic remains in `docs/ENGLISH_UI_FINAL_AUDIT.md` §3.
 
 `test-native.sh` compiles `tests/native/*.swift` together with the app sources through `swiftc`. It uses an **explicit file list**, and the native Swift test files live outside the Xcode project, so:
 
@@ -108,7 +108,7 @@ There is deliberately no `--no-verify` escape hatch documented here: if the gate
 
 ## Release
 
-The current release is **1.0.2 build 8**. [`releases/v1.0.2-build8.md`](../releases/v1.0.2-build8.md) is the retained release note. The IPA comes from a verified main build; `CHANGELOG.md` keeps the version history.
+The current release is **1.0.2 build 9**. [`releases/v1.0.2-build9.md`](../releases/v1.0.2-build9.md) is the retained release note. The IPA comes from a verified main build; `CHANGELOG.md` keeps the version history.
 
 ## Repository Conventions
 

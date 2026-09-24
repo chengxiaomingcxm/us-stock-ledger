@@ -272,6 +272,7 @@ struct NativeTests {
     }
 
     /// Yahoo 某天 close=null 时，只接受 Nasdaq 同日的明确收盘价，不猜盘中价。
+    @MainActor
     private static func quoteHistoryGap() {
         // 使用真实日期的美东上午时刻，避免把时间戳误认成别的交易日。
         let dates = ["2026-09-21T13:30:00Z", "2026-09-22T13:30:00Z", "2026-09-23T13:30:00Z"]
@@ -301,5 +302,30 @@ struct NativeTests {
         let wrong: [String: Any] = ["status": ["rCode": 200], "data": ["symbol": "WRONG", "tradesTable": ["rows": []]]]
         check((try? QuoteService.parseNasdaq(wrong, symbol: "PFE", missingDates: ["2026-09-22"], now: now)) == nil,
               "代码不匹配时拒绝补价")
+
+        let tiingoRows: [[String: Any]] = [
+            ["date": "2026-09-22T00:00:00.000Z", "close": 27.95, "splitFactor": 1],
+            ["date": "not-a-date", "close": 999, "splitFactor": 1],
+        ]
+        let tiingo = try! QuoteService.parseTiingo(tiingoRows, symbol: "PFE", now: now)
+        check(tiingo.closes.count == 1 && tiingo.closes[0].price == 27.95 && tiingo.closes[0].source == "tiingo",
+              "Tiingo 只接受有效已完成日线")
+        let merged = QuoteService.mergeSeries(primary: tiingo, fallback: yahoo)
+        check(merged.closes.first { $0.date == "2026-09-22" }?.price == 27.95 && merged.missingDates.isEmpty,
+              "Tiingo 优先并补掉 Yahoo 明确缺口")
+
+        let oldPoint = try! JSONDecoder().decode(PricePoint.self, from: Data(#"{"symbol":"PFE","date":"2026-09-21","price":27.74}"#.utf8))
+        check(oldPoint.source == nil, "旧账本无行情来源字段仍可读取")
+        let oldSettings = try! JSONDecoder().decode(QuoteSettings.self, from: Data(#"{"provider":"yahoo","url":"","key":"","interval":60}"#.utf8))
+        check(oldSettings.tiingoKey == nil, "旧钥匙串设置无 Tiingo 字段仍可读取")
+
+        var manualLedger = ledger
+        manualLedger.history.closes = yahoo.closes
+        let manualState = AppState(ledger: manualLedger, settings: QuoteSettings(), persist: { _ in })
+        check(manualState.setHistoricalClose(symbol: "PFE", price: 27.93, date: "2026-09-22"), "可手工补已有交易日收盘")
+        check(manualState.ledger.history.closes.first { $0.symbol == "PFE" && $0.date == "2026-09-22" }?.source == "manual",
+              "手工收盘价带持久优先标记")
+        check(!manualState.setHistoricalClose(symbol: "PFE", price: 1, date: "2026-09-20"),
+              "拒绝给非收益日历日期补价")
     }
 }
