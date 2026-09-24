@@ -133,16 +133,16 @@ struct TodayCard: View {
                 Text(L10n.tr(result.title)).font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
                 Button {
-                    Task { await state.refreshQuotes() }
+                    Task { await state.refreshMarketData() }
                 } label: {
-                    if state.syncingQuotes {
+                    if state.syncingQuotes || state.syncingHistory {
                         ProgressView().controlSize(.small)
                     } else {
                         Label(L10n.tr("同步行情"), systemImage: "arrow.clockwise")
                     }
                 }
                 .font(.footnote)
-                .disabled(state.syncingQuotes || state.ledger.trades.isEmpty || state.demo)
+                .disabled(state.syncingQuotes || state.syncingHistory || state.ledger.trades.isEmpty || state.demo)
             }
             Text(result.pnl == nil ? L10n.tr("待补全") : Fmt.signedMoney(result.pnl))
                 .font(.largeTitle.weight(.bold))
@@ -208,8 +208,8 @@ struct PositionDetailView: View {
                             LabeledContent(L10n.tr("上一收盘"), value: "\(Fmt.money(previous))\(state.previousCloseDates[position.symbol].map { "（\($0)）" } ?? "")")
                         }
                         Button(L10n.tr("更新股价"), action: onEditQuote)
-                        Button(L10n.tr("同步行情")) { Task { await state.refreshQuotes() } }
-                            .disabled(state.syncingQuotes || state.demo)
+                        Button(L10n.tr("同步行情")) { Task { await state.refreshMarketData() } }
+                            .disabled(state.syncingQuotes || state.syncingHistory || state.demo)
                     }
                     Section(L10n.tr("相关交易")) {
                         let related = Array(Ledger.sortedTrades(state.ledger.trades.filter { $0.symbol == symbol }).reversed())

@@ -8,7 +8,7 @@
 
 A native SwiftUI app for iPhone. No account, no cloud sync, no analytics: your ledger is one JSON file inside the app's own `Documents` folder, and quote API keys live in the iOS Keychain.
 
-**Current version: native 1.0.1 (build 6)** — iOS 16+. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
+**Current version: native 1.0.2 (build 8)** — iOS 16+. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
 
 > **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
@@ -133,7 +133,7 @@ releases/                  per-version release notes
 | Statements | PDFKit (HSBC investment statement) and a custom CSV parser |
 | Networking | `URLSession` against Yahoo Finance, Finnhub, or a custom HTTPS endpoint |
 | Legacy web engine | TypeScript, Vite, Capacitor (build and regression tests only) |
-| Tests | Vitest (149 cases / 14 files), native Swift suites (441 fixed assertions, plus runtime heartbeat assertions), simulator renders, Playwright (26 cases) |
+| Tests | Vitest (149 cases / 14 files), native Swift suites (445 fixed assertions, plus runtime heartbeat assertions), simulator renders, Playwright (26 cases) |
 | CI | GitHub Actions: `checks` on `ubuntu-latest`, iOS build on `macos-26` |
 | Tooling | Node 24, pnpm 11, Xcode / `swiftc`, Playwright |
 
@@ -143,14 +143,14 @@ Three suites — two cross-platform, the native one macOS-only:
 
 ```sh
 pnpm test                                # Vitest — 149 cases
-bash scripts/test-native.sh              # macOS — native Swift suites, 441 fixed assertions
+bash scripts/test-native.sh              # macOS — native Swift suites, 445 fixed assertions
 pnpm e2e                                 # Playwright — 26 cases
 ```
 
 | Suite | What it locks down |
 | --- | --- |
 | Vitest (149 cases, 14 files) | Ledger maths, cash ledger, trade ranges, today's P&L, CSV import rules, storage and recovery, localization |
-| Native Swift (441 fixed assertions) | The Swift engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths — plus a 25,000-close / 4,000-session / 1,000-trade load test |
+| Native Swift (445 fixed assertions) | The Swift engine against golden ledgers, safety and recovery paths, diagnostics, Demo Mode, CSV import, error paths — plus a 25,000-close / 4,000-session / 1,000-trade load test |
 | Simulator renders | The calendar screen and all six README screenshots must actually render demo data; a blank or empty-state PNG fails the run |
 | Playwright (26 cases) | Full user journeys against the built app, including "no horizontal overflow" at 320 / 402 / 430 px |
 
@@ -205,7 +205,7 @@ Development happens on `deepseek-dev`, reviewed changes are merged to `main`, an
 
 ### Releases
 
-The project is sealed at **1.0.1 build 7**. The final unsigned IPA, checksum and notes are published in [the final release](releases/v1.0.1-build7.md); the running history remains in [CHANGELOG.md](CHANGELOG.md).
+The current version is **1.0.2 build 8**. The unsigned IPA, checksum and notes are published in [the release](releases/v1.0.2-build8.md); the running history remains in [CHANGELOG.md](CHANGELOG.md).
 
 ## Data & Privacy
 

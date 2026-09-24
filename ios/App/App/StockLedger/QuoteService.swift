@@ -281,6 +281,8 @@ enum QuoteService {
         var closes: [PricePoint] = []   // 升序
         var splits: [SplitEvent] = []
         var sessions: [String] = []
+        var missingDates: [String] = []
+        var instrumentType = ""
     }
 
     private static func seriesURL(_ symbol: String) -> URL? {
@@ -306,7 +308,12 @@ enum QuoteService {
             await withTaskGroup(of: (String, DailySeries?, String?).self) { group in
                 for symbol in chunk {
                     group.addTask {
-                        do { return (symbol, try await fetchSeries(symbol: symbol), nil) }
+                        do {
+                            let yahoo = try await fetchSeries(symbol: symbol)
+                            guard !yahoo.missingDates.isEmpty else { return (symbol, yahoo, nil) }
+                            do { return (symbol, try await fillMissingCloses(yahoo, symbol: symbol), nil) }
+                            catch { return (symbol, yahoo, (error as? QuoteError)?.errorDescription ?? error.localizedDescription) }
+                        }
                         catch { return (symbol, nil, (error as? QuoteError)?.errorDescription ?? error.localizedDescription) }
                     }
                 }
@@ -350,11 +357,11 @@ enum QuoteService {
         let precision = (hint.map { (0 ... 8).contains($0) } ?? false) ? hint! : 8
 
         var points: [PricePoint] = []
+        var missingDates: [String] = []
         for index in times.indices {
             guard let seconds = times[index], seconds.isFinite, seconds > 0 else { continue }
             let time = Date(timeIntervalSince1970: seconds)
             guard time <= now else { continue }
-            guard let value = price(closes[index]) else { continue }
             let date = MarketClock.date(time)
             if date > today { continue }
             if date == today {
@@ -364,6 +371,7 @@ enum QuoteService {
                       MarketClock.date(Date(timeIntervalSince1970: end)) == date,
                       now >= Date(timeIntervalSince1970: end + 900) else { continue }
             }
+            guard let value = price(closes[index]) else { missingDates.append(date); continue }
             points.append(PricePoint(symbol: symbol, date: date, price: round(value, scale: precision)))
         }
         points.sort { $0.date < $1.date }
@@ -378,7 +386,66 @@ enum QuoteService {
                 splits.append(SplitEvent(symbol: symbol, date: MarketClock.date(Date(timeIntervalSince1970: seconds))))
             }
         }
-        return DailySeries(closes: points, splits: splits, sessions: points.map(\.date))
+        return DailySeries(closes: points, splits: splits, sessions: points.map(\.date),
+                           missingDates: missingDates, instrumentType: instrument)
+    }
+
+    /// Yahoo 的某天 close 为 null 时，用 Nasdaq 明确标注日期的日收盘价补洞；原有 Yahoo 价格优先。
+    private static func fillMissingCloses(_ series: DailySeries, symbol: String) async throws -> DailySeries {
+        guard let first = series.missingDates.min(), let last = series.missingDates.max(),
+              let lastDay = MarketClock.day(last) else { return series }
+        // Nasdaq 对 fromdate == todate 返回 400；查询延长一天，解析时仍只接收缺口日期。
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = MarketClock.timeZone
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: lastDay) else { return series }
+        let end = MarketClock.date(nextDay)
+        guard var components = URLComponents(string: "https://api.nasdaq.com/api/quote/\(providerSymbol(symbol))/historical") else {
+            throw QuoteError.message("接口地址无效。")
+        }
+        components.queryItems = [
+            URLQueryItem(name: "assetclass", value: series.instrumentType == "ETF" ? "etf" : "stocks"),
+            URLQueryItem(name: "fromdate", value: first),
+            URLQueryItem(name: "todate", value: end),
+            URLQueryItem(name: "limit", value: "100"),
+        ]
+        guard let url = components.url else { throw QuoteError.message("接口地址无效。") }
+        let raw = try await get(url, headers: ["User-Agent": "Mozilla/5.0", "Accept": "application/json", "Origin": "https://www.nasdaq.com"])
+        let recovered = try parseNasdaq(raw, symbol: symbol, missingDates: Set(series.missingDates))
+        guard !recovered.isEmpty else { throw QuoteError.message("备用接口没有提供缺失日的收盘价。") }
+        var result = series
+        let known = Set(result.closes.map(\.date))
+        result.closes.append(contentsOf: recovered.filter { !known.contains($0.date) })
+        result.closes.sort { $0.date < $1.date }
+        result.sessions = result.closes.map(\.date)
+        return result
+    }
+
+    static func parseNasdaq(_ raw: Any, symbol: String, missingDates: Set<String>, now: Date = Date()) throws -> [PricePoint] {
+        guard let root = raw as? [String: Any],
+              let status = root["status"] as? [String: Any], status["rCode"] as? Int == 200,
+              let data = root["data"] as? [String: Any], data["symbol"] as? String == providerSymbol(symbol),
+              let table = data["tradesTable"] as? [String: Any],
+              let rows = table["rows"] as? [[String: Any]] else {
+            throw QuoteError.message("备用收盘行情无效。")
+        }
+        let today = MarketClock.date(now)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = MarketClock.timeZone
+        let minutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+        var seen: Set<String> = []
+        return rows.compactMap { row in
+            guard let rawDate = row["date"] as? String,
+                  rawDate.range(of: "^\\d{2}/\\d{2}/\\d{4}$", options: .regularExpression) != nil else { return nil }
+            let parts = rawDate.split(separator: "/")
+            let date = "\(parts[2])-\(parts[0])-\(parts[1])"
+            guard missingDates.contains(date), date < today || (date == today && minutes >= 975),
+                  let parsed = MarketClock.day(date), MarketClock.date(parsed) == date,
+                  seen.insert(date).inserted,
+                  let rawPrice = row["close"] as? String else { return nil }
+            let clean = rawPrice.replacingOccurrences(of: "$", with: "").replacingOccurrences(of: ",", with: "")
+            guard let value = price(clean), value > 0, value < Decimal(1_000_000_000_000) else { return nil }
+            return PricePoint(symbol: symbol, date: date, price: value)
+        }
     }
 
     /// 兼容旧调用：只取最新一条收盘价。

@@ -319,6 +319,12 @@ final class AppState: ObservableObject {
 
     var openSymbolList: [String] { openSymbols }
 
+    /// 手动刷新同时更新报价与收益日历；前台定时器仍只刷新报价。
+    func refreshMarketData() async {
+        await refreshQuotes()
+        await syncHistory()
+    }
+
     /// 同步全部持仓报价：请求失败只记录原因并保留已有价格，绝不写入零价或错误价格。
     func refreshQuotes() async {
         let recent = MarketClock.date(Date().addingTimeInterval(-10 * 86400))
@@ -338,10 +344,18 @@ final class AppState: ObservableObject {
 
         var incoming: [Quote] = []
         for (symbol, live) in result.quotes {
-            incoming.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date(), previousClose: live.previousClose, previousCloseDate: live.previousCloseDate))
-            if let previous = live.previousClose, live.previousCloseDate != live.date {
+            // Yahoo 日线若跳过了一个空值日期，保留已从历史同步补齐的更近收盘基准。
+            let history = ledger.history.closes.filter { $0.symbol == symbol && $0.date < live.date }.max { $0.date < $1.date }
+            let useHistory = history.map { point in
+                guard let previousDate = live.previousCloseDate else { return true }
+                return point.date > previousDate
+            } ?? false
+            let previous = useHistory ? history?.price : live.previousClose
+            let previousDate = useHistory ? history?.date : live.previousCloseDate
+            incoming.append(Quote(symbol: symbol, price: live.price, date: live.date, source: live.source, fetchedAt: Date(), previousClose: previous, previousCloseDate: previousDate))
+            if let previous, previousDate != live.date {
                 previousClose[symbol] = previous
-                if let date = live.previousCloseDate { previousCloseDates[symbol] = date }
+                if let date = previousDate { previousCloseDates[symbol] = date }
                 else { previousCloseDates.removeValue(forKey: symbol) }
             } else {
                 previousClose.removeValue(forKey: symbol)

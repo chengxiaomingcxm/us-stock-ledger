@@ -47,6 +47,7 @@ struct NativeTests {
 
     @MainActor
     static func main() async throws {
+        quoteHistoryGap()
         // 测试期间不得写真实的 Documents：诊断日志统一重定向到临时文件。
         Diagnostics.fileURLOverride = FileManager.default.temporaryDirectory
             .appendingPathComponent("stock-ledger-native-tests-diagnostics.log")
@@ -268,5 +269,37 @@ struct NativeTests {
         market.quotes[0].date = "2026-09-18"
         check(Engine.todayPnl(market, previousClose: ["TEST": 100], today: "2026-09-17").pnl == nil, "future quote cannot value a past session")
         print("PASS: \(assertions) assertions; 25,000 closes / 4,000 sessions / 1,000 trades: \(elapsed)s; main actor heartbeats: \(heartbeats)")
+    }
+
+    /// Yahoo 某天 close=null 时，只接受 Nasdaq 同日的明确收盘价，不猜盘中价。
+    private static func quoteHistoryGap() {
+        // 使用真实日期的美东上午时刻，避免把时间戳误认成别的交易日。
+        let dates = ["2026-09-21T13:30:00Z", "2026-09-22T13:30:00Z", "2026-09-23T13:30:00Z"]
+        let chart: [String: Any] = ["chart": ["error": NSNull(), "result": [[
+            "meta": ["symbol": "PFE", "currency": "USD", "exchangeTimezoneName": "America/New_York", "instrumentType": "EQUITY"],
+            "timestamp": dates.map { ISO8601DateFormatter().date(from: $0)!.timeIntervalSince1970 },
+            "indicators": ["quote": [["close": [27.74, NSNull(), 28.18]]]],
+        ]]]]
+        let now = ISO8601DateFormatter().date(from: "2026-09-24T11:00:00Z")!
+        let yahoo = try! QuoteService.parseSeries(chart, symbol: "PFE", provider: "PFE", now: now)
+        check(yahoo.missingDates == ["2026-09-22"] && yahoo.closes.count == 2, "Yahoo 空收盘价单独标记")
+        let nasdaq: [String: Any] = ["status": ["rCode": 200], "data": [
+            "symbol": "PFE", "tradesTable": ["rows": [
+                ["date": "09/22/2026", "close": "$27.93"],
+                ["date": "09/23/2026", "close": "$999"],
+            ]],
+        ]]
+        let recovered = try! QuoteService.parseNasdaq(nasdaq, symbol: "PFE", missingDates: Set(yahoo.missingDates), now: now)
+        check(recovered.count == 1 && recovered[0].date == "2026-09-22" && recovered[0].price == 27.93,
+              "Nasdaq 只补指定日期的正式收盘价")
+        var ledger = Ledger()
+        ledger.trades = [Trade(sequence: 0, symbol: "PFE", side: .buy, date: "2026-09-21", quantity: 1, price: 27.74, fee: 0)]
+        ledger.history.sessions = ["2026-09-21", "2026-09-22", "2026-09-23"]
+        ledger.history.closes = yahoo.closes + recovered
+        let returns = Engine.dailyReturns(ledger)
+        check(returns.first { $0.date == "2026-09-22" }?.profit == 0.19, "补洞后当日收益恢复，按真实收盘价计算")
+        let wrong: [String: Any] = ["status": ["rCode": 200], "data": ["symbol": "WRONG", "tradesTable": ["rows": []]]]
+        check((try? QuoteService.parseNasdaq(wrong, symbol: "PFE", missingDates: ["2026-09-22"], now: now)) == nil,
+              "代码不匹配时拒绝补价")
     }
 }

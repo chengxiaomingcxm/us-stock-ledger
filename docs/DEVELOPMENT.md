@@ -108,7 +108,7 @@ There is deliberately no `--no-verify` escape hatch documented here: if the gate
 
 ## Release
 
-The project is sealed at **1.0.1 build 7**. [`releases/v1.0.1-build7.md`](../releases/v1.0.1-build7.md) is the only retained release note. The published IPA is the verified artifact from main commit `97c36ee`; old release manifests and assets are intentionally not retained. `CHANGELOG.md` remains the source history.
+The current release is **1.0.2 build 8**. [`releases/v1.0.2-build8.md`](../releases/v1.0.2-build8.md) is the retained release note. The IPA comes from a verified main build; `CHANGELOG.md` keeps the version history.
 
 ## Repository Conventions
 

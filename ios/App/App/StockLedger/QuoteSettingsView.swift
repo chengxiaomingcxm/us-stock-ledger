@@ -38,15 +38,15 @@ struct QuoteSourceView: View {
                 NavigationLink(L10n.tr("API 设置")) { ApiSettingsView() }
                 LabeledContent(L10n.tr("上次同步"), value: state.lastSyncedAt.map { Fmt.clock($0) } ?? L10n.tr("尚未同步"))
                 Button {
-                    Task { await state.refreshQuotes() }
+                    Task { await state.refreshMarketData() }
                 } label: {
-                    if state.syncingQuotes {
+                    if state.syncingQuotes || state.syncingHistory {
                         Label(L10n.tr("正在同步…"), systemImage: "arrow.triangle.2.circlepath")
                     } else {
                         Label(L10n.tr("立即同步持仓行情"), systemImage: "arrow.clockwise")
                     }
                 }
-                .disabled(state.syncingQuotes || state.demo)
+                .disabled(state.syncingQuotes || state.syncingHistory || state.demo)
                 ForEach(state.quoteErrors.sorted { $0.key < $1.key }, id: \.key) { entry in
                     Label(L10n.tr("{}：{}", entry.key, entry.value), systemImage: "wifi.exclamationmark")
                         .font(.footnote).foregroundStyle(.secondary)
