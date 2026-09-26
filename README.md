@@ -8,7 +8,7 @@
 
 A native SwiftUI app for iPhone. No account, no cloud sync, no analytics: your ledger is one JSON file inside the app's own `Documents` folder, and quote API keys live in the iOS Keychain.
 
-**Current version: native 1.0.2 (build 9)** — iOS 16+. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
+**Current source version: native 1.1.0** — iOS 16+. A test IPA is being prepared; this version is not a GitHub Release. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
 
 > **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
@@ -212,7 +212,7 @@ The application source license does not grant rights to redistribute Tiingo mark
 
 ### Releases
 
-The current version is **1.0.2 build 9**. The unsigned IPA, checksum and notes are published in [the release](releases/v1.0.2-build9.md); the running history remains in [CHANGELOG.md](CHANGELOG.md).
+The current source version is **1.1.0**. The latest published GitHub Release remains 1.0.2; 1.1.0 is a test package, not a release. See [CHANGELOG.md](CHANGELOG.md) for the current changes and historical versions.
 
 ## Data & Privacy
 

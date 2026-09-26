@@ -388,7 +388,7 @@ struct ReturnCalendar: View, Equatable {
                 }
                 ProfitRow(label: L10n.tr("本月收益"), value: stats.profit)
                     .font(.headline)
-                LabeledContent(L10n.tr("交易日"), value: "\(stats.rows.count) \(L10n.tr("天"))")
+                LabeledContent(L10n.tr("已计算"), value: "\(stats.complete) \(L10n.tr("天"))")
                 if stats.missing > 0 {
                     Text("\(stats.missing) \(L10n.tr("天收盘价不完整，未计入月度合计。"))")
                         .font(.caption2).foregroundStyle(.secondary)

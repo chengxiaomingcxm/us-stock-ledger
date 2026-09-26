@@ -428,7 +428,7 @@ final class AppState: ObservableObject {
 
         var incoming: [Quote] = []
         for (symbol, series) in result.series {
-            if symbol == "SPY" { sessions.formUnion(series.sessions) }
+            sessions.formUnion(Engine.validTradingDates(series.sessions))
             for point in series.closes where symbol != "SPY" {
                 let key = point.symbol + "|" + point.date
                 if closes[key]?.source != "manual" { closes[key] = point }

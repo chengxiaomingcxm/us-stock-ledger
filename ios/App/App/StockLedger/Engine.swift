@@ -180,6 +180,7 @@ enum Engine {
     struct Contribution: Identifiable, Equatable {
         var symbol: String
         var profit: Decimal?
+        var percent: Decimal? = nil
         var reason: String?
         var id: String { symbol }
     }
@@ -191,6 +192,7 @@ enum Engine {
         var cumulative: Decimal?
         var contributions: [Contribution]
         var missing: [String]
+        var basis: Decimal? = nil
         var id: String { date }
     }
 
@@ -212,6 +214,13 @@ enum Engine {
         return weekday == 1 || weekday == 7 || holidays.contains(date)
     }
 
+    static func validTradingDates(_ dates: [String]) -> [String] {
+        Array(Set(dates.filter { date in
+            guard let parsed = MarketClock.utcDay(date), MarketClock.utcDate(parsed) == date else { return false }
+            return !knownClosed(date)
+        })).sorted()
+    }
+
     /// 每日收益：期末市值 − 期初（上一交易日收盘）市值 + 当日卖出净额 − 当日买入含费支出。
     /// 重放当前账本，历史交易被修改后不会留下过期收益；任一必需收盘价缺失时该日显示待补全。
     static func dailyReturns(_ ledger: Ledger) -> [DayReturn] {
@@ -223,10 +232,10 @@ enum Engine {
         for close in ledger.history.closes { prices[close.symbol + "|" + close.date] = close.price }
         var firstTrade: [String: String] = [:]
         for trade in trades where firstTrade[trade.symbol] == nil { firstTrade[trade.symbol] = trade.date }
-        let splitSymbols = Set(ledger.history.splits.filter { split in
+        let splitDates = Dictionary(grouping: ledger.history.splits.filter { split in
             guard let first = firstTrade[split.symbol] else { return false }
             return split.date >= first
-        }.map(\.symbol))
+        }, by: \.symbol).compactMapValues { $0.map(\.date).min() }
         guard let firstDate = trades.first?.date else { return [] }
 
         var quantity: [String: Decimal] = [:]
@@ -278,6 +287,7 @@ enum Engine {
 
             var total = Decimal(0)
             var value = Decimal(0)
+            var basis = Decimal(0)
             var endComplete = true
             var missing: [String] = []
             var contributions: [Contribution] = []
@@ -287,7 +297,7 @@ enum Engine {
                 let endQty = quantity[symbol] ?? 0
                 let before = previous.flatMap { prices[symbol + "|" + $0] }
                 let after = prices[symbol + "|" + date]
-                let isSplit = splitSymbols.contains(symbol)
+                let isSplit = (splitDates[symbol].map { $0 <= date } ?? false) && (startQty > 0 || endQty > 0)
                 var reason: String?
                 if isSplit { reason = L10n.tr("发现拆股，需先核对股数与成本") }
                 else if stray.contains(symbol) { reason = L10n.tr("相邻交易日之间有交易记录，请核对美东交易日期") }
@@ -306,11 +316,13 @@ enum Engine {
                     let startValue = startQty > 0 && before != nil ? startQty * before! : 0
                     let profit = endValue - startValue + (flows[symbol] ?? 0)
                     total += profit
-                    contributions.append(Contribution(symbol: symbol, profit: profit, reason: nil))
+                    if startQty > 0 { basis += startValue }
+                    contributions.append(Contribution(symbol: symbol, profit: profit,
+                                                       percent: startValue > 0 ? profit / startValue : nil, reason: nil))
                 }
             }
 
-            if splitSymbols.contains(where: { firstTrade[$0].map { $0 <= date } ?? false }) { endComplete = false }
+            if splitDates.contains(where: { $0.value <= date && (quantity[$0.key] ?? 0) > 0 }) { endComplete = false }
 
             output.append(DayReturn(
                 date: date,
@@ -318,40 +330,55 @@ enum Engine {
                 profit: missing.isEmpty ? total : nil,
                 cumulative: endComplete ? value + cash : nil,
                 contributions: contributions,
-                missing: missing
+                missing: missing,
+                basis: missing.isEmpty ? basis : nil
             ))
         }
         return output
     }
 
-    /// Latest API marks replace only the most recent market-session row; prior days remain close-based.
+    /// Latest available quotes replace only the most recent market-session row; prior days remain close-based.
     static func applyingLiveQuotes(_ days: [DayReturn], to ledger: Ledger, now: Date = Date()) -> [DayReturn] {
         let today = MarketClock.date(now)
-        let liveQuotes = ledger.quotes.filter { $0.isLive && $0.date <= today && !isStaleQuote($0, now: now) }
-        guard let date = liveQuotes.map(\.date).max(),
+        let symbols = Set(ledger.trades.map(\.symbol))
+        let currentQuotes = ledger.quotes.filter { quote in
+            guard symbols.contains(quote.symbol), quote.date <= today,
+                  let parsed = MarketClock.utcDay(quote.date), MarketClock.utcDate(parsed) == quote.date else { return false }
+            return !quote.isLive || !isStaleQuote(quote, now: now)
+        }
+        guard let date = currentQuotes.map(\.date).max(),
               days.last.map({ date >= $0.date }) ?? true else { return days }
+        let quotesForDate = currentQuotes.filter { $0.date == date }
 
         var previousClose: [String: Decimal] = [:]
         var previousCloseDates: [String: String] = [:]
-        for quote in liveQuotes where quote.date == date {
+        for quote in quotesForDate {
             if let price = quote.previousClose, let previousDate = quote.previousCloseDate, previousDate < date {
                 previousClose[quote.symbol] = price
                 previousCloseDates[quote.symbol] = previousDate
             }
         }
         for symbol in Set(ledger.trades.map(\.symbol)) where previousClose[symbol] == nil {
-            if let close = ledger.history.closes.filter({ $0.symbol == symbol && $0.date < date }).max(by: { $0.date < $1.date }) {
+            if let close = validatedPreviousClose(ledger, symbol: symbol, before: date) {
                 previousClose[symbol] = close.price
                 previousCloseDates[symbol] = close.date
             }
         }
+        let invalidBaselines = previousClose.keys.filter { symbol in
+            guard let baselineDate = previousCloseDates[symbol] else { return true }
+            return !validBaselineDate(baselineDate, before: date)
+        }
+        for symbol in invalidBaselines {
+            previousClose.removeValue(forKey: symbol)
+            previousCloseDates.removeValue(forKey: symbol)
+        }
 
         let result = todayPnl(ledger, previousClose: previousClose, previousCloseDates: previousCloseDates, today: date)
-        let contributions = result.rows.map { Contribution(symbol: $0.symbol, profit: $0.pnl, reason: $0.reason) }
+        let contributions = result.rows.map { Contribution(symbol: $0.symbol, profit: $0.pnl, percent: $0.percent, reason: $0.reason) }
         let previous = days.last(where: { $0.date < date })
         let row = DayReturn(date: date, previous: previousCloseDates.values.min() ?? previous?.date,
                             profit: result.pnl, cumulative: result.pnl.flatMap { profit in previous?.cumulative.map { $0 + profit } },
-                            contributions: contributions, missing: result.missing)
+                            contributions: contributions, missing: result.missing, basis: result.basis)
         var updated = days
         if let index = updated.firstIndex(where: { $0.date == date }) { updated[index] = row }
         else { updated.append(row); updated.sort { $0.date < $1.date } }
@@ -427,14 +454,16 @@ enum Engine {
     struct TodayRow: Identifiable {
         var symbol: String
         var pnl: Decimal?
+        var percent: Decimal? = nil
         var reason: String?
         var id: String { symbol }
     }
 
     struct TodayResult {
+        var date: String? = nil
         var title: String = L10n.tr("今日盈亏")
         var pnl: Decimal?
-        var percent: Decimal?
+        var percent: Decimal? = nil
         var caption: String
         var missing: [String] = []
         var rows: [TodayRow] = []
@@ -443,36 +472,41 @@ enum Engine {
     }
 
     /// Evaluate a single actual quote session, excluding trades made after that session.
-    static func displayedReturn(_ ledger: Ledger, now: Date = Date()) -> TodayResult {
+    static func displayedReturn(_ ledger: Ledger, days suppliedDays: [DayReturn]? = nil, now: Date = Date()) -> TodayResult {
         let today = MarketClock.date(now)
-        let symbols = Set(ledger.trades.map(\.symbol))
-        let quotes = ledger.quotes.filter { symbols.contains($0.symbol) && $0.date <= today }
-        guard let date = quotes.map(\.date).max() else {
+        let days = suppliedDays ?? applyingLiveQuotes(dailyReturns(ledger), to: ledger, now: now)
+        guard let day = days.last(where: { $0.date <= today }) else {
             return TodayResult(caption: L10n.tr("尚无报价，请同步行情"))
         }
-        var before: [String: Decimal] = [:]
-        var dates: [String: String] = [:]
-        for quote in quotes where quote.date == date {
-            if let value = quote.previousClose, !(quote.source == "finnhub-live" && quote.date < today) {
-                before[quote.symbol] = value
-                if let day = quote.previousCloseDate { dates[quote.symbol] = day }
-            }
+        let symbols = Set(ledger.trades.map(\.symbol))
+        let quotes = ledger.quotes.filter { symbols.contains($0.symbol) && $0.date == day.date }
+        let closed = !quotes.isEmpty && quotes.allSatisfy { $0.source == "yahoo-close" || $0.source == "manual-close" }
+        var result = TodayResult(date: day.date, title: closed ? L10n.tr("最近收盘收益") : (day.date == today ? L10n.tr("今日盈亏") : L10n.tr("最近报价日收益")),
+                                 pnl: day.profit, caption: "\(L10n.tr("美东")) \(day.date) · " + (closed ? L10n.tr("已完成交易日收盘") : L10n.tr("最新报价")) + (day.profit == nil ? " · " + L10n.tr("待补全") : ""),
+                                 missing: day.missing)
+        result.percent = day.profit != nil && (day.basis ?? 0) > 0 ? day.profit! / day.basis! : nil
+        result.basis = day.basis
+        result.rows = day.contributions.map { contribution in
+            return TodayRow(symbol: contribution.symbol, pnl: contribution.profit,
+                            percent: contribution.percent,
+                            reason: contribution.reason)
         }
-        // 没有 previousClose 时用最近的历史收盘价补上当日基准（行情来源不提供，或从备份恢复后）。
-        let history = Dictionary(grouping: ledger.history.closes) { $0.symbol }
-        for symbol in symbols where before[symbol] == nil {
-            if let close = history[symbol]?.filter({ $0.date < date }).max(by: { $0.date < $1.date }),
-               let start = MarketClock.utcDay(close.date), let end = MarketClock.utcDay(date),
-               end.timeIntervalSince(start) <= 10 * 86400,
-               stride(from: start.timeIntervalSince1970 + 86400, to: end.timeIntervalSince1970, by: 86400).allSatisfy({ knownClosed(MarketClock.utcDate(Date(timeIntervalSince1970: $0))) }) {
-                before[symbol] = close.price; dates[symbol] = close.date
-            }
-        }
-        var result = todayPnl(ledger, previousClose: before, previousCloseDates: dates, today: date)
-        let closed = quotes.filter { $0.date == date }.allSatisfy { $0.source == "yahoo-close" }
-        result.title = closed ? L10n.tr("最近收盘收益") : (date == today ? L10n.tr("今日盈亏") : L10n.tr("最近报价日收益"))
-        result.caption = "\(L10n.tr("美东")) \(date) · " + (closed ? L10n.tr("已完成交易日收盘") : L10n.tr("最新报价")) + (result.pnl == nil ? " · " + L10n.tr("待补全") : "")
+        result.tradedToday = ledger.trades.filter { $0.date == day.date }.count
         return result
+    }
+
+    private static func validatedPreviousClose(_ ledger: Ledger, symbol: String, before date: String) -> PricePoint? {
+        guard let close = ledger.history.closes.filter({ $0.symbol == symbol && $0.date < date }).max(by: { $0.date < $1.date }),
+              validBaselineDate(close.date, before: date) else { return nil }
+        return close
+    }
+
+    private static func validBaselineDate(_ baseline: String, before date: String) -> Bool {
+        guard baseline < date, let start = MarketClock.utcDay(baseline), MarketClock.utcDate(start) == baseline,
+              let end = MarketClock.utcDay(date), MarketClock.utcDate(end) == date,
+              end.timeIntervalSince(start) <= 10 * 86_400 else { return false }
+        return stride(from: start.timeIntervalSince1970 + 86_400, to: end.timeIntervalSince1970, by: 86_400)
+            .allSatisfy { knownClosed(MarketClock.utcDate(Date(timeIntervalSince1970: $0))) }
     }
 
     static func todayPnl(_ ledger: Ledger, previousClose: [String: Decimal], previousCloseDates: [String: String] = [:], today: String) -> TodayResult {
@@ -529,7 +563,8 @@ enum Engine {
             if openQty > 0 { basis += startValue }
             let profit = endValue - startValue - buyCost + sellNet
             total += profit
-            rows.append(TodayRow(symbol: symbol, pnl: profit, reason: nil))
+            rows.append(TodayRow(symbol: symbol, pnl: profit,
+                                 percent: startValue > 0 ? profit / startValue : nil, reason: nil))
         }
 
         var caption = "\(L10n.tr("美东")) \(today)"
@@ -653,7 +688,6 @@ struct LedgerDerived {
     static func compute(_ ledger: Ledger, cached: LedgerDerived?, historyUnchanged: Bool) -> LedgerDerived {
         var value = LedgerDerived()
         value.summary = Engine.summary(ledger)
-        value.displayReturn = Engine.displayedReturn(ledger)
         value.cash = Engine.cashTotals(ledger)
         value.unknownDividendTax = ledger.cash.filter { $0.source == "hsbc-statement-net" && $0.tax == nil }.count
         value.trades = ledger.orderedTrades
@@ -661,6 +695,7 @@ struct LedgerDerived {
         value.symbols = value.summary.open.map(\.symbol)
         let historicalDays = historyUnchanged ? (cached?.days ?? Engine.dailyReturns(ledger)) : Engine.dailyReturns(ledger)
         value.days = Engine.applyingLiveQuotes(historicalDays, to: ledger)
+        value.displayReturn = Engine.displayedReturn(ledger, days: value.days)
         if historyUnchanged, let cached, value.days == cached.days {
             value.insights = cached.insights
         } else if !Task.isCancelled {

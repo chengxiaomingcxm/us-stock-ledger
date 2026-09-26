@@ -8,6 +8,8 @@ struct HoldingsView: View {
     @State private var detailSymbol: String?
     @State private var quoteSymbol: String?
     @AppStorage("backup.lastExport") private var lastExport = 0.0
+    @AppStorage("appearance.colors") private var colorSchemePreference = "green-up"
+    @Environment(\.colorScheme) private var colorScheme
 
     private var summary: LedgerSummary { state.summary }
 
@@ -87,6 +89,7 @@ struct HoldingsView: View {
     }
 
     private func row(_ position: Position) -> some View {
+        let daily = state.displayReturn.rows.first { $0.symbol == position.symbol }
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(position.symbol).font(.headline)
@@ -95,26 +98,36 @@ struct HoldingsView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(quoteLabel(position))
+                Text("\(L10n.tr("行情")) \(position.quote?.date ?? L10n.tr("待报价"))")
                     .font(.caption2).foregroundStyle(.secondary)
-                Text(position.unrealized.map { Fmt.percent($0 / max(position.cost, 1)) } ?? "—")
-                    .font(.subheadline)
-                AmountText(value: position.unrealized)
-                    .font(.subheadline.weight(.semibold))
+                labeledReturn("持仓收益", amount: position.unrealized,
+                              percent: position.unrealized.map { $0 / max(position.cost, 1) })
+                labeledReturn("今日涨跌", amount: daily?.pnl, percent: daily?.percent)
             }
             Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.tr("{}，{} 股，浮动收益 {}", position.symbol, Fmt.quantity(position.quantity), Fmt.signedMoney(position.unrealized)))
+        .accessibilityLabel(L10n.tr("{}，{} 股，持仓收益 {}，今日涨跌 {}", position.symbol, Fmt.quantity(position.quantity), Fmt.signedMoney(position.unrealized), Fmt.signedMoney(daily?.pnl)))
     }
 
-    private func quoteLabel(_ position: Position) -> String {
-        guard let quote = position.quote else { return L10n.tr("待报价") }
-        let stale = (Engine.isStaleQuote(quote) || quote.isStale) ? " · \(L10n.tr("较早"))" : ""
-        let updated = quote.isLive ? quote.fetchedAt.map { " · \(L10n.tr("更新时间")) \(Fmt.clock($0))" } ?? "" : ""
-        return "\(quote.date)\(updated)\(stale)"
+    private func labeledReturn(_ label: String, amount: Decimal?, percent: Decimal?) -> some View {
+        HStack(spacing: 5) {
+            Text(L10n.tr(label)).font(.caption2).foregroundStyle(.secondary)
+            Text(percent.map { Fmt.percent($0) } ?? "—")
+                .font(.caption).monospacedDigit().foregroundStyle(pnlColor(amount))
+            AmountText(value: amount).font(.caption.weight(.semibold))
+        }
     }
+
+    private func pnlColor(_ value: Decimal?) -> Color {
+        guard let value else { return .secondary }
+        let colors = ThemeColors(redUp: colorSchemePreference == "red-up")
+        if value > 0 { return colors.gain(colorScheme) }
+        if value < 0 { return colors.loss(colorScheme) }
+        return .primary
+    }
+
 }
 
 struct SymbolBox: Identifiable {

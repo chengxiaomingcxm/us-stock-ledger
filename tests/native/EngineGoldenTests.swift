@@ -281,6 +281,66 @@ enum EngineGoldenTests {
         expectNil(days[1].cumulative, "dailyReturns/缺收盘 — 曲线同样待补全")
     }
 
+    private static func dailyReturnRegressionCases() {
+        let base = dailyLedger()
+        let days = Engine.dailyReturns(base)
+        let home = Engine.displayedReturn(base, days: days)
+        NativeTests.check(home.date == days.last?.date && home.pnl == days.last?.profit,
+                          "Home/Calendar 共用最新日结果")
+        expect(days.last?.contributions.reduce(Decimal(0)) { $0 + ($1.profit ?? 0) }, "-10",
+               "按股票贡献相加等于日历组合收益")
+        let month = Engine.monthStats([
+            Engine.DayReturn(date: "2026-01-05", previous: nil, profit: decimal("10.005"), cumulative: nil, contributions: [], missing: []),
+            Engine.DayReturn(date: "2026-01-06", previous: nil, profit: nil, cumulative: nil, contributions: [], missing: ["AAA"]),
+            Engine.DayReturn(date: "2026-01-07", previous: nil, profit: decimal("10.005"), cumulative: nil, contributions: [], missing: []),
+        ], month: "2026-01")
+        expect(month.profit, "20.010", "月收益先加未舍入 Decimal")
+        NativeTests.check(month.complete == 2, "有效日计数排除待补全日期")
+        NativeTests.check(Fmt.money(month.profit) == "$20.01", "月度合计只在最终格式化时舍入")
+
+        var splitLedger = dailyLedger()
+        splitLedger.history.splits = [SplitEvent(symbol: "AAA", date: "2026-01-07")]
+        let splitDays = Engine.dailyReturns(splitLedger)
+        expect(splitDays.first { $0.date == "2026-01-06" }?.profit, "20", "拆股前完整日仍可计算")
+        expectNil(splitDays.first { $0.date == "2026-01-07" }?.profit, "拆股边界待补全")
+
+        let dates = Engine.validTradingDates(["2026-01-05", "2026-01-06", "2026-01-10", "bad-date"])
+        NativeTests.check(dates == ["2026-01-05", "2026-01-06"], "SPY 缺失时成功标的行情日期可并入并过滤无效/周末")
+
+        var missing = dailyLedger()
+        missing.history.closes.removeAll { $0.date == "2026-01-06" }
+        missing.quotes = [Quote(symbol: "AAA", price: decimal("11"), date: "2026-01-07", source: "tiingo-live",
+                                fetchedAt: MarketClock.utcDay("2026-01-07"), previousClose: nil, previousCloseDate: nil)]
+        let jan7Noon = ISO8601DateFormatter().date(from: "2026-01-07T18:00:00Z")!
+        let overlaid = Engine.applyingLiveQuotes(Engine.dailyReturns(missing), to: missing, now: jan7Noon)
+        expectNil(Engine.displayedReturn(missing, days: overlaid, now: jan7Noon).pnl,
+                  "缺少实时基准时首页与日历同时待补全")
+
+        var live = dailyLedger()
+        live.quotes = [Quote(symbol: "AAA", price: decimal("11"), date: "2026-01-07", source: "tiingo-live",
+                             fetchedAt: jan7Noon, previousClose: decimal("12"), previousCloseDate: "2026-01-06")]
+        let liveDays = Engine.applyingLiveQuotes(Engine.dailyReturns(live), to: live, now: jan7Noon)
+        let liveHome = Engine.displayedReturn(live, days: liveDays, now: jan7Noon)
+        expect(liveHome.pnl, "-10", "实时最新日首页复用日历结果")
+        expect(liveHome.rows.reduce(Decimal(0)) { $0 + ($1.pnl ?? 0) }, "-10",
+               "实时明细贡献与组合日收益对账")
+
+        var stale = dailyLedger()
+        stale.quotes = [Quote(symbol: "AAA", price: decimal("11"), date: "2026-01-20", source: "tiingo-live",
+                              fetchedAt: MarketClock.utcDay("2026-01-20"), previousClose: decimal("10"), previousCloseDate: "2026-01-05")]
+        let jan20Noon = ISO8601DateFormatter().date(from: "2026-01-20T18:00:00Z")!
+        let staleDays = Engine.applyingLiveQuotes(Engine.dailyReturns(stale), to: stale, now: jan20Noon)
+        expectNil(Engine.displayedReturn(stale, days: staleDays, now: jan20Noon).pnl,
+                  "过期基准时首页与日历同时待补全")
+
+        var separated = dailyLedger()
+        separated.quotes = [quote("AAA", "11", "2026-01-07")]
+        let separatedSummary = Engine.summary(separated)
+        expect(separatedSummary.positions.first?.unrealized, "10", "持仓收益仍为成本以来浮盈")
+        expect(Engine.displayedReturn(separated, days: Engine.dailyReturns(separated)).pnl, "-10",
+               "今日收益独立于持仓收益")
+    }
+
     // MARK: - Engine.todayPnl
 
     private static func todayLedger() -> Ledger {
@@ -427,6 +487,7 @@ enum EngineGoldenTests {
         dailyReturnsIgnoreCashFlows()
         dailyReturnsGap()
         dailyReturnsMissingClose()
+        dailyReturnRegressionCases()
         todayPnlNormal()
         todayPnlMissingPreviousClose()
         todayPnlPositionChange()

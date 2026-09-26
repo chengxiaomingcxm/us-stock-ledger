@@ -178,6 +178,10 @@ enum L10n {
         // 「This month」丢掉了“收益”这件事，而同一张卡片的日行叫 Daily P&L，这里跟上。
         "本月收益": "Monthly P&L",
         "交易日": "Trading days",
+        "已计算": "Calculated",
+        "行情": "Quote",
+        "今日涨跌": "Today's P&L",
+        "持仓收益": "Unrealized P&L",
         "天": "days",
         "天收盘价不完整，未计入月度合计。": "days have incomplete closes and are excluded from the total.",
         "盈利": "Gain",
@@ -551,6 +555,7 @@ enum L10n {
         "持平": "Flat",
         "清除 {}": "Clear {}",
         "{}，{} 股，浮动收益 {}": "{}, {} shares, unrealized {}",
+        "{}，{} 股，持仓收益 {}，今日涨跌 {}": "{} · {} shares · unrealized {} · today {}",
         "示例：买入 ETF": "Sample: buy ETF",
         "示例：定投 ETF": "Sample: recurring ETF buy",
         "示例：止损卖出": "Sample: stop-loss sale",
