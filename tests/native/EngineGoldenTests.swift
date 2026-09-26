@@ -525,6 +525,42 @@ enum EngineGoldenTests {
         expectNil(newResult.rows.first?.percent, "daily detail/new position percent is not unrealized percent")
     }
 
+    private static func unrealizedCalendarSnapshots() {
+        var ledger = Ledger()
+        ledger.trades = [
+            trade(0, "AAA", .buy, "2026-01-05", "10", "100", "2"),
+            trade(1, "AAA", .sell, "2026-01-07", "4", "150", "3"),
+            trade(2, "AAA", .buy, "2026-01-08", "2", "125", "1"),
+            trade(3, "AAA", .sell, "2026-01-09", "8", "200"),
+            trade(4, "ROUND", .buy, "2026-01-09", "1", "10"),
+            trade(5, "ROUND", .sell, "2026-01-09", "1", "20")
+        ]
+        ledger.history.sessions = ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"]
+        ledger.history.closes = zip(ledger.history.sessions, ["110", "112", "120", "110"]).map {
+            PricePoint(symbol: "AAA", date: $0.0, price: decimal($0.1))
+        }
+        ledger.quotes = [quote("AAA", "999", "2026-01-08")]
+        let snapshots = Engine.unrealizedSnapshots(ledger)
+        for (index, expected) in ["98", "118", "118.8", "27.8", "0"].enumerated() {
+            expect(snapshots[index].profit, expected, "snapshot/end-of-day remaining cost \(index)")
+        }
+        NativeTests.check(snapshots.last!.contributions.isEmpty, "snapshot/full sell and round trip excluded, no close needed")
+        expect(snapshots[2].contributions.first?.profit, "118.8", "snapshot/sale proceeds and realized profit excluded")
+        let presentation = InsightsPresentation(days: Engine.dailyReturns(ledger), calendarDays: snapshots)
+        expect(presentation.calendar["2026-01"]?.stats.rows.last?.profit, "0", "snapshot/month ends at final snapshot, not sum")
+        expect(presentation.calendar["2026-01"]?.stats.profit, "0", "snapshot/no accumulated unrealized subtotal")
+        var missing = ledger
+        missing.history.closes.removeAll { $0.date == "2026-01-06" }
+        expectNil(Engine.unrealizedSnapshots(missing)[1].profit, "snapshot/missing same-day close not replaced by live quote or prior close")
+        var split = ledger
+        split.history.splits = [SplitEvent(symbol: "AAA", date: "2026-01-07")]
+        expect(Engine.unrealizedSnapshots(split)[1].profit, "118", "snapshot/pre-split remains valid")
+        expectNil(Engine.unrealizedSnapshots(split)[2].profit, "snapshot/split-adjusted quantity not invented")
+        var withCash = ledger
+        withCash.cash = [cash(0, "2026-01-06", .dividend, "100"), cash(1, "2026-01-06", .deposit, "1000")]
+        NativeTests.check(Engine.unrealizedSnapshots(withCash) == snapshots, "snapshot/dividends and deposits excluded")
+    }
+
     // MARK: - 入口
 
     static func run() {
@@ -539,6 +575,7 @@ enum EngineGoldenTests {
         dailyReturnsMissingClose()
         dailyReturnRegressionCases()
         dailyDetailPresentation()
+        unrealizedCalendarSnapshots()
         todayPnlNormal()
         todayPnlMissingPreviousClose()
         todayPnlPositionChange()

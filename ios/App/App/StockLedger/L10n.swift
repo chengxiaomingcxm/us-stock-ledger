@@ -33,6 +33,14 @@ enum L10n {
 
     /// 中文文案 → 英文译文。
     static let en: [String: String] = [
+        "月内最后交易日浮盈": "Last session unrealized P&L",
+        "收盘浮盈": "Unrealized P&L at close",
+        "浮盈合计": "Total unrealized P&L",
+        "拆股后持仓与成本待核对": "Holdings and cost after split need verification",
+        "{} 天浮盈快照待补全": "{} unrealized snapshots incomplete",
+        "每天格子显示收盘浮盈快照，点按查看当时持仓的浮盈明细。": "Each cell shows unrealized P&L at close. Tap for that day's holdings breakdown.",
+        "仅统计该日收盘仍持有的股票，浮盈等于收盘市值减剩余持仓成本。": "Only positions held at that day's close are included: closing market value minus remaining cost.",
+        "日历显示每日收盘时仍持有股票的市值减剩余成本，已卖出部分不计入；不是当日收益或浮盈变化。每日浮盈不累加，缺少收盘价时显示待补全。": "The calendar shows closing market value minus remaining cost of positions held that day, excluding sold positions. These are snapshots, not daily returns or changes; they are not added together. Missing closes remain incomplete.",
         "当日持仓": "Held at day end",
         "当日已清仓": "Closed on this day",
         "当日合计": "Daily total",

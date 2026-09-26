@@ -4,6 +4,37 @@ import { describe, expect, it } from 'vitest'
 const read = (path: string) => readFileSync(path, 'utf8')
 
 describe('native daily detail presentation wiring', () => {
+  it('calendar snapshots use closing marks and shared remaining-cost replay, without live overlays or monthly summation', () => {
+    const engine = read('ios/App/App/StockLedger/Engine.swift')
+    const snapshot = engine.split('static func unrealizedSnapshots(')[1].split('struct MonthStats')[0]
+    expect(snapshot).toContain('position.apply(trade)')
+    expect(snapshot).toContain('position.quantity * $0.price - position.cost')
+    expect(snapshot).toContain('position.quantity > 0')
+    expect(snapshot).not.toContain('ledger.quotes')
+    expect(snapshot).not.toContain('previousClose')
+    expect(engine).toContain('calendarDays: value.snapshots')
+    const views = read('ios/App/App/StockLedger/InsightsView.swift')
+    expect(views).toContain('value: stats.rows.last?.profit')
+    expect(views).toContain('DayReturnDetail(row: row, isSnapshot: true)')
+  })
+
+  it('locally checks end-of-day unrealized snapshots with fees and partial/full sales', () => {
+    // Integer cents oracle; Swift product behavior is exercised by the native tests.
+    let quantity = 10
+    let cost = 100_200
+    expect(quantity * 11_000 - cost).toBe(9800)
+    expect(quantity * 11_200 - cost).toBe(11800)
+    cost -= cost * 4 / quantity
+    quantity -= 4
+    expect(quantity * 12_000 - cost).toBe(11880)
+    cost += 2 * 12_500 + 100
+    quantity += 2
+    expect(quantity * 11_000 - cost).toBe(2780)
+    cost -= cost
+    quantity -= 8
+    expect(quantity * 0 - cost).toBe(0)
+  })
+
   it('uses engine contributions and selected-day quantities without changing the portfolio total', () => {
     const engine = read('ios/App/App/StockLedger/Engine.swift')
     const presentation = engine.split('struct DailyDetailPresentation {')[1].split('struct LedgerDerived {')[0]

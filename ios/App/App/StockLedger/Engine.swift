@@ -13,6 +13,21 @@ struct Position: Identifiable {
     var value: Decimal? { quote.map { quantity * $0.price } }
     var unrealized: Decimal? { value.map { $0 - cost } }
     var id: String { symbol }
+
+    /// Shared moving-average replay for current holdings and historical snapshots.
+    mutating func apply(_ trade: Trade) -> Decimal? {
+        if trade.side == .buy {
+            cost += trade.gross + trade.fee
+            quantity += trade.quantity
+            return nil
+        }
+        let removed = trade.quantity == quantity ? cost : cost * trade.quantity / quantity
+        let profit = trade.gross - trade.fee - removed
+        realized += profit
+        cost -= removed
+        quantity -= trade.quantity
+        return profit
+    }
 }
 
 struct LedgerSummary {
@@ -55,19 +70,8 @@ enum Engine {
 
         for trade in ledger.orderedTrades {
             var position = map[trade.symbol] ?? Position(symbol: trade.symbol, quantity: 0, cost: 0, realized: 0)
-            let gross = trade.gross
             fees += trade.fee
-            if trade.side == .buy {
-                position.cost += gross + trade.fee
-                position.quantity += trade.quantity
-            } else {
-                let removed = trade.quantity == position.quantity ? position.cost : position.cost * trade.quantity / position.quantity
-                let profit = gross - trade.fee - removed
-                position.realized += profit
-                gains[trade.id] = profit
-                position.cost -= removed
-                position.quantity -= trade.quantity
-            }
+            if let profit = position.apply(trade) { gains[trade.id] = profit }
             map[trade.symbol] = position
         }
 
@@ -386,6 +390,47 @@ enum Engine {
         return updated
     }
 
+    /// End-of-session unrealized P&L, not daily investment return. Never overlays live quotes.
+    static func unrealizedSnapshots(_ ledger: Ledger, now: Date = Date()) -> [DayReturn] {
+        let trades = ledger.orderedTrades
+        let closes = Dictionary(ledger.history.closes.map { ($0.symbol + "|" + $0.date, $0) }, uniquingKeysWith: { _, last in last })
+        let firstTrades = Dictionary(trades.map { ($0.symbol, $0.date) }, uniquingKeysWith: { min($0, $1) })
+        var positions: [String: Position] = [:]
+        var index = 0
+        var output: [DayReturn] = []
+        for date in Set(ledger.history.sessions).sorted() where date <= MarketClock.date(now) {
+            while index < trades.count && trades[index].date <= date {
+                let trade = trades[index]
+                var position = positions[trade.symbol] ?? Position(symbol: trade.symbol, quantity: 0, cost: 0, realized: 0)
+                _ = position.apply(trade)
+                positions[trade.symbol] = position
+                index += 1
+            }
+            var contributions: [Contribution] = []
+            var missing: [String] = []
+            var total: Decimal = 0
+            var cost: Decimal = 0
+            for position in positions.values.sorted(by: { $0.symbol < $1.symbol }) where position.quantity > 0 {
+                var reason: String?
+                let close = closes[position.symbol + "|" + date]
+                if ledger.history.splits.contains(where: { $0.symbol == position.symbol && $0.date > (firstTrades[position.symbol] ?? date) && $0.date <= date }) {
+                    reason = L10n.tr("拆股后持仓与成本待核对")
+                } else if close == nil {
+                    reason = L10n.tr("缺少") + " \(date) " + L10n.tr("收盘价")
+                }
+                let profit = reason == nil ? close.map { position.quantity * $0.price - position.cost } : nil
+                contributions.append(Contribution(symbol: position.symbol, profit: profit,
+                                                  percent: profit.flatMap { position.cost > 0 ? $0 / position.cost : nil }, reason: reason))
+                if let profit { total += profit; cost += position.cost }
+                else { missing.append(L10n.tr("{}：{}", position.symbol, reason ?? L10n.tr("待补全"))) }
+            }
+            output.append(DayReturn(date: date, previous: nil, profit: missing.isEmpty ? total : nil,
+                                    cumulative: nil, contributions: contributions, missing: missing,
+                                    basis: missing.isEmpty ? cost : nil))
+        }
+        return output
+    }
+
     struct MonthStats {
         var rows: [DayReturn] = []
         var complete = 0
@@ -610,9 +655,9 @@ struct InsightsPresentation {
     var minimum: Double = 0
     var missingDays = 0
     var curve: CGPath = CGMutablePath()
-    init(days: [Engine.DayReturn] = []) {
+    init(days: [Engine.DayReturn] = [], calendarDays: [Engine.DayReturn]? = nil) {
         var running = Decimal(0)
-        let grouped = Dictionary(grouping: days) { String($0.date.prefix(7)) }
+        let grouped = Dictionary(grouping: calendarDays ?? days) { String($0.date.prefix(7)) }
         months = grouped.keys.sorted()
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = MarketClock.timeZone
@@ -620,7 +665,10 @@ struct InsightsPresentation {
             let rows = grouped[month] ?? []
             var stats = Engine.MonthStats(rows: rows)
             for row in rows {
-                if let profit = row.profit { stats.profit += profit; stats.complete += 1 }
+                if let profit = row.profit {
+                    if calendarDays == nil { stats.profit += profit }
+                    stats.complete += 1
+                }
                 else { stats.missing += 1 }
             }
             guard let first = MarketClock.day(month + "-01"), let range = cal.range(of: .day, in: .month, for: first) else { continue }
@@ -707,6 +755,7 @@ struct LedgerDerived {
     var cashRecords: [CashRecord] = []
     var symbols: [String] = []
     var days: [Engine.DayReturn] = []
+    var snapshots: [Engine.DayReturn] = []
     var insights = InsightsPresentation()
     static func compute(_ ledger: Ledger, cached: LedgerDerived?, historyUnchanged: Bool) -> LedgerDerived {
         var value = LedgerDerived()
@@ -719,10 +768,11 @@ struct LedgerDerived {
         let historicalDays = historyUnchanged ? (cached?.days ?? Engine.dailyReturns(ledger)) : Engine.dailyReturns(ledger)
         value.days = Engine.applyingLiveQuotes(historicalDays, to: ledger)
         value.displayReturn = Engine.displayedReturn(ledger, days: value.days)
+        value.snapshots = historyUnchanged ? (cached?.snapshots ?? Engine.unrealizedSnapshots(ledger)) : Engine.unrealizedSnapshots(ledger)
         if historyUnchanged, let cached, value.days == cached.days {
             value.insights = cached.insights
         } else if !Task.isCancelled {
-            value.insights = InsightsPresentation(days: value.days)
+            value.insights = InsightsPresentation(days: value.days, calendarDays: value.snapshots)
         }
         return value
     }

@@ -121,8 +121,12 @@ enum MarketDataTests {
         let sessionRow = updatedState.dayReturns.first { $0.date == session }
         let month = String(session.prefix(7))
         NativeTests.check(updatedState.summary.unrealized == 20, "API quote updates homepage unrealized profit")
-        NativeTests.check(sessionRow?.profit == 20 && updatedState.insights.calendar[month]?.stats.profit == 20,
-                          "API quote updates the matching calendar day and month total")
+        // Calendar now uses historical closing unrealized snapshots, not live daily returns.
+        NativeTests.check(sessionRow?.profit == 20, "API quote updates daily return independently of calendar")
+        NativeTests.check(updatedState.insights.calendar[month]?.stats.rows.last?.profit == 10,
+                          "live price does not overwrite the historical closing unrealized snapshot")
+        NativeTests.check(updatedState.insights.calendar[month]?.stats.profit == 0,
+                          "calendar does not add daily unrealized snapshots into monthly profit")
         NativeTests.check(updatedState.insights.revision != oldCalendarRevision,
                           "changed live profit publishes a new calendar presentation")
     }

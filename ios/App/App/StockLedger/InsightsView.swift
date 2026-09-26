@@ -117,7 +117,7 @@ struct InsightsView: View {
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.tr("按上一交易日收盘与当日收盘计算每日收益，重放当前账本；缺少收盘价的交易日标记为待补全，不以零代替。历史行情优先使用 Tiingo，并由 Yahoo、Nasdaq 和手工录入兜底。"))
+                    Text(L10n.tr("日历显示每日收盘时仍持有股票的市值减剩余成本，已卖出部分不计入；不是当日收益或浮盈变化。每日浮盈不累加，缺少收盘价时显示待补全。"))
                     if let synced = state.historySyncedAt {
                         Text(L10n.tr("上次同步：{}", Fmt.clock(synced)))
                     }
@@ -386,11 +386,11 @@ struct ReturnCalendar: View, Equatable {
                     .disabled(monthIndex >= months.count - 1)
                     .accessibilityLabel(L10n.tr("下一个月"))
                 }
-                ProfitRow(label: L10n.tr("本月收益"), value: stats.profit)
+                ProfitRow(label: L10n.tr("月内最后交易日浮盈"), value: stats.rows.last?.profit)
                     .font(.headline)
                 LabeledContent(L10n.tr("已计算"), value: "\(stats.complete) \(L10n.tr("天"))")
                 if stats.missing > 0 {
-                    Text("\(stats.missing) \(L10n.tr("天收盘价不完整，未计入月度合计。"))")
+                    Text(L10n.tr("{} 天浮盈快照待补全", "\(stats.missing)"))
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
@@ -418,14 +418,14 @@ struct ReturnCalendar: View, Equatable {
                     legend(color: colors.loss(scheme), text: L10n.tr("亏损"))
                     Label(L10n.tr("待补全"), systemImage: "circle.dotted").font(.caption2).foregroundStyle(.secondary)
                 }
-                Text(L10n.tr("每天格子里显示当日收益金额，点按查看按股票的明细。"))
+                Text(L10n.tr("每天格子显示收盘浮盈快照，点按查看当时持仓的浮盈明细。"))
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
         .onAppear { if month.isEmpty { month = months.last ?? "" } }
         .onChange(of: months) { value in if !value.contains(month) { month = value.last ?? "" } }
         .sheet(item: $selected) { row in
-            DayReturnDetail(row: row)
+            DayReturnDetail(row: row, isSnapshot: true)
                 .environmentObject(state)
         }
     }
@@ -502,6 +502,7 @@ struct DayReturnDetail: View {
     @EnvironmentObject private var state: AppState
     @State private var enteringClose = false
     let row: Engine.DayReturn
+    var isSnapshot = false
 
     var body: some View {
         let detail = DailyDetailPresentation(row: row, ledger: state.ledger)
@@ -509,16 +510,27 @@ struct DayReturnDetail: View {
             List {
                 Section {
                     LabeledContent(L10n.tr("日期"), value: row.date)
-                    LabeledContent(L10n.tr("上一交易日"), value: row.previous ?? "—")
-                    ProfitRow(label: L10n.tr("当日收益"), value: row.profit)
-                    LabeledContent(L10n.tr("累计资产"), value: Fmt.money(row.cumulative))
+                    if isSnapshot {
+                        ProfitRow(label: L10n.tr("收盘浮盈"), value: row.profit)
+                        LabeledContent(L10n.tr("持仓成本"), value: Fmt.money(row.basis))
+                        Text(L10n.tr("仅统计该日收盘仍持有的股票，浮盈等于收盘市值减剩余持仓成本。"))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        LabeledContent(L10n.tr("上一交易日"), value: row.previous ?? "—")
+                        ProfitRow(label: L10n.tr("当日收益"), value: row.profit)
+                        LabeledContent(L10n.tr("累计资产"), value: Fmt.money(row.cumulative))
+                    }
                 }
                 contributionSection("当日持仓", rows: detail.held, subtotal: detail.heldSubtotal)
-                contributionSection("当日已清仓", rows: detail.closed, subtotal: detail.closedSubtotal)
+                if !isSnapshot {
+                    contributionSection("当日已清仓", rows: detail.closed, subtotal: detail.closedSubtotal)
+                }
                 Section {
-                    ProfitRow(label: L10n.tr("当日合计"), value: row.profit)
+                    ProfitRow(label: L10n.tr(isSnapshot ? "浮盈合计" : "当日合计"), value: row.profit)
                 } footer: {
-                    Text(L10n.tr("当日收益包含仍持仓及当日已清仓股票的贡献，不等同于已实现收益。分类按所选日期结束时的持仓判断。"))
+                    if !isSnapshot {
+                        Text(L10n.tr("当日收益包含仍持仓及当日已清仓股票的贡献，不等同于已实现收益。分类按所选日期结束时的持仓判断。"))
+                    }
                 }
                 if !row.missing.isEmpty {
                     Section(L10n.tr("缺失行情")) {
