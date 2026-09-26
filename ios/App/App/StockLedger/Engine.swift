@@ -343,6 +343,7 @@ enum Engine {
         let symbols = Set(ledger.trades.map(\.symbol))
         let currentQuotes = ledger.quotes.filter { quote in
             guard symbols.contains(quote.symbol), quote.date <= today,
+                  quote.isLive || quote.source == "yahoo-close" || quote.source == "manual-close",
                   let parsed = MarketClock.utcDay(quote.date), MarketClock.utcDate(parsed) == quote.date else { return false }
             return !quote.isLive || !isStaleQuote(quote, now: now)
         }
