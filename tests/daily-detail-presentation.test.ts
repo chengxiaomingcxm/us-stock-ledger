@@ -14,7 +14,11 @@ describe('native daily detail presentation wiring', () => {
     expect(snapshot).not.toContain('previousClose')
     expect(engine).toContain('calendarDays: value.snapshots')
     const views = read('ios/App/App/StockLedger/InsightsView.swift')
-    expect(views).toContain('value: stats.rows.last?.profit')
+    expect(views).toContain('value: dailyStats.profit')
+    expect(views).toContain('@AppStorage("calendar.showPercent")')
+    expect(views).toContain('.pickerStyle(.segmented)')
+    expect(views).toContain('row.percent.map { Fmt.percent($0) }')
+    expect(engine).toContain('dailyStats: Engine.monthStats(days, month: month)')
     expect(views).toContain('DayReturnDetail(row: row, isSnapshot: true)')
   })
 
@@ -33,6 +37,14 @@ describe('native daily detail presentation wiring', () => {
     cost -= cost
     quantity -= 8
     expect(quantity * 0 - cost).toBe(0)
+  })
+
+  it('keeps monthly investment return distinct from unrealized snapshots and percentages', () => {
+    expect([98, 20, 197, -91, 730].reduce((a, b) => a + b, 0)).toBe(954)
+    expect(98 / 1002 * 100).toBeCloseTo(9.780439, 6)
+    expect(0 / 1002).toBe(0)
+    const engine = read('ios/App/App/StockLedger/Engine.swift')
+    expect(engine).toContain('guard let profit, let basis, basis > 0 else { return nil }')
   })
 
   it('uses engine contributions and selected-day quantities without changing the portfolio total', () => {

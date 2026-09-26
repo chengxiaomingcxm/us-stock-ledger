@@ -198,6 +198,10 @@ enum Engine {
         var missing: [String]
         var basis: Decimal? = nil
         var id: String { date }
+        var percent: Decimal? {
+            guard let profit, let basis, basis > 0 else { return nil }
+            return profit / basis
+        }
     }
 
     /// 已公布的 NYSE 休市日（2026–2028）；未知工作日绝不当作休市。
@@ -642,7 +646,7 @@ struct InsightsPresentation {
         var row: Engine.DayReturn?
         var id: String { key }
     }
-    struct Month { var stats: Engine.MonthStats; var cells: [Cell] }
+    struct Month { var stats: Engine.MonthStats; var cells: [Cell]; var dailyStats: Engine.MonthStats }
     let revision = UUID()
     var months: [String] = []
     var calendar: [String: Month] = [:]
@@ -681,7 +685,7 @@ struct InsightsPresentation {
                 let date = String(format: "%@-%02d", month, day)
                 cells.append(Cell(key: date, day: day, row: map[date]))
             }
-            calendar[month] = Month(stats: stats, cells: cells)
+            calendar[month] = Month(stats: stats, cells: cells, dailyStats: Engine.monthStats(days, month: month))
         }
         for day in days {
             if let profit = day.profit { running += profit } else { missingDays += 1 }

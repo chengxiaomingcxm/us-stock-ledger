@@ -33,6 +33,11 @@ enum L10n {
 
     /// 中文文案 → 英文译文。
     static let en: [String: String] = [
+        "浮盈显示": "Unrealized P&L display",
+        "收益金额": "Amount",
+        "收益百分比": "Percentage",
+        "月收益合计每日投资盈亏（含当月买卖），不是每日浮盈快照相加。": "Monthly return sums daily investment P&L, including trades, not unrealized snapshots.",
+        "浮盈百分比 = 当日收盘浮盈 ÷ 剩余持仓成本；空仓或无有效成本显示 —。": "Percentage = closing unrealized P&L / remaining cost. No holdings or valid cost: —.",
         "月内最后交易日浮盈": "Last session unrealized P&L",
         "收盘浮盈": "Unrealized P&L at close",
         "浮盈合计": "Total unrealized P&L",

@@ -37,7 +37,7 @@ EOF
 codesign --force --sign - "$APP"
 xcrun simctl install "$UDID" "$APP"
 
-for screen in holdings trades returns settings calendar import; do
+for screen in holdings trades returns settings calendar calendar-percent import; do
   echo "=== launching $screen ==="
   xcrun simctl launch --terminate-running-process "$UDID" "com.stockledger.screens" "$screen" >/dev/null
   sleep 8
@@ -46,7 +46,7 @@ for screen in holdings trades returns settings calendar import; do
 done
 
 # 崩溃或白屏同样会产出一个 PNG，所以逐张查是否真的渲染出了内容。
-for screen in holdings trades returns settings calendar import; do
+for screen in holdings trades returns settings calendar calendar-percent import; do
   png="$ROOT/$screen.png"
   [ -s "$png" ] || { echo "FAIL: $screen.png 缺失"; exit 1; }
   size="$(wc -c < "$png")"

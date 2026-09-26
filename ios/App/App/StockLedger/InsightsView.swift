@@ -328,6 +328,7 @@ struct ReturnCalendar: View, Equatable {
     @Environment(\.colorScheme) private var scheme
     @EnvironmentObject private var state: AppState
     @AppStorage("appearance.colors") private var colorPreference = "green-up"
+    @AppStorage("calendar.showPercent") private var showPercent = false
 
     let data: InsightsPresentation
 
@@ -337,6 +338,7 @@ struct ReturnCalendar: View, Equatable {
     private var colors: ThemeColors { ThemeColors(redUp: colorPreference == "red-up") }
     private var months: [String] { data.months }
     private var stats: Engine.MonthStats { data.calendar[month]?.stats ?? Engine.MonthStats() }
+    private var dailyStats: Engine.MonthStats { data.calendar[month]?.dailyStats ?? Engine.MonthStats() }
     private typealias Cell = InsightsPresentation.Cell
     private var cells: [Cell] { data.calendar[month]?.cells ?? [] }
 
@@ -386,11 +388,27 @@ struct ReturnCalendar: View, Equatable {
                     .disabled(monthIndex >= months.count - 1)
                     .accessibilityLabel(L10n.tr("下一个月"))
                 }
-                ProfitRow(label: L10n.tr("月内最后交易日浮盈"), value: stats.rows.last?.profit)
+                ProfitRow(label: L10n.tr("本月收益"), value: dailyStats.profit)
                     .font(.headline)
+                Text(L10n.tr("月收益合计每日投资盈亏（含当月买卖），不是每日浮盈快照相加。"))
+                    .font(.caption2).foregroundStyle(.secondary)
+                if dailyStats.missing > 0 {
+                    Text("\(dailyStats.missing) \(L10n.tr("天收盘价不完整，未计入月度合计。"))")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
                 LabeledContent(L10n.tr("已计算"), value: "\(stats.complete) \(L10n.tr("天"))")
                 if stats.missing > 0 {
                     Text(L10n.tr("{} 天浮盈快照待补全", "\(stats.missing)"))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+
+                Picker(L10n.tr("浮盈显示"), selection: $showPercent) {
+                    Text(L10n.tr("收益金额")).tag(false)
+                    Text(L10n.tr("收益百分比")).tag(true)
+                }
+                .pickerStyle(.segmented)
+                if showPercent {
+                    Text(L10n.tr("浮盈百分比 = 当日收盘浮盈 ÷ 剩余持仓成本；空仓或无有效成本显示 —。"))
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
@@ -468,6 +486,7 @@ struct ReturnCalendar: View, Equatable {
     private func amountText(_ row: Engine.DayReturn?) -> String {
         guard let row else { return "" }
         guard let profit = row.profit else { return L10n.tr("待补") }
+        if showPercent { return row.percent.map { Fmt.percent($0) } ?? "—" }
         return Fmt.compactSigned(profit)
     }
 
@@ -486,7 +505,7 @@ struct ReturnCalendar: View, Equatable {
     private func accessibilityLabel(_ cell: Cell) -> String {
         guard let day = cell.day else { return "" }
         guard let row = cell.row else { return "\(month)-\(day) " + L10n.tr("非交易日") }
-        return "\(row.date) \(row.profit == nil ? L10n.tr("待补全") : Fmt.signedMoney(row.profit))"
+        return "\(row.date) \(showPercent ? L10n.tr("收益百分比") : L10n.tr("收益金额")) \(row.profit == nil ? L10n.tr("待补全") : (showPercent ? row.percent.map { Fmt.percent($0) } ?? "—" : Fmt.signedMoney(row.profit)))"
     }
 
     private func legend(color: Color, text: String) -> some View {

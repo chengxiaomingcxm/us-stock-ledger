@@ -27,6 +27,7 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
         // `log show`; print output is block-buffered and lost on terminate.
         NSLog("HARNESS-START")
         let screen = ProcessInfo.processInfo.arguments.dropFirst().first ?? "holdings"
+        UserDefaults.standard.set(screen == "calendar-percent", forKey: "calendar.showPercent")
         // `AppState.init` overwrites `L10n.current` from UserDefaults, so English must be
         // switched on after construction and before the demo ledger is generated —
         // the generator localises its sample notes at that moment.
@@ -70,7 +71,7 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
             NavigationStack { InsightsView() }.environmentObject(state)
         case "settings":
             NavigationStack { SettingsView() }.environmentObject(state)
-        case "calendar":
+        case "calendar", "calendar-percent":
             NavigationStack { CalendarOnlyView() }.environmentObject(state)
         case "import":
             NavigationStack { ImportView() }.environmentObject(state)

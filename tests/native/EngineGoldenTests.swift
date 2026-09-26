@@ -549,6 +549,14 @@ enum EngineGoldenTests {
         let presentation = InsightsPresentation(days: Engine.dailyReturns(ledger), calendarDays: snapshots)
         expect(presentation.calendar["2026-01"]?.stats.rows.last?.profit, "0", "snapshot/month ends at final snapshot, not sum")
         expect(presentation.calendar["2026-01"]?.stats.profit, "0", "snapshot/no accumulated unrealized subtotal")
+        expect(presentation.calendar["2026-01"]?.dailyStats.profit, "954", "calendar/month sums daily investment returns including sales, not snapshots")
+        expectApprox(snapshots[0].percent, "0.0978043912", "0.00000001", "snapshot/percent uses remaining cost")
+        expectNil(snapshots.last?.percent, "snapshot/empty holdings percent unavailable")
+        var zero = snapshots[0]
+        zero.profit = 0
+        expect(zero.percent, "0", "snapshot/zero profit with positive cost is zero percent")
+        zero.profit = nil
+        expectNil(zero.percent, "snapshot/missing profit percent unavailable")
         var missing = ledger
         missing.history.closes.removeAll { $0.date == "2026-01-06" }
         expectNil(Engine.unrealizedSnapshots(missing)[1].profit, "snapshot/missing same-day close not replaced by live quote or prior close")

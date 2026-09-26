@@ -127,6 +127,8 @@ enum MarketDataTests {
                           "live price does not overwrite the historical closing unrealized snapshot")
         NativeTests.check(updatedState.insights.calendar[month]?.stats.profit == 0,
                           "calendar does not add daily unrealized snapshots into monthly profit")
+        NativeTests.check(updatedState.insights.calendar[month]?.dailyStats.profit == 20,
+                          "monthly investment return still includes live daily investment profit, independently of closing snapshot")
         NativeTests.check(updatedState.insights.revision != oldCalendarRevision,
                           "changed live profit publishes a new calendar presentation")
     }
