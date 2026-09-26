@@ -90,7 +90,7 @@ struct HoldingsView: View {
 
     private func row(_ position: Position) -> some View {
         let daily = state.displayReturn.rows.first { $0.symbol == position.symbol }
-        HStack(spacing: 12) {
+        return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(position.symbol).font(.headline)
                 Text("\(Fmt.quantity(position.quantity)) \(L10n.tr("股")) · \(L10n.tr("市值")) \(Fmt.money(position.value))")
