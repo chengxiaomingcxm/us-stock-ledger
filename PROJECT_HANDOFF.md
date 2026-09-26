@@ -8,11 +8,12 @@
 - 当前源码版本：**原生版 1.1.0**；应用“关于”页仅显示 `1.1.0`，Xcode 内部构建号为 10。
 - 1.1.0 是用户测试包目标，不代表已发布 GitHub Release；最新已发布 Release 仍为 `v1.0.2-build9`。
 - 当前 UI：SwiftUI 原生 iPhone App，支持 iOS 16+。
-- 1.1.0 本轮开始时 `main` HEAD：`35308ec576c4d6c8da55c3e3ae51444b90b7bf1e`；后续提交与 CI 结果以 GitHub Actions 实际 headSha 为准。
+- 1.1.0 IPA 对应的源码提交：`ac2b79512895ea421f08393eaaf96af0df9ef8da`。
 - build 9 源码提交：`639ca4bbe4a0adb845a91148b8ec66256f90e9e1`。
 - GitHub 当前只保留一个 Release：`v1.0.2-build9`。
 - Release：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.0.2-build9
 - `v1.0.2-build9` 未签名 IPA SHA-256：`7caac8451e4d21d8b23d53de25e1ece6cccdc69d1d7ac8e42cd22519850bfbc8`（历史发布资产）。
+- 1.1.0 unsigned 测试 IPA：GitHub Actions run `36208457669`，SHA-256 `52ce466c0715aaff443d38c7541d0150c1c40877b880d88909a86ad603717e36`；未创建 Release。
 - 应用标识保持 `com.personal.stockledger`；账本仍为 `Documents/ledger-v2.json`、`format: 2`。
 - 旧标签和 Git 历史保留，没有重写；旧 build 8 Release、资产和本地 build 8 IPA 已删除。
 - `deepseek-dev` **没有在最后一次发布后同步**，不得声称它与 main 一致。
@@ -305,4 +306,4 @@ bash scripts/build-unsigned-ios.sh
 
 ## 11. 1.1.0 测试包任务状态
 
-1.1.0 的 Daily P&L / 持仓显示修复、版本元数据和仓库文档已按用户授权更新。正式未签名 IPA 只能由 recovered 仓库 `main` 上的 macOS Actions 构建；本阶段不创建 GitHub Release。旧的 build 9 标签、Release 和历史记录保留，不得改写。
+1.1.0 的 Daily P&L / 持仓显示修复、版本元数据和仓库文档已按用户授权更新。提交 `ac2b79512895ea421f08393eaaf96af0df9ef8da` 的 Checks 与 Build unsigned iOS IPA 均成功；原生测试、模拟器日历渲染、英文截图和 unsigned arm64 IPA 均通过。测试包可从 Actions run `36208457669` 下载；校验和见上方。本阶段没有创建 GitHub Release。旧的 build 9 标签、Release 和历史记录保留，不得改写。

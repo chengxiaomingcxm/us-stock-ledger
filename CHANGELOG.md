@@ -5,7 +5,7 @@
 - 首页、收益日历和按股票明细共用最新日收益结果；持仓列表分别显示持仓收益与今日涨跌。
 - 月度“已计算”天数排除待补全日；拆股前日期不再受后续拆股影响，拆股后仍持仓时保守标记待核对。
 - 历史交易日候选合并所有成功行情源，不再只依赖 SPY。
-- 更新账本说明；账本格式仍为 `format: 2`，成本和分红会计口径不变。1.1.0 测试 IPA 由 macOS Actions 生成，不代表已发布 GitHub Release。
+- 更新账本说明；账本格式仍为 `format: 2`，成本和分红会计口径不变。未签名测试 IPA 由 [macOS Actions](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36208457669) 生成（SHA-256：`52ce466c0715aaff443d38c7541d0150c1c40877b880d88909a86ad603717e36`），不代表已发布 GitHub Release。
 
 ## 原生版 1.0.2 · build 9 · 2026-09-24
 

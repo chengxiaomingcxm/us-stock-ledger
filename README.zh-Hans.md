@@ -8,7 +8,7 @@
 
 原生 SwiftUI iPhone App。不用注册账号、不连云同步、不埋点统计：账本就是 App 自己 `Documents` 目录下的一个 JSON 文件，行情 API Key 存在 iOS 钥匙串里。
 
-当前源码版本：**原生版 1.1.0**，支持 iOS 16 及以上。测试 IPA 正在制作；1.1.0 尚不是 GitHub Release。账本格式为 `format: 2`，也就是 1.0 起的稳定数据基线；旧 Web 版的版本号、标签和发布记录与原生版分开看。
+当前源码版本：**原生版 1.1.0**，支持 iOS 16 及以上。未签名测试 IPA 已上传至 [macOS Actions artifact](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36208457669)；1.1.0 尚不是 GitHub Release。账本格式为 `format: 2`，也就是 1.0 起的稳定数据基线；旧 Web 版的版本号、标签和发布记录与原生版分开看。
 
 > **English: [README.md](README.md).** 本文件是中文版。
 
@@ -212,7 +212,7 @@ open ios/App/App.xcodeproj   # 然后在模拟器或自己的真机上运行
 
 ### 版本发布
 
-当前源码版本为 **1.1.0**。最近一次 GitHub Release 仍为 1.0.2；1.1.0 是测试包，尚未发布。当前变更与历史版本见 [CHANGELOG.md](CHANGELOG.md)。
+当前源码版本为 **1.1.0**。最近一次 GitHub Release 仍为 1.0.2；1.1.0 是测试包，尚未发布。IPA artifact 见 [Actions run](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36208457669)，校验和与变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 数据与隐私
 

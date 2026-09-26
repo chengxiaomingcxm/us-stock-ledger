@@ -8,7 +8,7 @@
 
 A native SwiftUI app for iPhone. No account, no cloud sync, no analytics: your ledger is one JSON file inside the app's own `Documents` folder, and quote API keys live in the iOS Keychain.
 
-**Current source version: native 1.1.0** — iOS 16+. A test IPA is being prepared; this version is not a GitHub Release. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
+**Current source version: native 1.1.0** — iOS 16+. The unsigned test IPA is available from the [macOS Actions run](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36208457669); this version is not a GitHub Release. The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
 
 > **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
@@ -212,7 +212,7 @@ The application source license does not grant rights to redistribute Tiingo mark
 
 ### Releases
 
-The current source version is **1.1.0**. The latest published GitHub Release remains 1.0.2; 1.1.0 is a test package, not a release. See [CHANGELOG.md](CHANGELOG.md) for the current changes and historical versions.
+The current source version is **1.1.0**. The latest published GitHub Release remains 1.0.2; 1.1.0 is a test package, not a release. See the [Actions artifact](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36208457669) and [CHANGELOG.md](CHANGELOG.md) for package details and history.
 
 ## Data & Privacy
 
