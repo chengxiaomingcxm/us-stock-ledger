@@ -23,6 +23,8 @@ def manifest(path):
     data = json.loads(path.read_text(encoding='utf-8'))
     require(re.fullmatch(r'\d+\.\d+\.\d+', data['version']), 'Invalid version')
     require(path.stem == 'v' + data['version'], 'Manifest filename/version mismatch')
+    data['tag'] = data.get('tag', 'v' + data['version'])
+    require(data['tag'] in ('v' + data['version'], 'native-v' + data['version']), 'Invalid release tag')
     require(re.fullmatch(r'\d+', data['build']), 'Invalid build number')
     require(re.fullmatch(r'[a-f0-9]{40}', data['commit']), 'Invalid source commit')
     require(re.fullmatch(r'[a-f0-9]{64}', data['sha256']), 'Invalid SHA-256')
@@ -61,7 +63,7 @@ def gh(*args):
 
 def publish(path, repo):
     data = manifest(path)
-    tag = 'v' + data['version']
+    tag = data['tag']
     refs = json.loads(gh('api', f'repos/{repo}/git/matching-refs/tags/{tag}'))
     if any(ref['ref'] == 'refs/tags/' + tag for ref in refs):
         resolved = json.loads(gh('api', f'repos/{repo}/commits/{tag}'))['sha']
@@ -87,7 +89,7 @@ def publish(path, repo):
         gh('run', 'download', data['run_id'], '--repo', repo, '--name', data['artifact'], '--dir', folder / 'download')
         files = prepare(data, folder / 'download/StockLedger-unsigned.ipa', folder / 'publish', path.with_suffix('.md'), repo)
         if not existing:
-            gh('release', 'create', tag, '--repo', repo, '--target', data['commit'], '--title', f'持仓账本 {tag}', '--notes-file', files[2], '--draft')
+            gh('release', 'create', tag, '--repo', repo, '--target', data['commit'], '--title', f"持仓账本 {data['version']}", '--notes-file', files[2], '--draft')
         else:
             require(existing['target_commitish'] == data['commit'], 'Draft target mismatch')
             gh('release', 'edit', tag, '--repo', repo, '--notes-file', files[2])

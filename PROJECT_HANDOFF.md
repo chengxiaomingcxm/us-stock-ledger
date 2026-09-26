@@ -8,14 +8,14 @@
 - 2026-09-26 用户最终确认日历口径：**每日收盘浮盈快照**（该日剩余持仓市值减剩余成本），日期格子显示同日收盘值，不是每日投资收益或每日浮盈变化；可切换金额/百分比（浮盈÷剩余成本）。月份下方恢复**全月每日投资盈亏合计，包含当月买卖影响**，不累加快照。日历明细只含当日收盘仍持仓的股票。首页每日盈亏及累计收益曲线仍使用原每日投资收益口径；详见 `DAILY-RETURNS.md`。下文旧包/旧日历记录为历史过程，不代表最终日历定义。
 
 - 当前源码版本：**原生版 1.1.0**；应用“关于”页仅显示 `1.1.0`，Xcode 内部构建号为 10。
-- 1.1.0 是用户测试包目标，不代表已发布 GitHub Release；最新已发布 Release 仍为 `v1.0.2-build9`。
+- 最新正式 GitHub Release 为 `native-v1.1.0`；发布复用已验证的最终 IPA，不重新构建或改写旧包。
 - 当前 UI：SwiftUI 原生 iPhone App，支持 iOS 16+。
 - 最终 1.1.0 IPA 对应的源码提交：`2201daed82537efc20908b87b944ede842d792e6`；早期 1.1.0 测试包源码 `ac2b795` 为历史记录。
 - build 9 源码提交：`639ca4bbe4a0adb845a91148b8ec66256f90e9e1`。
-- GitHub 当前只保留一个 Release：`v1.0.2-build9`。
-- Release：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/v1.0.2-build9
+- GitHub 保留新 Release `native-v1.1.0` 与历史 Release `v1.0.2-build9`，不删除旧记录。
+- 最新 Release：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.1.0
 - `v1.0.2-build9` 未签名 IPA SHA-256：`7caac8451e4d21d8b23d53de25e1ece6cccdc69d1d7ac8e42cd22519850bfbc8`（历史发布资产）。
-- 最终 1.1.0 unsigned 测试 IPA：GitHub Actions run `36215253909`，SHA-256 `a665d7f14f73176add3e821d4666fe59b7c8dbac65623729e8e1b7692a121a36`；本地 `build/1.1.0-final-2201dae/StockLedger-unsigned.ipa`，未创建 Release。
+- 最终 1.1.0 unsigned IPA：GitHub Actions run `36215253909`，SHA-256 `a665d7f14f73176add3e821d4666fe59b7c8dbac65623729e8e1b7692a121a36`；本地 `build/1.1.0-final-2201dae/StockLedger-unsigned.ipa`；Release 附件包含同一 IPA、校验和与升级说明。
 - 应用标识保持 `com.personal.stockledger`；账本仍为 `Documents/ledger-v2.json`、`format: 2`。
 - 旧标签和 Git 历史保留，没有重写；旧 build 8 Release、资产和本地 build 8 IPA 已删除。
 - `deepseek-dev` **没有在最后一次发布后同步**，不得声称它与 main 一致。
@@ -283,7 +283,7 @@ bash scripts/build-unsigned-ios.sh
 - `docs/CASE_STUDY.md`
 - `releases/v1.0.2-build9.md`
 
-旧 Web 文档保存在 `docs/archive/`，只作历史参考。GitHub 当前只保留 build 9 Release；旧 Release 和资产已清理，但旧标签与提交历史保留。`CHANGELOG.md` 仍保留版本沿革，这是历史记录，不属于需要删除的旧 Release 文档。
+旧 Web 文档保存在 `docs/archive/`，只作历史参考。GitHub 最新 Release 为 1.1.0，build 9 Release 作为历史记录保留。更早 Release 的清理是此前阶段的操作，不是本轮操作。旧标签、提交历史及 `CHANGELOG.md` 的版本沿革保留。
 
 `FINAL_RELEASE_AUDIT.md` 是 2026-09-22 的时点报告，其中两个 P1 已由 build 7 修复，因此不要把它原样当作当前发布结论。
 
@@ -308,4 +308,4 @@ bash scripts/build-unsigned-ios.sh
 
 ## 11. 1.1.0 测试包任务状态
 
-最终提交 `2201daed82537efc20908b87b944ede842d792e6` 的 Checks（`36215253902`）与 Build unsigned iOS IPA（`36215253909`）均成功；本地 155 项测试及质量门禁通过，CI 原生测试、模拟器日历渲染、金额/百分比两种英文日历截图和 unsigned arm64 IPA 均通过。最终口径见第 1 节，不能再以旧日历定义继续修改。测试包版本仍为 1.1.0，未创建 GitHub Release。已校验包结构与 SHA-256，但最终真机验收需用户安装后确认。旧 build 9 标签、Release 和历史记录保留，不得改写。
+最终提交 `2201daed82537efc20908b87b944ede842d792e6` 的 Checks（`36215253902`）与 Build unsigned iOS IPA（`36215253909`）均成功；本地 155 项测试及质量门禁通过，CI 原生测试、模拟器日历渲染、金额/百分比两种英文日历截图和 unsigned arm64 IPA 均通过。最终口径见第 1 节，不能再以旧日历定义继续修改。用户随后授权将代码、安装包和文档更新到 GitHub，因此新增 `releases/v1.1.0.json` 与升级说明，通过现有 Publish verified IPA release 工作流发布 `native-v1.1.0`。已校验包结构与 SHA-256，但最终真机验收需用户安装后确认。旧 build 9 标签、Release 和历史记录保留，不得改写。

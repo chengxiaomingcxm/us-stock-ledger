@@ -1,0 +1,9 @@
+{
+  "version": "1.1.0",
+  "tag": "native-v1.1.0",
+  "build": "10",
+  "commit": "2201daed82537efc20908b87b944ede842d792e6",
+  "run_id": 36215253909,
+  "artifact": "StockLedger-unsigned-IPA",
+  "sha256": "a665d7f14f73176add3e821d4666fe59b7c8dbac65623729e8e1b7692a121a36"
+}

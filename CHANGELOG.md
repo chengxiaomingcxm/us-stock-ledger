@@ -2,10 +2,12 @@
 
 ## 原生版 1.1.0 · 2026-09-26
 
-- 首页、收益日历和按股票明细共用最新日收益结果；持仓列表分别显示持仓收益与今日涨跌。
+- 收益日历最终改为同日收盘浮盈快照，明细只含该日收盘仍持仓股票；月份下方保留全月每日投资盈亏合计（包含买卖影响），不累加浮盈快照。
+- 日历增加收益金额／收益百分比切换，百分比为浮盈除以剩余持仓成本；缺价、空仓或无基数不伪装为 0%。
+- 首页日收益明细保留当天已清仓股票贡献并显示分组小计；持仓行分层排版，分别显示持仓收益与今日涨跌，避免百分号换行。
 - 月度“已计算”天数排除待补全日；拆股前日期不再受后续拆股影响，拆股后仍持仓时保守标记待核对。
 - 历史交易日候选合并所有成功行情源，不再只依赖 SPY。
-- 更新账本说明；账本格式仍为 `format: 2`，成本和分红会计口径不变。未签名测试 IPA 由 [macOS Actions](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36208457669) 生成（SHA-256：`52ce466c0715aaff443d38c7541d0150c1c40877b880d88909a86ad603717e36`），不代表已发布 GitHub Release。
+- 更新账本说明；账本格式仍为 `format: 2`，成本和分红会计口径不变。最终 IPA 源码为 `2201dae`，由 [macOS Actions](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36215253909) 生成（SHA-256：`a665d7f14f73176add3e821d4666fe59b7c8dbac65623729e8e1b7692a121a36`）。[1.1.0 发布说明](releases/v1.1.0.md)与 [GitHub Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.1.0)提供安装包及升级说明，今天早期测试包由最终包取代。
 
 ## 原生版 1.0.2 · build 9 · 2026-09-24
 
