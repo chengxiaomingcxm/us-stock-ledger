@@ -513,7 +513,8 @@ enum EngineGoldenTests {
         expect(Engine.monthStats([row], month: "2026-09").profit, "-0.71", "daily detail/month unchanged")
         NativeTests.check(detail.closed.map(\.symbol).sorted() == ["C0", "C1", "C2"], "daily detail/prior holding and round trip closed; OLD excluded; future buy ignored")
         var incomplete = row
-        incomplete.contributions[0].profit = nil
+        // Contributions are symbol-sorted: select a held symbol, not the first (closed) row.
+        incomplete.contributions[incomplete.contributions.firstIndex(where: { $0.symbol == "H0" })!].profit = nil
         expectNil(DailyDetailPresentation(row: incomplete, ledger: ledger).heldSubtotal, "daily detail/incomplete subtotal")
 
         var newPosition = Ledger()
