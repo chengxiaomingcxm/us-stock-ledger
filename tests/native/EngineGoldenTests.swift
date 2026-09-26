@@ -475,6 +475,55 @@ enum EngineGoldenTests {
         NativeTests.check(tightRows.first?.text == "+$100", "纵轴参考值 — 丢的是靠后的那条，不是上限")
     }
 
+    /// Synthetic amounts requested for reconciliation; no private ledger fixture.
+    private static func dailyDetailPresentation() {
+        let date = "2026-09-25"
+        var ledger = Ledger()
+        let amounts = ["1.56", "0.62", "1.08", "0.98", "2.08", "0.55", "4.20", "1.17"]
+        var baselines: [String: Decimal] = [:]
+        for (index, amount) in amounts.enumerated() {
+            let symbol = "H\(index)"
+            ledger.trades.append(trade(index, symbol, .buy, "2026-09-24", "1", "100"))
+            ledger.quotes.append(Quote(symbol: symbol, price: 100 + decimal(amount), date: date, source: nil, fetchedAt: nil))
+            baselines[symbol] = 100
+        }
+        ledger.trades += [
+            trade(8, "C0", .buy, "2026-09-24", "10", "90"),
+            trade(9, "C0", .sell, date, "10", "98.875"),
+            trade(10, "C1", .buy, date, "2", "100"),
+            trade(11, "C1", .sell, date, "2", "101.70"),
+            trade(12, "C2", .buy, "2026-09-24", "1", "90"),
+            trade(13, "C2", .sell, date, "1", "94.90"),
+            trade(14, "OLD", .buy, "2026-09-18", "1", "10"),
+            trade(15, "OLD", .sell, "2026-09-21", "1", "11"),
+            // Future activity must not change a historical day's classification.
+            trade(16, "C0", .buy, "2026-09-28", "1", "100")
+        ]
+        baselines["C0"] = 100
+        baselines["C2"] = 100
+        let result = Engine.todayPnl(ledger, previousClose: baselines, today: date)
+        let row = Engine.DayReturn(date: date, previous: "2026-09-24", profit: result.pnl, cumulative: nil,
+                                   contributions: result.rows.map { Engine.Contribution(symbol: $0.symbol, profit: $0.pnl, percent: $0.percent, reason: $0.reason) }, missing: result.missing)
+        let detail = DailyDetailPresentation(row: row, ledger: ledger)
+        expect(detail.heldSubtotal, "12.24", "daily detail/held subtotal")
+        expect(detail.closedSubtotal, "-12.95", "daily detail/closed subtotal")
+        expect(row.profit, "-0.71", "daily detail/portfolio unchanged")
+        expect(row.contributions.reduce(Decimal(0)) { $0 + ($1.profit ?? 0) }, "-0.71", "daily detail/all contributions reconcile")
+        expect(Engine.displayedReturn(ledger, days: [row], now: MarketClock.utcDay("2026-09-26")!).pnl, "-0.71", "daily detail/home unchanged")
+        expect(Engine.monthStats([row], month: "2026-09").profit, "-0.71", "daily detail/month unchanged")
+        NativeTests.check(detail.closed.map(\.symbol).sorted() == ["C0", "C1", "C2"], "daily detail/prior holding and round trip closed; OLD excluded; future buy ignored")
+        var incomplete = row
+        incomplete.contributions[0].profit = nil
+        expectNil(DailyDetailPresentation(row: incomplete, ledger: ledger).heldSubtotal, "daily detail/incomplete subtotal")
+
+        var newPosition = Ledger()
+        newPosition.trades = [trade(0, "NEW", .buy, date, "48", "26.3875")]
+        newPosition.quotes = [quote("NEW", "26.41", date)]
+        let newResult = Engine.todayPnl(newPosition, previousClose: [:], today: date)
+        expect(newResult.rows.first?.pnl, "1.08", "daily detail/new position amount")
+        expectNil(newResult.rows.first?.percent, "daily detail/new position percent is not unrealized percent")
+    }
+
     // MARK: - 入口
 
     static func run() {
@@ -488,6 +537,7 @@ enum EngineGoldenTests {
         dailyReturnsGap()
         dailyReturnsMissingClose()
         dailyReturnRegressionCases()
+        dailyDetailPresentation()
         todayPnlNormal()
         todayPnlMissingPreviousClose()
         todayPnlPositionChange()

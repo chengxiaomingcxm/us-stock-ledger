@@ -33,6 +33,12 @@ enum L10n {
 
     /// 中文文案 → 英文译文。
     static let en: [String: String] = [
+        "当日持仓": "Held at day end",
+        "当日已清仓": "Closed on this day",
+        "当日合计": "Daily total",
+        "小计": "Subtotal",
+        "收益明细": "Daily breakdown",
+        "当日收益包含仍持仓及当日已清仓股票的贡献，不等同于已实现收益。分类按所选日期结束时的持仓判断。": "Daily P&L includes holdings and positions closed that day, not lifetime realized gains. Groups reflect holdings at the selected day's end.",
         // 标签栏与全局
         "持仓": "Holdings",
         "交易": "Trades",

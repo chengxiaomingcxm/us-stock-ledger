@@ -90,21 +90,21 @@ struct HoldingsView: View {
 
     private func row(_ position: Position) -> some View {
         let daily = state.displayReturn.rows.first { $0.symbol == position.symbol }
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(position.symbol).font(.headline)
-                Text("\(Fmt.quantity(position.quantity)) \(L10n.tr("股")) · \(L10n.tr("市值")) \(Fmt.money(position.value))")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(position.symbol).font(.headline)
+                    Text("\(Fmt.quantity(position.quantity)) \(L10n.tr("股")) · \(L10n.tr("市值")) \(Fmt.money(position.value))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
                 Text("\(L10n.tr("行情")) \(position.quote?.date ?? L10n.tr("待报价"))")
                     .font(.caption2).foregroundStyle(.secondary)
-                labeledReturn("持仓收益", amount: position.unrealized,
-                              percent: position.unrealized.map { $0 / max(position.cost, 1) })
-                labeledReturn("今日涨跌", amount: daily?.pnl, percent: daily?.percent)
+                Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
             }
-            Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
+            labeledReturn("持仓收益", amount: position.unrealized,
+                          percent: position.unrealized.map { $0 / max(position.cost, 1) })
+            labeledReturn("今日涨跌", amount: daily?.pnl, percent: daily?.percent)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
@@ -112,12 +112,26 @@ struct HoldingsView: View {
     }
 
     private func labeledReturn(_ label: String, amount: Decimal?, percent: Decimal?) -> some View {
-        HStack(spacing: 5) {
-            Text(L10n.tr(label)).font(.caption2).foregroundStyle(.secondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Text(L10n.tr(label)).font(.caption).foregroundStyle(.secondary).fixedSize()
+                Spacer(minLength: 12)
+                returnValues(amount: amount, percent: percent)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.tr(label)).font(.caption).foregroundStyle(.secondary)
+                returnValues(amount: amount, percent: percent)
+            }
+        }
+    }
+
+    private func returnValues(amount: Decimal?, percent: Decimal?) -> some View {
+        HStack(spacing: 16) {
             Text(percent.map { Fmt.percent($0) } ?? "—")
                 .font(.caption).monospacedDigit().foregroundStyle(pnlColor(amount))
             AmountText(value: amount).font(.caption.weight(.semibold))
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func pnlColor(_ value: Decimal?) -> Color {
@@ -136,6 +150,7 @@ struct SymbolBox: Identifiable {
 }
 
 struct TodayCard: View {
+    @State private var selectedDay: Engine.DayReturn?
     @EnvironmentObject private var state: AppState
     @Environment(\.colorScheme) private var scheme
     @AppStorage("appearance.colors") private var colorPreference = "green-up"
@@ -169,6 +184,9 @@ struct TodayCard: View {
             }
             LabeledContent(L10n.tr("持仓市值"), value: Fmt.money(state.summary.value))
                 .font(.footnote)
+            if let day = state.dayReturns.first(where: { $0.date == result.date }) {
+                Button(L10n.tr("收益明细")) { selectedDay = day }.font(.footnote)
+            }
             ForEach(result.rows.filter { $0.reason != nil }) { row in
                 Label(L10n.tr("{}：{}", row.symbol, L10n.tr(row.reason ?? "")), systemImage: "exclamationmark.triangle")
                     .font(.caption2).foregroundStyle(.secondary)
@@ -179,6 +197,9 @@ struct TodayCard: View {
             }
         }
         .padding(.vertical, 4)
+        .sheet(item: $selectedDay) { day in
+            DayReturnDetail(row: day).environmentObject(state)
+        }
     }
 
     /// 今日盈亏同样跟随涨跌配色设置，不用系统默认颜色。

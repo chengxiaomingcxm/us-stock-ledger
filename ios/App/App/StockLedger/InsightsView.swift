@@ -504,6 +504,7 @@ struct DayReturnDetail: View {
     let row: Engine.DayReturn
 
     var body: some View {
+        let detail = DailyDetailPresentation(row: row, ledger: state.ledger)
         NavigationStack {
             List {
                 Section {
@@ -512,16 +513,12 @@ struct DayReturnDetail: View {
                     ProfitRow(label: L10n.tr("当日收益"), value: row.profit)
                     LabeledContent(L10n.tr("累计资产"), value: Fmt.money(row.cumulative))
                 }
-                if !row.contributions.isEmpty {
-                    Section(L10n.tr("按股票")) {
-                        ForEach(row.contributions) { item in
-                            if let profit = item.profit {
-                                ProfitRow(label: item.symbol, value: profit)
-                            } else {
-                                LabeledContent(item.symbol, value: item.reason ?? L10n.tr("待补全"))
-                            }
-                        }
-                    }
+                contributionSection("当日持仓", rows: detail.held, subtotal: detail.heldSubtotal)
+                contributionSection("当日已清仓", rows: detail.closed, subtotal: detail.closedSubtotal)
+                Section {
+                    ProfitRow(label: L10n.tr("当日合计"), value: row.profit)
+                } footer: {
+                    Text(L10n.tr("当日收益包含仍持仓及当日已清仓股票的贡献，不等同于已实现收益。分类按所选日期结束时的持仓判断。"))
                 }
                 if !row.missing.isEmpty {
                     Section(L10n.tr("缺失行情")) {
@@ -538,6 +535,21 @@ struct DayReturnDetail: View {
             .sheet(isPresented: $enteringClose) {
                 HistoricalCloseForm(symbol: row.contributions.first(where: { $0.profit == nil })?.symbol ?? "", date: row.date)
                     .environmentObject(state)
+            }
+        }
+    }
+    @ViewBuilder
+    private func contributionSection(_ title: String, rows: [Engine.Contribution], subtotal: Decimal?) -> some View {
+        if !rows.isEmpty {
+            Section(L10n.tr(title)) {
+                ForEach(rows) { item in
+                    if let profit = item.profit {
+                        ProfitRow(label: item.symbol, value: profit)
+                    } else {
+                        LabeledContent(item.symbol, value: item.reason ?? L10n.tr("待补全"))
+                    }
+                }
+                ProfitRow(label: L10n.tr("小计"), value: subtotal)
             }
         }
     }

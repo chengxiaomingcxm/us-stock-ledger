@@ -676,6 +676,28 @@ struct InsightsPresentation {
         return rows
     }
 }
+/// Presentation only: classify existing contributions at the selected day's end.
+struct DailyDetailPresentation {
+    var held: [Engine.Contribution]
+    var closed: [Engine.Contribution]
+    var heldSubtotal: Decimal? { subtotal(held) }
+    var closedSubtotal: Decimal? { subtotal(closed) }
+
+    init(row: Engine.DayReturn, ledger: Ledger) {
+        var quantities: [String: Decimal] = [:]
+        for trade in ledger.orderedTrades where trade.date <= row.date {
+            quantities[trade.symbol, default: 0] += trade.side == .buy ? trade.quantity : -trade.quantity
+        }
+        held = row.contributions.filter { quantities[$0.symbol, default: 0] > 0 }
+        closed = row.contributions.filter { quantities[$0.symbol, default: 0] <= 0 }
+    }
+
+    private func subtotal(_ rows: [Engine.Contribution]) -> Decimal? {
+        guard rows.allSatisfy({ $0.profit != nil }) else { return nil }
+        return rows.reduce(Decimal(0)) { $0 + ($1.profit ?? 0) }
+    }
+}
+
 struct LedgerDerived {
     var displayReturn = Engine.TodayResult(caption: L10n.tr("正在计算"))
     var unknownDividendTax = 0
