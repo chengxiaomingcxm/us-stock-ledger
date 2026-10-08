@@ -128,7 +128,8 @@ enum HSBCStatement {
                         guard price > 0, quantity > 0, settlement > 0 else { throw LedgerError.message("交易价格、股数及交收额必须大于零。") }
                         let fee = feeByReference[ref] ?? 0
                         let expected = side == .buy ? price * quantity + fee : price * quantity - fee
-                        guard abs(expected - settlement) <= Decimal(string: "0.005")! else {
+                        // ponytail: 只容忍结单中至多 2 美分未列明差额；更大差额需按成交凭据处理。
+                        guard abs(expected - settlement) <= Decimal(string: "0.02")! else {
                             throw LedgerError.message(L10n.tr("{}：成交价、费用与交收额不符，需核对成交确认书。", ref))
                         }
                         consumed.insert(ref)

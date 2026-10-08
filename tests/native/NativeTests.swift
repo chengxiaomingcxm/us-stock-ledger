@@ -118,6 +118,21 @@ struct NativeTests {
         rejects("bad amount") { _ = try HSBCStatement.parse(pages: [fixture.replacingOccurrences(of: "10.12500", with: "BAD")], ledger: empty) }
         rejects("missing reference") { _ = try HSBCStatement.parse(pages: [fixture.replacingOccurrences(of: "Reference: PURTEST001 Type: PUR", with: "")], ledger: empty) }
         rejects("wrong settlement") { _ = try HSBCStatement.parse(pages: [fixture.replacingOccurrences(of: "USD 10.13", with: "USD 90.13")], ledger: empty) }
+        let centDifference = fixture
+            .replacingOccurrences(of: "USD 10.12500 1 USD 10.13", with: "USD 10.13000 1 USD 10.14")
+            .replacingOccurrences(of: "USD 12.34500 1- USD 12.34", with: "USD 12.35000 1- USD 12.33")
+        let centRows = try HSBCStatement.parse(pages: [centDifference], ledger: empty).rows
+        check(centRows.filter(\.selected).count == 3, "one-cent settlement differences are previewed")
+        let centLedger = try HSBCStatement.candidate(rows: centRows, ledger: empty, insertBefore: false)
+        check(centLedger.trades[0].netCash == Decimal(string: "10.14") &&
+              centLedger.trades[1].netCash == Decimal(string: "12.33"),
+              "buy and sell use the bank settlement, not an invented fee")
+        let twoCentRows = try HSBCStatement.parse(pages: [centDifference.replacingOccurrences(of: "USD 12.33", with: "USD 12.32")], ledger: empty).rows
+        let twoCentLedger = try HSBCStatement.candidate(rows: twoCentRows, ledger: empty, insertBefore: false)
+        check(twoCentLedger.trades[1].netCash == Decimal(string: "12.32"), "two-cent bank settlement is authoritative")
+        rejects("more than two cents settlement difference") {
+            _ = try HSBCStatement.parse(pages: [centDifference.replacingOccurrences(of: "USD 12.33", with: "USD 12.31")], ledger: empty)
+        }
         rejects("unknown income") { _ = try HSBCStatement.parse(pages: [fixture.replacingOccurrences(of: "PAID BENEFITS", with: "OTHER INCOME")], ledger: empty) }
         rejects("unsupported tax line") { _ = try HSBCStatement.parse(pages: [fixture + "\nWITHHOLDING TAX USD 0.22"], ledger: empty) }
         rejects("missing buy") {
