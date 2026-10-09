@@ -107,6 +107,12 @@ struct PricePoint: Codable, Hashable {
     var source: String? = nil // yahoo / tiingo / nasdaq / manual；旧账本缺失时保持兼容
 }
 
+struct DividendGroup: Identifiable {
+    var symbol: String
+    var records: [CashRecord]
+    var id: String { symbol }
+}
+
 struct SplitEvent: Codable, Hashable {
     var symbol: String
     var date: String
@@ -151,6 +157,13 @@ struct Ledger: Codable {
     /// 交易 / 现金按日期与录入顺序排列。
     var orderedTrades: [Trade] { Ledger.sortedTrades(trades) }
     var orderedCash: [CashRecord] { Ledger.sortedCash(cash) }
+    var dividendGroups: [DividendGroup] {
+        Dictionary(grouping: orderedCash.filter { $0.kind == .dividend }) {
+            ($0.symbol ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        }
+        .map { DividendGroup(symbol: $0.key, records: $0.value) }
+        .sorted { $0.symbol.localizedStandardCompare($1.symbol) == .orderedAscending }
+    }
     var nextTradeSequence: Int { (trades.map(\.sequence).max() ?? -1) + 1 }
     var nextCashSequence: Int { (cash.map(\.sequence).max() ?? -1) + 1 }
 }

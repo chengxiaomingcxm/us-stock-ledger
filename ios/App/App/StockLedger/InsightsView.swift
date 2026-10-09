@@ -55,7 +55,16 @@ struct InsightsView: View {
                 }
                 LabeledContent(L10n.tr("累计入金"), value: Fmt.money(cash.deposit))
                 LabeledContent(L10n.tr("累计出金"), value: Fmt.money(-cash.withdraw))
-                ProfitRow(label: L10n.tr("分红到账（扣税）"), value: cash.dividend - cash.tax)
+                NavigationLink {
+                    DividendRecordsView().environmentObject(state)
+                } label: {
+                    HStack {
+                        Text(L10n.tr("分红到账（扣税）"))
+                        Spacer()
+                        AmountText(value: cash.dividend - cash.tax)
+                    }
+                }
+                .accessibilityHint(L10n.tr("按股票查看分红记录"))
                 ProfitRow(label: L10n.tr("已知预扣税费"), value: -cash.tax)
                 if state.derived.unknownDividendTax > 0 {
                     Text("\(state.derived.unknownDividendTax) \(L10n.tr("笔分红按实际到账记账，预扣税未披露；不代表免税。"))")
@@ -89,9 +98,10 @@ struct InsightsView: View {
                 .font(.footnote)
             }
 
-            if !state.orderedCash.isEmpty {
+            let otherCash = state.orderedCash.filter { $0.kind != .dividend }
+            if !otherCash.isEmpty {
                 Section(L10n.tr("现金记录")) {
-                    ForEach(state.orderedCash.reversed()) { record in
+                    ForEach(otherCash.reversed()) { record in
                         Button { editingRecord = record } label: { cashRow(record) }
                             .buttonStyle(.plain)
                             .swipeActions {
@@ -169,6 +179,81 @@ struct InsightsView: View {
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(record.kind.label) \(Fmt.signedMoney(record.net)) \(record.date)")
+    }
+}
+
+struct DividendRecordsView: View {
+    @EnvironmentObject private var state: AppState
+    @State private var cashForm: CashFormMode?
+    @State private var editingRecord: CashRecord?
+
+    var body: some View {
+        List {
+            if state.ledger.dividendGroups.isEmpty {
+                Text(L10n.tr("暂无分红记录"))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+            } else {
+                ForEach(state.ledger.dividendGroups, id: \.symbol) { group in
+                    Section {
+                        DisclosureGroup {
+                            ForEach(group.records.reversed()) { record in
+                                Button { editingRecord = record } label: {
+                                    dividendRow(record)
+                                }
+                                .buttonStyle(.plain)
+                                .swipeActions {
+                                    Button(L10n.tr("删除"), role: .destructive) { state.deleteCash(record.id) }
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Text(group.symbol.isEmpty ? L10n.tr("未关联股票") : group.symbol)
+                                    .font(.headline)
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    AmountText(value: group.records.reduce(Decimal.zero) { $0 + $1.net })
+                                    Text(L10n.tr("{} 笔", "\(group.records.count)"))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(L10n.tr("现金分红"))
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { cashForm = .new(.dividend) } label: { Image(systemName: "plus") }
+                    .accessibilityLabel(L10n.tr("记录分红"))
+            }
+        }
+        .sheet(item: $cashForm) { mode in
+            CashFormView(mode: mode).environmentObject(state)
+        }
+        .sheet(item: $editingRecord) { record in
+            CashFormView(mode: .edit(record)).environmentObject(state)
+        }
+    }
+
+    private func dividendRow(_ record: CashRecord) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(record.date).font(.subheadline).foregroundStyle(.secondary)
+                if let tax = record.tax {
+                    Text(L10n.tr("预扣税费 {}", Fmt.money(tax)))
+                        .font(.caption).foregroundStyle(.secondary)
+                } else if !Fmt.cashNote(record).isEmpty {
+                    Text(Fmt.cashNote(record)).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            AmountText(value: record.net)
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
     }
 }
 

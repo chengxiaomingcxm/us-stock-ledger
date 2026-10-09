@@ -47,6 +47,7 @@ struct NativeTests {
 
     @MainActor
     static func main() async throws {
+        dividendGroups()
         quoteHistoryGap()
         // 测试期间不得写真实的 Documents：诊断日志统一重定向到临时文件。
         Diagnostics.fileURLOverride = FileManager.default.temporaryDirectory
@@ -295,6 +296,20 @@ struct NativeTests {
         market.quotes[0].date = "2026-09-18"
         check(Engine.todayPnl(market, previousClose: ["TEST": 100], today: "2026-09-17").pnl == nil, "future quote cannot value a past session")
         print("PASS: \(assertions) assertions; 25,000 closes / 4,000 sessions / 1,000 trades: \(elapsed)s; main actor heartbeats: \(heartbeats)")
+    }
+
+    private static func dividendGroups() {
+        var ledger = Ledger()
+        ledger.cash = [
+            CashRecord(sequence: 0, date: "2026-01-02", kind: .dividend, amount: 1, tax: nil, symbol: "pg"),
+            CashRecord(sequence: 1, date: "2026-01-03", kind: .dividend, amount: 2, tax: 0.3, symbol: " PG "),
+            CashRecord(sequence: 2, date: "2026-01-04", kind: .dividend, amount: 4, tax: nil, symbol: nil),
+            CashRecord(sequence: 3, date: "2026-01-05", kind: .fee, amount: 1, tax: nil, symbol: "PG")
+        ]
+        let groups = ledger.dividendGroups
+        check(groups.map(\.symbol) == ["", "PG"], "dividends group by normalized ticker and retain unlinked records")
+        check(groups[1].records.count == 2 && groups[1].records[1].tax == 0.3,
+              "dividend group preserves records and known tax")
     }
 
     /// Yahoo 某天 close=null 时，只接受 Nasdaq 同日的明确收盘价，不猜盘中价。

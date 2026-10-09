@@ -69,6 +69,8 @@ final class ScreenshotsApp: UIResponder, UIApplicationDelegate {
             NavigationStack { TradesView(onAdd: {}) }.environmentObject(state)
         case "returns":
             NavigationStack { InsightsView() }.environmentObject(state)
+        case "dividends":
+            NavigationStack { DividendRecordsView() }.environmentObject(state)
         case "settings":
             NavigationStack { SettingsView() }.environmentObject(state)
         case "calendar", "calendar-percent":
