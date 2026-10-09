@@ -79,6 +79,16 @@ struct NativeTests {
         check(visualReport.rows.count == 4, "PDFKit visual order parsing")
         let report = try HSBCStatement.parse(pages: [fixture], ledger: empty)
         check(report.rows.count == 4, "all rows previewed including excluded currency")
+        let continuation = """
+        Transaction summary
+        08JAN2026 09JAN2026 HKD 8.00000 2 HKD 16.00
+        Reference: PURTEST005 Type: PUR
+        """
+        let continued = try HSBCStatement.parse(pages: [fixture, continuation], ledger: empty)
+        check(continued.rows.count == 5 && continued.rows.contains {
+            $0.trade?.symbol == "UTEST" && $0.currency == "HKD" && !$0.selected &&
+                $0.trade?.externalId?.hasSuffix("PURTEST005") == true
+        }, "transaction rows at a page break inherit the preceding security")
         check(report.rows.filter(\.selected).count == 3, "HKD excluded")
         check(empty.trades.isEmpty && empty.cash.isEmpty, "preview is read only")
         let imported = try HSBCStatement.candidate(rows: report.rows, ledger: empty, insertBefore: false)

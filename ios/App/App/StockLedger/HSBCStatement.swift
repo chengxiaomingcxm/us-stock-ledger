@@ -99,6 +99,39 @@ enum HSBCStatement {
         }
         var consumed = Set<String>()
         var seen = Set<String>()
+        var currentSymbol: String?
+        var currentSecurityType: String?
+        func appendTrades(in source: String, symbol: String, securityType: String) throws {
+            let block = source.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            let records = matches(#"(\d{2}[A-Z]{3}\d{4})\s+(\d{2}[A-Z]{3}\d{4})\s+([A-Z]{3})\s+([\d,.]+)\s+([\d,.]+)\s*(-?)\s+([A-Z]{3})\s+([\d,.]+)\s+Reference\s*:\s*([A-Z0-9]+)\s+Type\s*:\s*(PUR|SAL)\b"#, block)
+            for r in records {
+                let ref = r[9].uppercased(), id = identity(ref)
+                guard seen.insert(id).inserted else { throw LedgerError.message("文件内交易编号重复，未导入任何记录。") }
+                let side: TradeSide = r[10].uppercased() == "PUR" ? .buy : .sell
+                guard (side == .sell) == (r[6] == "-"), r[3] == r[7] else {
+                    throw LedgerError.message(L10n.tr("{}：方向、股数符号或币种不一致。", ref))
+                }
+                let tradeDate = try date(r[1]), settlementDate = try date(r[2])
+                guard settlementDate >= tradeDate else { throw LedgerError.message("交收日早于成交日。") }
+                let price = try amount(r[4]), quantity = try amount(r[5]), settlement = try amount(r[8])
+                guard price > 0, quantity > 0, settlement > 0 else { throw LedgerError.message("交易价格、股数及交收额必须大于零。") }
+                let fee = feeByReference[ref] ?? 0
+                let expected = side == .buy ? price * quantity + fee : price * quantity - fee
+                // shortcut: 只容忍至多 2 美分差额，更大差额需先按成交凭据核实。
+                guard abs(expected - settlement) <= Decimal(string: "0.02")! else {
+                    throw LedgerError.message(L10n.tr("{}：成交价、费用与交收额不符，需核对成交确认书。", ref))
+                }
+                consumed.insert(ref)
+                let excluded = r[3].uppercased() != "USD" || securityType.uppercased() != "SHS"
+                // note 只留给用户/来源数据：交收日已结构化保存，说明在展示层生成。
+                let trade = Trade(sequence: 0, symbol: symbol.uppercased(), side: side, date: tradeDate,
+                                  quantity: quantity, price: price, fee: fee,
+                                  source: "hsbc-statement", externalId: id,
+                                  settlementAmount: settlement, settlementDate: settlementDate)
+                report.rows.append(Row(id: id, trade: trade, currency: r[3].uppercased(),
+                                       issue: excluded ? "非美元股票，不写入美元账本" : nil, selected: !excluded))
+            }
+        }
         // Read only transaction sections, never the portfolio valuation table.
         for page in pages {
             let sections = page.components(separatedBy: "Transaction summary")
@@ -107,41 +140,23 @@ enum HSBCStatement {
                 let body = section.components(separatedBy: "Charges and income summary")[0]
                 let symbolPattern = #"(?m)^\s*([A-Z][A-Z0-9.\-]{0,14})[ \t]+[^\r\n]*?\((SHS|UNT)\)"#
                 let symbols = matches(symbolPattern, body)
+                if let currentSymbol, let currentSecurityType, let first = symbols.first,
+                   let range = body.range(of: first[0]) {
+                    try appendTrades(in: String(body[..<range.lowerBound]), symbol: currentSymbol,
+                                     securityType: currentSecurityType)
+                }
+                if symbols.isEmpty, let currentSymbol, let currentSecurityType {
+                    try appendTrades(in: body, symbol: currentSymbol, securityType: currentSecurityType)
+                }
                 var remaining = body[...]
                 for symbol in symbols {
                     guard let start = remaining.range(of: symbol[0]) else { continue }
                     remaining = remaining[start.upperBound...]
                     let nextSymbol = remaining.range(of: symbolPattern, options: .regularExpression)
                     let block = String(nextSymbol.map { remaining[..<$0.lowerBound] } ?? remaining)
-                        .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                    let records = matches(#"(\d{2}[A-Z]{3}\d{4})\s+(\d{2}[A-Z]{3}\d{4})\s+([A-Z]{3})\s+([\d,.]+)\s+([\d,.]+)\s*(-?)\s+([A-Z]{3})\s+([\d,.]+)\s+Reference\s*:\s*([A-Z0-9]+)\s+Type\s*:\s*(PUR|SAL)\b"#, block)
-                    for r in records {
-                        let ref = r[9].uppercased(), id = identity(ref)
-                        guard seen.insert(id).inserted else { throw LedgerError.message("文件内交易编号重复，未导入任何记录。") }
-                        let side: TradeSide = r[10].uppercased() == "PUR" ? .buy : .sell
-                        guard (side == .sell) == (r[6] == "-"), r[3] == r[7] else {
-                            throw LedgerError.message(L10n.tr("{}：方向、股数符号或币种不一致。", ref))
-                        }
-                        let tradeDate = try date(r[1]), settlementDate = try date(r[2])
-                        guard settlementDate >= tradeDate else { throw LedgerError.message("交收日早于成交日。") }
-                        let price = try amount(r[4]), quantity = try amount(r[5]), settlement = try amount(r[8])
-                        guard price > 0, quantity > 0, settlement > 0 else { throw LedgerError.message("交易价格、股数及交收额必须大于零。") }
-                        let fee = feeByReference[ref] ?? 0
-                        let expected = side == .buy ? price * quantity + fee : price * quantity - fee
-                        // ponytail: 只容忍结单中至多 2 美分未列明差额；更大差额需按成交凭据处理。
-                        guard abs(expected - settlement) <= Decimal(string: "0.02")! else {
-                            throw LedgerError.message(L10n.tr("{}：成交价、费用与交收额不符，需核对成交确认书。", ref))
-                        }
-                        consumed.insert(ref)
-                        let excluded = r[3].uppercased() != "USD" || symbol[2].uppercased() != "SHS"
-                        // note 只留给用户/来源数据：交收日已结构化保存，说明在展示层生成。
-                        let trade = Trade(sequence: 0, symbol: symbol[1].uppercased(), side: side, date: tradeDate,
-                                          quantity: quantity, price: price, fee: fee,
-                                          source: "hsbc-statement", externalId: id,
-                                          settlementAmount: settlement, settlementDate: settlementDate)
-                        report.rows.append(Row(id: id, trade: trade, currency: r[3].uppercased(),
-                                               issue: excluded ? "非美元股票，不写入美元账本" : nil, selected: !excluded))
-                    }
+                    let ticker = symbol[1].uppercased(), securityType = symbol[2].uppercased()
+                    currentSymbol = ticker; currentSecurityType = securityType
+                    try appendTrades(in: block, symbol: ticker, securityType: securityType)
                 }
                 let references = matches(#"Reference\s*:\s*([A-Z0-9]+)\s+Type\s*:"#, body)
                 let datedRows = matches(#"\d{2}[A-Z]{3}\d{4}\s+\d{2}[A-Z]{3}\d{4}\s+[A-Z]{3}"#, body)
