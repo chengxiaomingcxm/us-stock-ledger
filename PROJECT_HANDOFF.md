@@ -1,19 +1,23 @@
 # 持仓账本项目总结与新窗口交接
 
-更新日期：2026-09-26
+更新日期：2026-10-09
 用途：供新的 Codex / DeepSeek 对话先读取，再根据实际仓库状态继续工作。本文是项目过程摘要，不代替 `AGENTS.md`、代码、测试或 CI；如有冲突，以当前仓库事实和用户当轮明确要求为准。
 
 ## 1. 当前结论
 
 - 2026-09-26 用户最终确认日历口径：**每日收盘浮盈快照**（该日剩余持仓市值减剩余成本），日期格子显示同日收盘值，不是每日投资收益或每日浮盈变化；可切换金额/百分比（浮盈÷剩余成本）。月份下方恢复**全月每日投资盈亏合计，包含当月买卖影响**，不累加快照。日历明细只含当日收盘仍持仓的股票。首页每日盈亏及累计收益曲线仍使用原每日投资收益口径；详见 `DAILY-RETURNS.md`。下文旧包/旧日历记录为历史过程，不代表最终日历定义。
 
-- 当前源码版本：**原生版 1.1.0**；应用“关于”页仅显示 `1.1.0`，Xcode 内部构建号为 10。
-- 最新正式 GitHub Release 为 `native-v1.1.0`；发布复用已验证的最终 IPA，不重新构建或改写旧包。
+- 当前源码版本：**原生版 1.2.0**；应用“关于”页仅显示 `1.2.0`，Xcode 内部构建号为 11。
+- 最新正式 GitHub Release 为 `native-v1.2.0`；发布复用已验证的 Actions IPA，不重新构建或改写旧包。
 - 当前 UI：SwiftUI 原生 iPhone App，支持 iOS 16+。
+- 当前 main：`92561dc4e89865f1424667454b5981ec360b308b`；本次 1.2.0 功能源码提交：`a6f567826693f6a5be2521a05bc03c31d0a7f3a9`。
+- 1.2.0 GitHub Release：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.2.0
+- 1.2.0 unsigned IPA：Actions run `37905174141`，SHA-256 `5b9ee0fbebacc18ba7043898eac7e48ffbc5363b3f1abd1550b996f034079acb`；Release 附有 IPA、校验和与升级说明。
+- 1.2.0 Checks `37905174091`、iOS Build `37905174141`、Release Publish `37907427560` 均成功；包含分红分组测试、HSBC 跨页回归、模拟器截图和 iPhoneOS arm64 IPA。
 - 最终 1.1.0 IPA 对应的源码提交：`2201daed82537efc20908b87b944ede842d792e6`；早期 1.1.0 测试包源码 `ac2b795` 为历史记录。
 - build 9 源码提交：`639ca4bbe4a0adb845a91148b8ec66256f90e9e1`。
-- GitHub 保留新 Release `native-v1.1.0` 与历史 Release `v1.0.2-build9`，不删除旧记录。
-- 最新 Release：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.1.0
+- GitHub 保留 `native-v1.2.0`、`native-v1.1.0` 与历史 Release `v1.0.2-build9`，不删除旧记录。
+- 最新 Release：https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.2.0
 - `v1.0.2-build9` 未签名 IPA SHA-256：`7caac8451e4d21d8b23d53de25e1ece6cccdc69d1d7ac8e42cd22519850bfbc8`（历史发布资产）。
 - 最终 1.1.0 unsigned IPA：GitHub Actions run `36215253909`，SHA-256 `a665d7f14f73176add3e821d4666fe59b7c8dbac65623729e8e1b7692a121a36`；本地 `build/1.1.0-final-2201dae/StockLedger-unsigned.ipa`；Release 附件包含同一 IPA、校验和与升级说明。
 - 应用标识保持 `com.personal.stockledger`；账本仍为 `Documents/ledger-v2.json`、`format: 2`。
@@ -309,3 +313,9 @@ bash scripts/build-unsigned-ios.sh
 ## 11. 1.1.0 测试包任务状态
 
 最终提交 `2201daed82537efc20908b87b944ede842d792e6` 的 Checks（`36215253902`）与 Build unsigned iOS IPA（`36215253909`）均成功；本地 155 项测试及质量门禁通过，CI 原生测试、模拟器日历渲染、金额/百分比两种英文日历截图和 unsigned arm64 IPA 均通过。最终口径见第 1 节，不能再以旧日历定义继续修改。用户随后授权将代码、安装包和文档更新到 GitHub，因此新增 `releases/v1.1.0.json` 与升级说明，通过现有 Publish verified IPA release 工作流发布 `native-v1.1.0`。已校验包结构与 SHA-256，但最终真机验收需用户安装后确认。旧 build 9 标签、Release 和历史记录保留，不得改写。
+
+## 12. 1.2.0 最终发布
+
+1.2.0 源码为 `a6f567826693f6a5be2521a05bc03c31d0a7f3a9`：现金分红页按规范化股票代码折叠分组，未关联代码单独归组；支持查看日期、净到账和已知税费，并可新增、编辑、删除。主页现金记录列表不再重复铺开展示分红。HSBC 新版结单支持跨页继承证券代码与类别；成交价/费用核对差异最高 $0.02 时采用银行交收金额，超过仍拒绝导入。账本仍为 format 2。
+
+本次本地质量门禁通过（155 个测试与 TypeScript/Vite 构建）；GitHub Checks `37905174091`、macOS iOS Build `37905174141`、发布 `37907427560` 均成功。CI 包含 Swift 原生测试、收益日历和英文页面模拟器渲染，以及 iPhoneOS arm64 IPA。IPA 版本 1.2.0 / build 11，Bundle ID `com.personal.stockledger`，SHA-256 `5b9ee0fbebacc18ba7043898eac7e48ffbc5363b3f1abd1550b996f034079acb`。正式 Release 为 [`native-v1.2.0`](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.2.0)。模拟器测试不代表真机性能；最终真机验收仍需用户安装后确认。
