@@ -8,7 +8,7 @@
 
 A native SwiftUI app for iPhone. No account, no cloud sync, no analytics: your ledger is one JSON file inside the app's own `Documents` folder, and quote API keys live in the iOS Keychain.
 
-**Current version: native 1.1.0** — iOS 16+. Download the verified unsigned IPA, checksum and upgrade notes from the [1.1.0 Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.1.0). The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
+**Current version: native 1.2.0** — iOS 16+. Download the verified unsigned IPA, checksum and upgrade notes from the [1.2.0 Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.2.0). The ledger format is `format: 2`, the stable data baseline since 1.0; the retired web app's version numbers, tags and release notes are kept separate from the native line.
 
 > **中文版见 [README.zh-Hans.md](README.zh-Hans.md)。** / Chinese version: [README.zh-Hans.md](README.zh-Hans.md).
 
@@ -212,7 +212,7 @@ The application source license does not grant rights to redistribute Tiingo mark
 
 ### Releases
 
-The current version is **1.1.0**. See the [GitHub Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.1.0), [verified build](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/36215253909) and [CHANGELOG.md](CHANGELOG.md) for package details and history. Calendar cells show closing unrealized P&L with an amount/percentage toggle; monthly P&L sums daily investment returns including trades, not unrealized snapshots.
+The current version is **1.2.0**. See the [GitHub Release](https://github.com/chengxiaomingcxm/us-stock-ledger/releases/tag/native-v1.2.0), [verified build](https://github.com/chengxiaomingcxm/us-stock-ledger/actions/runs/37905174141) and [CHANGELOG.md](CHANGELOG.md) for package details and history. Cash dividends are grouped by stock on a dedicated screen. Calendar cells show closing unrealized P&L with an amount/percentage toggle; monthly P&L sums daily investment returns including trades, not unrealized snapshots.
 
 ## Data & Privacy
 
